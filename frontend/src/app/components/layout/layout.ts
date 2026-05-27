@@ -1,11 +1,11 @@
 import { Component } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     <div class="min-h-screen bg-gray-50">
       <nav class="bg-white shadow-sm border-b">
@@ -29,7 +29,7 @@ import { ApiService } from '../../services/api.service';
         </div>
       </nav>
       <main class="max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
-        <ng-content />
+        <router-outlet />
       </main>
       <nav class="fixed bottom-0 left-0 right-0 bg-white border-t sm:hidden z-50">
         <div class="flex items-center justify-around h-14">
