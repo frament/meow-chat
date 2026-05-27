@@ -3,6 +3,7 @@ import { LoginComponent } from './components/login/login';
 import { RegisterComponent } from './components/register/register';
 import { FeedComponent } from './components/feed/feed';
 import { ChatComponent } from './components/chat/chat';
+import { SettingsComponent } from './components/settings/settings';
 import { LayoutComponent } from './components/layout/layout';
 
 export const routes: Routes = [
@@ -15,6 +16,7 @@ export const routes: Routes = [
     children: [
       { path: 'feed', component: FeedComponent },
       { path: 'chat', component: ChatComponent },
+      { path: 'settings', component: SettingsComponent },
     ],
   },
 ];

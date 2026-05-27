@@ -5,6 +5,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  avatar_url: string;
   created_at: string;
 }
 
@@ -14,6 +15,7 @@ export interface Post {
   content: string;
   created_at: string;
   username: string;
+  avatar_url: string;
 }
 
 export interface Message {
@@ -29,6 +31,7 @@ export interface LoginResponse {
   id: number;
   username: string;
   email: string;
+  avatar_url: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -95,6 +98,26 @@ export class ApiService {
     return this.http.post<{ id: number; message: string }>(
       `${this.baseUrl}/messages/${user!.id}`,
       { to_user_id: toUserId, content },
+      { headers: this.getHeaders() }
+    );
+  }
+
+  uploadAvatar(file: File) {
+    const user = this.currentUser();
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return this.http.post<{ avatar_url: string }>(
+      `${this.baseUrl}/upload-avatar/${user!.id}`,
+      formData,
+      { headers: new HttpHeaders().set('X-User-Id', String(user!.id)) }
+    );
+  }
+
+  updateProfile(username: string, email: string) {
+    const user = this.currentUser();
+    return this.http.put<LoginResponse>(
+      `${this.baseUrl}/profile/${user!.id}`,
+      { username, email },
       { headers: this.getHeaders() }
     );
   }

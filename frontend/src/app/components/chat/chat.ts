@@ -18,9 +18,13 @@ import { ApiService, User, Message } from '../../services/api.service';
             class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
             [class.bg-blue-50]="selectedUser?.id === user.id"
             [class.hover:bg-gray-100]="selectedUser?.id !== user.id">
-            <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-sm font-medium text-green-600">
-              {{ user.username[0] }}
-            </div>
+            @if (user.avatar_url) {
+              <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
+            } @else {
+              <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-sm font-medium text-green-600 shrink-0">
+                {{ user.username[0] }}
+              </div>
+            }
             <span class="text-sm">{{ user.username }}</span>
           </div>
         }
@@ -33,9 +37,13 @@ import { ApiService, User, Message } from '../../services/api.service';
         @for (user of users; track user.id) {
           <div (click)="selectUser(user); showMobileChat = true"
             class="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-0">
-            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-sm font-medium text-green-600 shrink-0">
-              {{ user.username[0] }}
-            </div>
+            @if (user.avatar_url) {
+              <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
+            } @else {
+              <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-sm font-medium text-green-600 shrink-0">
+                {{ user.username[0] }}
+              </div>
+            }
             <span class="text-sm font-medium">{{ user.username }}</span>
           </div>
         }

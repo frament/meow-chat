@@ -23,9 +23,13 @@ import { ApiService, Post } from '../../services/api.service';
       @for (post of posts; track post.id) {
         <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
           <div class="flex items-center gap-2 mb-2">
-            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-medium text-blue-600">
-              {{ post.username[0] }}
-            </div>
+            @if (post.avatar_url) {
+              <img [src]="post.avatar_url" class="w-8 h-8 rounded-full object-cover">
+            } @else {
+              <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-medium text-blue-600 shrink-0">
+                {{ post.username[0] }}
+              </div>
+            }
             <div>
               <p class="text-sm font-medium">{{ post.username }}</p>
               <p class="text-xs text-gray-500">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>

@@ -12,6 +12,7 @@ backend/       # Go module: my-chat-backend
   database/    # SQLite init + auto-migration (3 tables: users, messages, posts)
   handlers/    # REST handlers + WebSocket hub (in-memory per-process)
   models/      # request/response structs
+uploads/avatars/ # avatar images (auto-created on server start)
 frontend/
   src/app/
     components/{login,register,feed,chat,layout}/  # standalone components
@@ -46,4 +47,5 @@ cd frontend && npm run build   # production build with service-worker
 - **No tests beyond defaults**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files.
 - **DB auto-migrates** on startup. Schema: `users`, `messages`, `posts` with foreign keys. SQLite WAL mode enabled.
 - **Frontend uses Angular standalone components** and new `@if/@for` control flow. Do NOT add `CommonModule` imports.
+- **Avatars**: Uploaded via `POST /api/upload-avatar/:userId` (multipart), stored in `./uploads/avatars/`, served via `/uploads/`. Profile update via `PUT /api/profile/:userId`. Users table has `avatar_url TEXT`. Login/GetUsers/GetFeed all return `avatar_url`.
 - **Mobile responsive**: Layout has bottom nav on mobile (`sm:hidden`), top nav on desktop. Chat shows user list / chat view one at a time on mobile (`md:hidden` toggle). Feed/Login/Register use responsive padding.

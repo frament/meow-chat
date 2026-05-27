@@ -7,6 +7,7 @@ type User struct {
 	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	Password  string    `json:"-"`
+	AvatarURL string    `json:"avatar_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -25,6 +26,7 @@ type Post struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 	Username  string    `json:"username,omitempty"`
+	AvatarURL string    `json:"avatar_url,omitempty"`
 }
 
 type CreatePostRequest struct {
@@ -45,4 +47,9 @@ type RegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type UpdateProfileRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
 }

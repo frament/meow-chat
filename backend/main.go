@@ -21,9 +21,12 @@ func main() {
 		AppName: "MyChat",
 	})
 
+	app.Static("/uploads", "./uploads")
+
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowHeaders: "Origin, Content-Type, Accept, X-User-Id",
+		AllowMethods: "GET,POST,PUT,DELETE",
 	}))
 
 	api := app.Group("/api")
@@ -38,6 +41,9 @@ func main() {
 
 	api.Get("/messages", h.GetMessages)
 	api.Post("/messages/:userId", h.SendMessage)
+
+	api.Post("/upload-avatar/:userId", h.UploadAvatar)
+	api.Put("/profile/:userId", h.UpdateProfile)
 
 	api.Get("/ws/:userId", websocket.New(func(c *websocket.Conn) {
 		c.Locals("userId", c.Params("userId"))

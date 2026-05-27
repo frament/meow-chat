@@ -42,6 +42,7 @@ func migrate() {
 			username TEXT UNIQUE NOT NULL,
 			email TEXT UNIQUE NOT NULL,
 			password TEXT NOT NULL,
+			avatar_url TEXT DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
@@ -66,6 +67,16 @@ func migrate() {
 		if _, err := DB.Exec(q); err != nil {
 			log.Fatal("Migration failed:", err)
 		}
+	}
+
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='avatar_url'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
+	}
+
+	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
+		log.Fatal("Failed to create uploads directory:", err)
 	}
 
 	log.Println("Database migrated successfully")

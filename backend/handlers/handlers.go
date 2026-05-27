@@ -2,7 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"my-chat-backend/database"
 	"my-chat-backend/models"
@@ -101,9 +106,9 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 
 	var user models.User
 	err := database.DB.QueryRow(
-		"SELECT id, username, email, password FROM users WHERE username = ?",
+		"SELECT id, username, email, password, avatar_url FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Password)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL)
 
 	if err == sql.ErrNoRows {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
@@ -117,14 +122,15 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"id":       user.ID,
-		"username": user.Username,
-		"email":    user.Email,
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
+		"avatar_url": user.AvatarURL,
 	})
 }
 
 func (h *Handler) GetUsers(c *fiber.Ctx) error {
-	rows, err := database.DB.Query("SELECT id, username, email, created_at FROM users ORDER BY username")
+	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, created_at FROM users ORDER BY username")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
 	}
@@ -133,7 +139,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
 			continue
 		}
 		users = append(users, u)
@@ -166,7 +172,7 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 
 func (h *Handler) GetFeed(c *fiber.Ctx) error {
 	rows, err := database.DB.Query(`
-		SELECT p.id, p.user_id, p.content, p.created_at, u.username
+		SELECT p.id, p.user_id, p.content, p.created_at, u.username, u.avatar_url
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		ORDER BY p.created_at DESC
@@ -180,7 +186,7 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 	var posts []models.Post
 	for rows.Next() {
 		var p models.Post
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL); err != nil {
 			continue
 		}
 		posts = append(posts, p)
@@ -240,6 +246,79 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	h.broadcast <- wsMessage{from: int64(fromUserID), to: req.ToUserID, content: req.Content}
 
 	return c.Status(201).JSON(fiber.Map{"id": id, "message": "Message sent"})
+}
+
+func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
+	userID, err := c.ParamsInt("userId")
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "No file provided"})
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
+		return c.Status(400).JSON(fiber.Map{"error": "Only image files (jpg, png, gif, webp) are allowed"})
+	}
+
+	if file.Size > 5*1024*1024 {
+		return c.Status(400).JSON(fiber.Map{"error": "File too large (max 5MB)"})
+	}
+
+	filename := fmt.Sprintf("%d_%d%s", userID, time.Now().UnixMilli(), ext)
+	savePath := filepath.Join("./uploads/avatars", filename)
+
+	if err := c.SaveFile(file, savePath); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save file"})
+	}
+
+	avatarURL := "/uploads/avatars/" + filename
+	_, err = database.DB.Exec("UPDATE users SET avatar_url = ? WHERE id = ?", avatarURL, userID)
+	if err != nil {
+		os.Remove(savePath)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update avatar"})
+	}
+
+	return c.JSON(fiber.Map{"avatar_url": avatarURL})
+}
+
+func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
+	userID, err := c.ParamsInt("userId")
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	var req models.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.Username == "" || req.Email == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Username and email are required"})
+	}
+
+	_, err = database.DB.Exec(
+		"UPDATE users SET username = ?, email = ? WHERE id = ?",
+		req.Username, req.Email, userID,
+	)
+	if err != nil {
+		return c.Status(409).JSON(fiber.Map{"error": "Username or email already taken"})
+	}
+
+	var user models.User
+	database.DB.QueryRow(
+		"SELECT id, username, email, avatar_url, created_at FROM users WHERE id = ?", userID,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.AvatarURL, &user.CreatedAt)
+
+	return c.JSON(fiber.Map{
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
+		"avatar_url": user.AvatarURL,
+	})
 }
 
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {
