@@ -41,7 +41,7 @@ cd frontend && npm run build   # production build with service-worker
 - **Auth**: No JWT. Frontend sends `X-User-Id` header, backend reads it from params/header. Login returns plain JSON saved to localStorage.
 - **WebSocket**: In-memory hub per process. Does not scale beyond one instance. WS endpoint at `/api/ws/:userId`.
 - **PWA**: Service worker registers only in production build (`!isDevMode()`). Dev mode has no SW.
-- **Tailwind v4**: Configured via `@import "tailwindcss"` in `styles.css`. No `tailwind.config.js`. Build uses `@tailwindcss/postcss` (auto-detected by Angular's Vite builder).
+- **Tailwind v4**: Configured via `@import "tailwindcss"` in `styles.css`. No `tailwind.config.js`. Requires `frontend/.postcssrc.json` with `{ "plugins": { "@tailwindcss/postcss": {} } }` — Angular's Vite builder does NOT auto-detect `@tailwindcss/postcss` without it.
 - **No linter/formatter**: Neither backend nor frontend has lint/format config beyond Angular CLI defaults.
 - **No tests beyond defaults**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files.
 - **DB auto-migrates** on startup. Schema: `users`, `messages`, `posts` with foreign keys. SQLite WAL mode enabled.
