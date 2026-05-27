@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService, User, Message } from '../../services/api.service';
 
 @Component({
@@ -14,7 +15,7 @@ import { ApiService, User, Message } from '../../services/api.service';
         [class.hidden]="showMobileChat">
         <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Пользователи</h3>
         @for (user of users; track user.id) {
-          <div (click)="selectUser(user)"
+          <div (click)="openChat(user)"
             class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
             [class.bg-blue-50]="selectedUser?.id === user.id"
             [class.hover:bg-gray-100]="selectedUser?.id !== user.id">
@@ -35,7 +36,7 @@ import { ApiService, User, Message } from '../../services/api.service';
         [class.hidden]="showMobileChat">
         <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Пользователи</h3>
         @for (user of users; track user.id) {
-          <div (click)="selectUser(user); showMobileChat = true"
+          <div (click)="openChat(user)"
             class="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-0">
             @if (user.avatar_url) {
               <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
@@ -60,7 +61,7 @@ import { ApiService, User, Message } from '../../services/api.service';
 
         @if (selectedUser) {
           <div class="border-b px-4 py-3 flex items-center gap-3">
-            <button (click)="showMobileChat = false" class="md:hidden p-1 -ml-1 text-gray-500 hover:text-gray-700">
+            <button (click)="router.navigate(['/chat'])" class="md:hidden p-1 -ml-1 text-gray-500 hover:text-gray-700">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
@@ -107,13 +108,35 @@ export class ChatComponent implements OnInit, OnDestroy {
   showMobileChat = false;
   private ws: WebSocket | null = null;
 
-  constructor(private api: ApiService) {}
+  constructor(
+    private api: ApiService,
+    private route: ActivatedRoute,
+    protected router: Router,
+  ) {}
 
   ngOnInit() {
     this.currentUserId = this.api.currentUser()?.id ?? 0;
 
+    this.route.paramMap.subscribe((params) => {
+      const userId = params.get('userId');
+      this.showMobileChat = !!userId;
+      if (userId && this.users.length > 0) {
+        const user = this.users.find((u) => u.id === Number(userId));
+        if (user) {
+          this.selectUser(user);
+        }
+      }
+    });
+
     this.api.getUsers().subscribe((users: User[]) => {
       this.users = users.filter((u) => u.id !== this.currentUserId);
+      const userId = this.route.snapshot.paramMap.get('userId');
+      if (userId) {
+        const user = this.users.find((u) => u.id === Number(userId));
+        if (user) {
+          this.selectUser(user);
+        }
+      }
     });
 
     this.connectWebSocket();
@@ -148,6 +171,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.api.getMessages(this.currentUserId, user.id).subscribe((msgs: Message[]) => {
       this.messages = msgs;
     });
+  }
+
+  openChat(user: User) {
+    this.router.navigate(['/chat', user.id]);
   }
 
   sendMessage() {
