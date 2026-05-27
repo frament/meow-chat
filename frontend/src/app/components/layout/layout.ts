@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -18,24 +18,18 @@ import { ApiService } from '../../services/api.service';
                   class="text-gray-600 hover:text-gray-900 transition-colors">Лента</a>
                 <a routerLink="/chat" routerLinkActive="text-blue-600 font-medium"
                   class="text-gray-600 hover:text-gray-900 transition-colors">Чат</a>
-                <a routerLink="/settings" routerLinkActive="text-blue-600 font-medium"
-                  class="text-gray-600 hover:text-gray-900 transition-colors">Профиль</a>
               </div>
             </div>
-            <div class="flex items-center gap-3">
-              <a routerLink="/settings" class="hidden sm:flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                @if (api.currentUser()?.avatar_url) {
-                  <img [src]="api.currentUser()?.avatar_url" class="w-7 h-7 rounded-full object-cover">
-                } @else {
-                  <div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium text-blue-600">
-                    {{ (api.currentUser()?.username ?? '?')[0] }}
-                  </div>
-                }
-                <span class="text-sm">{{ api.currentUser()?.username }}</span>
-              </a>
-              <button (click)="logout()"
-                class="text-sm text-red-600 hover:text-red-800 transition-colors">Выйти</button>
-            </div>
+            <a routerLink="/settings" class="hidden sm:flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
+              @if (api.currentUser()?.avatar_url) {
+                <img [src]="api.currentUser()?.avatar_url" class="w-7 h-7 rounded-full object-cover">
+              } @else {
+                <div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium text-blue-600">
+                  {{ (api.currentUser()?.username ?? '?')[0] }}
+                </div>
+              }
+              <span class="text-sm">{{ api.currentUser()?.username }}</span>
+            </a>
           </div>
         </div>
       </nav>
@@ -69,11 +63,5 @@ import { ApiService } from '../../services/api.service';
   `,
 })
 export class LayoutComponent {
-  constructor(protected api: ApiService, private router: Router) {}
-
-  logout() {
-    this.api.currentUser.set(null);
-    localStorage.removeItem('currentUser');
-    this.router.navigate(['/login']);
-  }
+  constructor(protected api: ApiService) {}
 }
