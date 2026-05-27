@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -326,7 +327,11 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	if v == nil {
 		return
 	}
-	uid := int64(v.(float64))
+	uid, err := strconv.ParseInt(v.(string), 10, 64)
+	if err != nil {
+		log.Println("Invalid userId in WebSocket:", err)
+		return
+	}
 
 	client := &wsClient{conn: c, uid: uid}
 	h.register <- client
