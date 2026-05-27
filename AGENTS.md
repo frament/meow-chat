@@ -49,3 +49,5 @@ cd frontend && npm run build   # production build with service-worker
 - **Frontend uses Angular standalone components** and new `@if/@for` control flow. Do NOT add `CommonModule` imports.
 - **Avatars**: Uploaded via `POST /api/upload-avatar/:userId` (multipart), stored in `./uploads/avatars/`, served via `/uploads/`. Profile update via `PUT /api/profile/:userId`. Users table has `avatar_url TEXT`. Login/GetUsers/GetFeed all return `avatar_url`.
 - **Mobile responsive**: Layout has bottom nav on mobile (`sm:hidden`), top nav on desktop. Chat shows user list / chat view one at a time on mobile (`md:hidden` toggle). Feed/Login/Register use responsive padding.
+- **Direct chat URL**: `/chat/:userId` opens chat with specific user. User list clicks navigate via router, not direct select.
+- **WebSocket fix**: `c.Params("userId")` returns `string` — use `strconv.ParseInt` instead of `v.(float64)` type assertion.
