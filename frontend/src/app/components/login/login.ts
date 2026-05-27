@@ -9,7 +9,7 @@ import { ApiService } from '../../services/api.service';
   imports: [FormsModule, RouterLink],
   template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50">
-      <div class="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+      <div class="bg-white p-6 sm:p-8 rounded-xl shadow-md w-full max-w-md mx-4 sm:mx-0">
         <h1 class="text-2xl font-bold text-center mb-6">Вход</h1>
         <form (ngSubmit)="onSubmit()" class="space-y-4">
           <div>

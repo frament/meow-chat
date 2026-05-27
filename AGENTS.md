@@ -46,3 +46,4 @@ cd frontend && npm run build   # production build with service-worker
 - **No tests beyond defaults**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files.
 - **DB auto-migrates** on startup. Schema: `users`, `messages`, `posts` with foreign keys. SQLite WAL mode enabled.
 - **Frontend uses Angular standalone components** and new `@if/@for` control flow. Do NOT add `CommonModule` imports.
+- **Mobile responsive**: Layout has bottom nav on mobile (`sm:hidden`), top nav on desktop. Chat shows user list / chat view one at a time on mobile (`md:hidden` toggle). Feed/Login/Register use responsive padding.
