@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "PR Review": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/pr_review/SKILL.md",
+      "computedHash": "a8c994afe1e909e395ee0c5707cdf01d6d870879d5a1b9145d9023b3408afc94"
+    },
+    "adev-writing-guide": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/adev-writing-guide/SKILL.md",
+      "computedHash": "c978379d06221cfb72a703e8a176e7a7ab71556638bd222aa4240a9246791e27"
+    },
+    "angular-developer": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": "skills/dev-skills/angular-developer/SKILL.md",
+      "computedHash": "c5958947eaf0e79954dcb7690eb09ed3dec546b009fe730681b937ad072d0b58"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "go-development": {
+      "source": "netresearch/go-development-skill",
+      "sourceType": "github",
+      "skillPath": "skills/go-development/SKILL.md",
+      "computedHash": "5725cccd42cad753f30df6d2ed0a50090d63fffabe8d2d7e4c2d0892d406b96d"
+    },
+    "reference-compiler-cli": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/reference-compiler-cli/SKILL.md",
+      "computedHash": "b3d9ba0bcb463f2c5ac134d6ca91105025470889d2cc0895b91cd8828ff63b6f"
+    },
+    "reference-core": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/reference-core/SKILL.md",
+      "computedHash": "98428f08f8ddbcf03a07bf33b00ee5e1bf98f82aabc047595438dd36de061729"
+    },
+    "reference-signal-forms": {
+      "source": "angular/angular",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/reference-signal-forms/SKILL.md",
+      "computedHash": "ceb0ae2c1830bd04b4d6ef5a1fa3ee708ad3bf1052e93a9a3e69c36245a4e9b5"
+    }
+  }
+}
