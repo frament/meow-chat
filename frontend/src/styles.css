@@ -113,6 +113,61 @@ body {
   border-top: 1px solid var(--nav-border);
 }
 
+.nav-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 0;
+  position: relative;
+}
+.nav-link:hover {
+  color: var(--text-primary);
+}
+.nav-link.active-link {
+  color: var(--accent);
+}
+.nav-link.active-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-gradient);
+  border-radius: 2px;
+}
+
+.bottom-nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+}
+.bottom-nav-link.active-link::after {
+  display: none;
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  padding: 3px 10px 3px 3px;
+  border-radius: 50px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.user-badge:hover {
+  border-color: var(--border-default);
+}
+
 .card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
