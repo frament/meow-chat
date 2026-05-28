@@ -20,13 +20,20 @@ type Message struct {
 	FromUser   string    `json:"from_user,omitempty"`
 }
 
+type PostImage struct {
+	ID       int64  `json:"id"`
+	PostID   int64  `json:"post_id"`
+	ImageURL string `json:"image_url"`
+}
+
 type Post struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	Username  string    `json:"username,omitempty"`
-	AvatarURL string    `json:"avatar_url,omitempty"`
+	ID        int64       `json:"id"`
+	UserID    int64       `json:"user_id"`
+	Content   string      `json:"content"`
+	CreatedAt time.Time   `json:"created_at"`
+	Username  string      `json:"username,omitempty"`
+	AvatarURL string      `json:"avatar_url,omitempty"`
+	Images    []PostImage `json:"images,omitempty"`
 }
 
 type CreatePostRequest struct {

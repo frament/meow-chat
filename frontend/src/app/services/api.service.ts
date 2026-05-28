@@ -9,6 +9,12 @@ export interface User {
   created_at: string;
 }
 
+export interface PostImage {
+  id: number;
+  post_id: number;
+  image_url: string;
+}
+
 export interface Post {
   id: number;
   user_id: number;
@@ -16,6 +22,7 @@ export interface Post {
   created_at: string;
   username: string;
   avatar_url: string;
+  images?: PostImage[];
 }
 
 export interface Message {
@@ -77,12 +84,17 @@ export class ApiService {
     return this.http.get<Post[]>(`${this.baseUrl}/feed`);
   }
 
-  createPost(content: string) {
+  createPost(content: string, files: File[] = []) {
     const user = this.currentUser();
+    const formData = new FormData();
+    formData.append('content', content);
+    for (const file of files) {
+      formData.append('images', file);
+    }
     return this.http.post<{ id: number; message: string }>(
       `${this.baseUrl}/posts/${user!.id}`,
-      { content },
-      { headers: this.getHeaders() }
+      formData,
+      { headers: new HttpHeaders().set('X-User-Id', String(user!.id)) }
     );
   }
 

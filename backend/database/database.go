@@ -61,6 +61,12 @@ func migrate() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS post_images (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id INTEGER NOT NULL,
+			image_url TEXT NOT NULL,
+			FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+		)`,
 	}
 
 	for _, q := range queries {
@@ -77,6 +83,9 @@ func migrate() {
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
 		log.Fatal("Failed to create uploads directory:", err)
+	}
+	if err := os.MkdirAll("./uploads/posts", 0755); err != nil {
+		log.Fatal("Failed to create posts uploads directory:", err)
 	}
 
 	log.Println("Database migrated successfully")

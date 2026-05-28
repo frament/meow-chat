@@ -154,21 +154,75 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
-	var req models.CreatePostRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid form data"})
 	}
 
-	result, err := database.DB.Exec(
+	content := ""
+	if vals, ok := form.Value["content"]; ok && len(vals) > 0 {
+		content = vals[0]
+	}
+
+	files := form.File["images"]
+	if len(files) > 10 {
+		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to create post"})
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		"INSERT INTO posts (user_id, content) VALUES (?, ?)",
-		userID, req.Content,
+		userID, content,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create post"})
 	}
 
-	id, _ := result.LastInsertId()
-	return c.Status(201).JSON(fiber.Map{"id": id, "message": "Post created"})
+	postID, _ := result.LastInsertId()
+
+	var savedImages []string
+	for _, file := range files {
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
+			continue
+		}
+		if file.Size > 10*1024*1024 {
+			continue
+		}
+
+		filename := fmt.Sprintf("%d_%d%s", postID, time.Now().UnixMilli(), ext)
+		savePath := filepath.Join("./uploads/posts", filename)
+
+		if err := c.SaveFile(file, savePath); err != nil {
+			continue
+		}
+
+		imageURL := "/uploads/posts/" + filename
+		_, err := tx.Exec(
+			"INSERT INTO post_images (post_id, image_url) VALUES (?, ?)",
+			postID, imageURL,
+		)
+		if err != nil {
+			os.Remove(savePath)
+			continue
+		}
+
+		savedImages = append(savedImages, imageURL)
+	}
+
+	if err := tx.Commit(); err != nil {
+		for _, img := range savedImages {
+			os.Remove("." + img)
+		}
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to create post"})
+	}
+
+	return c.Status(201).JSON(fiber.Map{"id": postID, "message": "Post created"})
 }
 
 func (h *Handler) GetFeed(c *fiber.Ctx) error {
@@ -190,6 +244,21 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL); err != nil {
 			continue
 		}
+
+		imgRows, err := database.DB.Query(
+			"SELECT id, post_id, image_url FROM post_images WHERE post_id = ? ORDER BY id",
+			p.ID,
+		)
+		if err == nil {
+			for imgRows.Next() {
+				var img models.PostImage
+				if err := imgRows.Scan(&img.ID, &img.PostID, &img.ImageURL); err == nil {
+					p.Images = append(p.Images, img)
+				}
+			}
+			imgRows.Close()
+		}
+
 		posts = append(posts, p)
 	}
 	return c.JSON(posts)
