@@ -2,27 +2,30 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { ThemeService, ThemeMode } from '../../services/theme.service';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div class="max-w-lg mx-auto space-y-6">
-      <div class="bg-white rounded-xl shadow-sm border p-6">
-        <h1 class="text-2xl font-bold mb-6">Настройки профиля</h1>
+    <div class="max-w-lg mx-auto">
+      <div class="card" style="padding:24px;">
+        <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Настройки</h1>
 
         <div class="flex flex-col items-center mb-6">
           <div class="relative">
             @if (previewUrl || currentAvatar) {
               <img [src]="previewUrl || currentAvatar" alt="Avatar"
-                class="w-24 h-24 rounded-full object-cover border-2 border-gray-200">
+                class="w-24 h-24 rounded-full object-cover" style="border:2px solid var(--border-default);">
             } @else {
-              <div class="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-2xl font-medium text-blue-600 border-2 border-gray-200">
+              <div class="w-24 h-24 rounded-full flex items-center justify-center text-2xl font-medium"
+                style="background:var(--avatar-bg);color:var(--avatar-text);border:2px solid var(--border-default);">
                 {{ currentUsername[0] }}
               </div>
             }
-            <label class="absolute bottom-0 right-0 bg-blue-600 text-white rounded-full p-1.5 cursor-pointer hover:bg-blue-700 transition-colors shadow-sm">
+            <label class="absolute bottom-0 right-0 rounded-full p-1.5 cursor-pointer transition-colors"
+              style="background:var(--accent-gradient);color:white;box-shadow:var(--shadow-sm);">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -31,41 +34,70 @@ import { ApiService } from '../../services/api.service';
             </label>
           </div>
           @if (uploading) {
-            <p class="text-sm text-blue-600 mt-2">Загрузка...</p>
+            <p class="text-sm mt-2" style="color:var(--accent);">Загрузка...</p>
           }
           @if (avatarSuccess) {
-            <p class="text-sm text-green-600 mt-2">Аватар обновлён</p>
+            <p class="text-sm mt-2" style="color:#27ae60;">Аватар обновлён</p>
           }
         </div>
 
         <form (ngSubmit)="onSubmit()" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700">Имя пользователя</label>
-            <input type="text" [(ngModel)]="username" name="username" required
-              class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <label class="block text-sm font-medium" style="color:var(--text-secondary);">Имя пользователя</label>
+            <input type="text" [(ngModel)]="username" name="username" required class="form-input">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Email</label>
-            <input type="email" [(ngModel)]="email" name="email" required
-              class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <label class="block text-sm font-medium" style="color:var(--text-secondary);">Email</label>
+            <input type="email" [(ngModel)]="email" name="email" required class="form-input">
           </div>
           <div class="flex gap-3">
-            <button type="submit" [disabled]="saving"
-              class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+            <button type="submit" [disabled]="saving" class="btn-primary" style="flex:1;padding:10px 20px;">
               {{ saving ? 'Сохранение...' : 'Сохранить' }}
             </button>
             <button type="button" (click)="logout()"
-              class="px-4 py-2 text-sm text-red-600 hover:text-red-800 transition-colors">
+              class="btn-danger" style="padding:10px 16px;background:transparent;border:none;color:var(--text-tertiary);font-weight:500;cursor:pointer;font-size:13px;">
               Выйти
             </button>
           </div>
         </form>
         @if (success) {
-          <p class="mt-3 text-sm text-green-600 text-center">{{ success }}</p>
+          <p class="mt-3 text-sm text-center" style="color:#27ae60;">{{ success }}</p>
         }
         @if (error) {
-          <p class="mt-3 text-sm text-red-600 text-center">{{ error }}</p>
+          <p class="mt-3 text-sm text-center" style="color:#e74c3c;">{{ error }}</p>
         }
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="section-label">Оформление</div>
+          <div class="theme-options">
+            <label class="theme-option" [class.active]="selectedTheme === 'light'" (click)="selectTheme('light')">
+              <span class="theme-icon">☀️</span>
+              <div>
+                <div>Светлая</div>
+                <div class="theme-desc">Тёплая кремовая гамма</div>
+              </div>
+              <span class="radio" style="margin-left:auto;"></span>
+            </label>
+            <label class="theme-option" [class.active]="selectedTheme === 'dark'" (click)="selectTheme('dark')">
+              <span class="theme-icon">🌙</span>
+              <div>
+                <div>Тёмная</div>
+                <div class="theme-desc">Глубокий тёмный фон, аккуратные акценты</div>
+              </div>
+              <span class="radio" style="margin-left:auto;"></span>
+            </label>
+            <label class="theme-option" [class.active]="selectedTheme === 'system'" (click)="selectTheme('system')">
+              <span class="theme-icon">💻</span>
+              <div>
+                <div>Системная</div>
+                <div class="theme-desc">Автоматически следует за настройками системы</div>
+              </div>
+              <span class="radio" style="margin-left:auto;"></span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -80,8 +112,15 @@ export class SettingsComponent implements OnInit {
   previewUrl: string | null = null;
   uploading = false;
   avatarSuccess = false;
+  selectedTheme: ThemeMode = 'light';
 
-  constructor(private api: ApiService, private router: Router) {}
+  constructor(
+    private api: ApiService,
+    private router: Router,
+    private theme: ThemeService,
+  ) {
+    this.selectedTheme = this.theme.currentMode;
+  }
 
   get currentUsername() {
     return this.api.currentUser()?.username ?? '';
@@ -149,6 +188,11 @@ export class SettingsComponent implements OnInit {
         this.error = 'Ошибка сохранения. Возможно, имя или email уже заняты.';
       },
     });
+  }
+
+  selectTheme(mode: ThemeMode) {
+    this.selectedTheme = mode;
+    this.theme.setTheme(mode);
   }
 
   logout() {
