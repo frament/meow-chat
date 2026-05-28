@@ -8,38 +8,34 @@ import { ApiService } from '../../services/api.service';
   standalone: true,
   imports: [FormsModule, RouterLink],
   template: `
-    <div class="min-h-screen flex items-center justify-center bg-gray-50">
-      <div class="bg-white p-6 sm:p-8 rounded-xl shadow-md w-full max-w-md mx-4 sm:mx-0">
-        <h1 class="text-2xl font-bold text-center mb-6">Регистрация</h1>
+    <div class="min-h-screen flex items-center justify-center" style="background:var(--bg-body);">
+      <div class="card" style="padding:24px 28px;width:100%;max-width:400px;margin:0 16px;">
+        <h1 class="text-2xl font-bold text-center mb-6" style="color:var(--text-primary);">Регистрация</h1>
         <form (ngSubmit)="onSubmit()" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700">Имя пользователя</label>
-            <input type="text" [(ngModel)]="username" name="username" required
-              class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <label class="block text-sm font-medium" style="color:var(--text-secondary);">Имя пользователя</label>
+            <input type="text" [(ngModel)]="username" name="username" required class="form-input mt-1">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Email</label>
-            <input type="email" [(ngModel)]="email" name="email" required
-              class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <label class="block text-sm font-medium" style="color:var(--text-secondary);">Email</label>
+            <input type="email" [(ngModel)]="email" name="email" required class="form-input mt-1">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700">Пароль</label>
-            <input type="password" [(ngModel)]="password" name="password" required
-              class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <label class="block text-sm font-medium" style="color:var(--text-secondary);">Пароль</label>
+            <input type="password" [(ngModel)]="password" name="password" required class="form-input mt-1">
           </div>
-          <button type="submit"
-            class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+          <button type="submit" class="btn-primary" style="width:100%;padding:10px 20px;">
             Зарегистрироваться
           </button>
         </form>
-        <p class="mt-4 text-center text-sm text-gray-600">
-          Уже есть аккаунт? <a routerLink="/login" class="text-blue-600 hover:underline">Войти</a>
+        <p class="mt-4 text-center text-sm" style="color:var(--text-secondary);">
+          Уже есть аккаунт? <a routerLink="/login" style="color:var(--accent);text-decoration:underline;">Войти</a>
         </p>
         @if (error) {
-          <p class="mt-2 text-red-600 text-sm text-center">{{ error }}</p>
+          <p class="mt-2 text-sm text-center" style="color:#e74c3c;">{{ error }}</p>
         }
         @if (success) {
-          <p class="mt-2 text-green-600 text-sm text-center">{{ success }}</p>
+          <p class="mt-2 text-sm text-center" style="color:#27ae60;">{{ success }}</p>
         }
       </div>
     </div>

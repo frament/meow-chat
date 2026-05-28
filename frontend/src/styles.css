@@ -354,6 +354,10 @@ body {
   margin-top: 2px;
 }
 
+.hover-bg:hover {
+  background: var(--bg-surface-hover);
+}
+
 .chat-message-incoming {
   background: var(--bg-surface-hover);
   color: var(--text-primary);
