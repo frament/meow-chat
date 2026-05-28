@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyChat — Design Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  /* ===== LIGHT THEME (Warm/Cozy) ===== */
+  .theme-light {
+    --bg-body: #f5f0eb;
+    --bg-surface: #ffffff;
+    --bg-surface-hover: #faf7f4;
+    --bg-elevated: #ffffff;
+    --text-primary: #2d2824;
+    --text-secondary: #8a7e73;
+    --text-tertiary: #b8aea4;
+    --border-subtle: rgba(0,0,0,0.06);
+    --border-default: rgba(0,0,0,0.08);
+    --accent: #c9754f;
+    --accent-hover: #b8643f;
+    --accent-light: #fdf1eb;
+    --accent-soft: #fef7f3;
+    --shadow-sm: 0 1px 3px rgba(120, 80, 50, 0.06), 0 1px 2px rgba(120, 80, 50, 0.04);
+    --shadow-md: 0 4px 12px rgba(120, 80, 50, 0.08), 0 2px 4px rgba(120, 80, 50, 0.04);
+    --shadow-lg: 0 8px 30px rgba(120, 80, 50, 0.1);
+    --nav-bg: rgba(255,255,255,0.85);
+    --avatar-bg: #fdf1eb;
+    --avatar-text: #c9754f;
+    --input-bg: #ffffff;
+    --badge-bg: #c9754f;
+    --divider: rgba(0,0,0,0.06);
+    --glass-border: rgba(255,255,255,0.6);
+    --scrollbar: rgba(0,0,0,0.08);
+    --highlight: #fef7f3;
+    --accent-gradient: linear-gradient(135deg, #c9754f 0%, #b8643f 100%);
+  }
+
+  /* ===== DARK THEME (Deep/Cozy) ===== */
+  .theme-dark {
+    --bg-body: #151210;
+    --bg-surface: #1e1b18;
+    --bg-surface-hover: #252220;
+    --bg-elevated: #282522;
+    --text-primary: #f0ece8;
+    --text-secondary: #9c938b;
+    --text-tertiary: #635b54;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-default: rgba(255,255,255,0.08);
+    --accent: #e8946a;
+    --accent-hover: #d4845d;
+    --accent-light: rgba(232, 148, 106, 0.12);
+    --accent-soft: rgba(232, 148, 106, 0.06);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
+    --nav-bg: rgba(21,18,16,0.85);
+    --avatar-bg: rgba(232, 148, 106, 0.15);
+    --avatar-text: #e8946a;
+    --input-bg: #1e1b18;
+    --badge-bg: #e8946a;
+    --divider: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.04);
+    --scrollbar: rgba(255,255,255,0.08);
+    --highlight: rgba(232, 148, 106, 0.06);
+    --accent-gradient: linear-gradient(135deg, #e8946a 0%, #d4845d 100%);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    transition: background 0.4s ease, color 0.4s ease;
+    min-height: 100vh;
+  }
+
+  /* ===== LAYOUT ===== */
+  .app { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+  /* Top Nav */
+  .top-nav {
+    background: var(--nav-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin: -16px -16px 20px;
+    padding: 0 16px;
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+  .top-nav-inner {
+    max-width: 768px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+  }
+  .nav-left { display: flex; align-items: center; gap: 24px; }
+  .logo {
+    font-weight: 700;
+    font-size: 18px;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-links { display: flex; gap: 20px; }
+  .nav-links a {
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.2s;
+    cursor: pointer;
+    padding: 4px 0;
+    position: relative;
+  }
+  .nav-links a:hover { color: var(--text-primary); }
+  .nav-links a.active { color: var(--accent); }
+  .nav-links a.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent-gradient);
+    border-radius: 2px;
+  }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+
+  /* Theme Toggle */
+  .theme-toggle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .theme-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* User Avatar */
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 10px 4px 4px;
+    border-radius: 50px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .user-badge:hover {
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-sm);
+  }
+  .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+  }
+  .card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-default);
+  }
+
+  /* New Post */
+  .new-post textarea {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .new-post textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+  .new-post textarea::placeholder { color: var(--text-tertiary); }
+  .post-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .btn {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+  .btn-primary {
+    background: var(--accent-gradient);
+    color: white;
+    box-shadow: 0 2px 8px rgba(201, 117, 79, 0.25);
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(201, 117, 79, 0.3);
+  }
+  .btn-secondary {
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Post */
+  .post-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .post-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .post-meta { flex: 1; }
+  .post-username {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .post-time {
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .post-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+  }
+
+  /* Post images grid */
+  .post-images {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .post-images img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+  }
+  .post-images .single { grid-template-columns: 1fr; }
+
+  /* ===== CHAT ===== */
+  .chat-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+    min-height: 500px;
+  }
+  .chat-sidebar {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .chat-sidebar-header {
+    padding: 16px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--divider);
+  }
+  .chat-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid var(--divider);
+  }
+  .chat-user:hover { background: var(--bg-surface-hover); }
+  .chat-user.active {
+    background: var(--accent-light);
+    border-left: 3px solid var(--accent);
+  }
+  .chat-user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .chat-user-info { flex: 1; }
+  .chat-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .chat-user-preview {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat-user-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .chat-main {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-messages {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    min-height: 400px;
+  }
+  .message {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .message.incoming {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .message.outgoing {
+    background: var(--accent-gradient);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-input-area {
+    border-top: 1px solid var(--divider);
+    padding: 12px 16px;
+    display: flex;
+    gap: 8px;
+  }
+  .chat-input-area input {
+    flex: 1;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    outline: none;
+  }
+  .chat-input-area input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+
+  /* ===== BOTTOM NAV (mobile) ===== */
+  .bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--nav-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-subtle);
+    z-index: 100;
+    padding: 0 8px;
+  }
+  .bottom-nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 56px;
+  }
+  .bottom-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+  }
+  .bottom-nav a:hover { color: var(--text-secondary); }
+  .bottom-nav a.active { color: var(--accent); }
+  .bottom-nav a svg { width: 20px; height: 20px; }
+
+  /* ===== THEME PILL ===== */
+  .theme-pill {
+    position: fixed;
+    top: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    display: flex;
+    gap: 4px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50px;
+    padding: 4px;
+    box-shadow: var(--shadow-lg);
+  }
+  .theme-pill button {
+    padding: 6px 16px;
+    border-radius: 50px;
+    border: none;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .theme-pill .btn-light {
+    background: var(--active-light, #f5f0eb);
+    color: var(--active-light-text, #2d2824);
+  }
+  .theme-pill .btn-dark {
+    background: var(--active-dark, transparent);
+    color: var(--active-dark-text, var(--text-secondary));
+  }
+  .theme-pill .btn-light.active {
+    background: #2d2824;
+    color: #f5f0eb;
+  }
+  .theme-pill .btn-dark.active {
+    background: #e8946a;
+    color: #151210;
+  }
+
+  /* ===== DIVIDER ===== */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+    margin: 24px 0 12px;
+    padding: 0 4px;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    .chat-layout { grid-template-columns: 1fr; }
+    .chat-sidebar { display: none; }
+    .bottom-nav { display: block; }
+    .app { padding: 12px; padding-bottom: 72px; }
+    .top-nav { margin: -12px -12px 16px; padding: 0 12px; }
+    .nav-links { display: none; }
+    .theme-pill { top: 64px; }
+  }
+</style>
+</head>
+<body class="theme-light" id="app-body">
+
+<div class="theme-pill" id="themePill">
+  <button class="btn-light active" onclick="setTheme('light')">☀️ Светлая</button>
+  <button class="btn-dark" onclick="setTheme('dark')">🌙 Тёмная</button>
+</div>
+
+<div class="app">
+
+  <!-- Top Nav -->
+  <nav class="top-nav">
+    <div class="top-nav-inner">
+      <div class="nav-left">
+        <span class="logo">MyChat</span>
+        <div class="nav-links">
+          <a class="active">Лента</a>
+          <a>Чат</a>
+        </div>
+      </div>
+      <div class="nav-right">
+        <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему">🌓</button>
+        <div class="user-badge">
+          <div class="avatar">А</div>
+          <span>Анна</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- New Post -->
+  <div class="card new-post" style="margin-bottom: 16px;">
+    <textarea rows="2" placeholder="Что у вас нового?">Закат сегодня невероятный 🌅</textarea>
+    <div class="post-actions">
+      <button class="btn btn-secondary">📷 Фото</button>
+      <button class="btn btn-primary" style="margin-left: auto;">Опубликовать</button>
+    </div>
+  </div>
+
+  <!-- Posts -->
+  <div class="card" style="margin-bottom: 12px;">
+    <div class="post-header">
+      <div class="post-avatar">Д</div>
+      <div class="post-meta">
+        <div class="post-username">Дмитрий</div>
+        <div class="post-time">Сегодня, 14:23</div>
+      </div>
+    </div>
+    <div class="post-content">
+      Отличный новый дизайн! Мягкие тени и тёплая гамма — глаз отдыхает. Очень уютно получилось.
+    </div>
+    <div class="post-images">
+      <img src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&h=300&fit=crop" alt="">
+      <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop" alt="">
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 12px;">
+    <div class="post-header">
+      <div class="post-avatar">М</div>
+      <div class="post-meta">
+        <div class="post-username">Мария</div>
+        <div class="post-time">Сегодня, 12:05</div>
+      </div>
+    </div>
+    <div class="post-content">
+      Кто завтра на кофе? ☕️
+    </div>
+  </div>
+
+  <!-- Chat Section -->
+  <div class="section-label">Чат</div>
+
+  <div class="chat-layout">
+    <div class="chat-sidebar">
+      <div class="chat-sidebar-header">Собеседники</div>
+      <div class="chat-user active">
+        <div class="chat-user-avatar">Д</div>
+        <div class="chat-user-info">
+          <div class="chat-user-name">Дмитрий</div>
+          <div class="chat-user-preview">Отличный новый дизайн!</div>
+        </div>
+        <div class="chat-user-time">14:23</div>
+      </div>
+      <div class="chat-user">
+        <div class="chat-user-avatar">М</div>
+        <div class="chat-user-info">
+          <div class="chat-user-name">Мария</div>
+          <div class="chat-user-preview">Кто завтра на кофе?</div>
+        </div>
+        <div class="chat-user-time">12:05</div>
+      </div>
+      <div class="chat-user">
+        <div class="chat-user-avatar">С</div>
+        <div class="chat-user-info">
+          <div class="chat-user-name">Сергей</div>
+          <div class="chat-user-preview">Скинь дизайн пожалуйста</div>
+        </div>
+        <div class="chat-user-time">Вчера</div>
+      </div>
+    </div>
+    <div class="chat-main">
+      <div class="chat-messages">
+        <div class="message outgoing">Привет! Как дизайн?</div>
+        <div class="message incoming">Очень круто! Мягкие тени, тёплые тона 🔥</div>
+        <div class="message outgoing">А в тёмной теме как?</div>
+        <div class="message incoming">Тоже огонь, попробуй переключить 🎨</div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" placeholder="Написать сообщение...">
+        <button class="btn btn-primary">→</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 40px;"></div>
+</div>
+
+<!-- Bottom Nav (mobile) -->
+<div class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <a class="active">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+      <span>Лента</span>
+    </a>
+    <a>
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <span>Чат</span>
+    </a>
+    <a>
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span>Профиль</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  function setTheme(theme) {
+    const body = document.getElementById('app-body');
+    body.className = theme === 'light' ? 'theme-light' : 'theme-dark';
+    document.querySelector('.btn-light').classList.toggle('active', theme === 'light');
+    document.querySelector('.btn-dark').classList.toggle('active', theme === 'dark');
+  }
+  function toggleTheme() {
+    const isLight = document.getElementById('app-body').classList.contains('theme-light');
+    setTheme(isLight ? 'dark' : 'light');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyChat — Настройки + Тема</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+  }
+
+  .theme-light {
+    --bg-body: #f5f0eb;
+    --bg-surface: #ffffff;
+    --text-primary: #2d2824;
+    --text-secondary: #8a7e73;
+    --text-tertiary: #b8aea4;
+    --border-subtle: rgba(0,0,0,0.06);
+    --border-default: rgba(0,0,0,0.08);
+    --accent: #c9754f;
+    --accent-light: #fdf1eb;
+    --shadow-sm: 0 1px 3px rgba(120,80,50,0.06);
+    --shadow-md: 0 4px 12px rgba(120,80,50,0.08);
+    --nav-bg: rgba(255,255,255,0.82);
+    --nav-border: rgba(0,0,0,0.06);
+    --avatar-bg: #fdf1eb;
+    --avatar-text: #c9754f;
+    --input-bg: #ffffff;
+    --divider: rgba(0,0,0,0.06);
+    --accent-gradient: linear-gradient(135deg, #c9754f 0%, #b8643f 100%);
+    --tag-bg: #f5f0eb;
+  }
+
+  .theme-dark {
+    --bg-body: #151210;
+    --bg-surface: #1e1b18;
+    --text-primary: #f0ece8;
+    --text-secondary: #9c938b;
+    --text-tertiary: #635b54;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-default: rgba(255,255,255,0.08);
+    --accent: #e8946a;
+    --accent-light: rgba(232,148,106,0.12);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --nav-bg: rgba(30,27,24,0.92);
+    --nav-border: rgba(255,255,255,0.06);
+    --avatar-bg: rgba(232,148,106,0.15);
+    --avatar-text: #e8946a;
+    --input-bg: #1e1b18;
+    --divider: rgba(255,255,255,0.06);
+    --accent-gradient: linear-gradient(135deg, #e8946a 0%, #d4845d 100%);
+    --tag-bg: #252220;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    transition: background 0.4s ease, color 0.4s ease;
+    min-height: 100vh;
+  }
+
+  .app { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+  /* Nav */
+  .top-nav {
+    background: var(--nav-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--nav-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin: -16px -16px 20px;
+    padding: 0 16px;
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+  .top-nav::before,
+  .top-nav::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--nav-border);
+    opacity: 0.5;
+  }
+  .top-nav::before { left: 0; }
+  .top-nav::after { right: 0; }
+  .top-nav-inner {
+    max-width: 768px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: relative;
+  }
+  .logo {
+    font-weight: 700;
+    font-size: 18px;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-links { display: flex; gap: 20px; }
+  .nav-links a {
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 0;
+    position: relative;
+  }
+  .nav-links a:hover { color: var(--text-primary); }
+  .nav-links a.active { color: var(--accent); }
+  .nav-links a.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-gradient);
+    border-radius: 2px;
+  }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .user-badge {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 10px 3px 3px;
+    border-radius: 50px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-text);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .card-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    color: var(--text-primary);
+  }
+  .card-section {
+    margin-bottom: 24px;
+  }
+  .card-section:last-child { margin-bottom: 0; }
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+  }
+
+  /* Avatar block */
+  .avatar-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .avatar-large {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: var(--avatar-bg);
+    color: var(--avatar-text);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 600;
+    position: relative;
+  }
+  .avatar-edit {
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent-gradient);
+    color: white;
+    border: 2px solid var(--bg-surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* Theme selector */
+  .theme-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .theme-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  .theme-option:hover {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .theme-option.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .theme-option .radio {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--border-default);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+  .theme-option.active .radio {
+    border-color: var(--accent);
+  }
+  .theme-option.active .radio::after {
+    content: '';
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .theme-option .theme-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .theme-option .theme-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  /* Form */
+  .form-group {
+    margin-bottom: 16px;
+  }
+  .form-group:last-child { margin-bottom: 0; }
+  .form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .form-input {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+  .btn-primary {
+    background: var(--accent-gradient);
+    color: white;
+    flex: 1;
+    box-shadow: 0 2px 8px rgba(201,117,79,0.25);
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(201,117,79,0.3);
+  }
+  .btn-danger {
+    background: transparent;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+  .btn-danger:hover {
+    color: #e74c3c;
+  }
+
+  @media (max-width: 768px) {
+    .card { border-radius: 0; box-shadow: none; border-left: none; border-right: none; }
+    .app { padding: 12px; }
+    .top-nav { margin: -12px -12px 16px; padding: 0 12px; }
+  }
+</style>
+</head>
+<body class="theme-light" id="app-body">
+
+<div class="app">
+  <!-- Nav -->
+  <nav class="top-nav">
+    <div class="top-nav-inner">
+      <div class="nav-left" style="display:flex;align-items:center;gap:24px;">
+        <span class="logo">MyChat</span>
+        <div class="nav-links">
+          <a>Лента</a>
+          <a>Чат</a>
+          <a class="active">Настройки</a>
+        </div>
+      </div>
+      <div class="nav-right">
+        <div class="user-badge">
+          <div class="avatar">А</div>
+          <span>Анна</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-title">Настройки</div>
+
+    <!-- Profile section -->
+    <div class="card-section">
+      <div class="section-label">Профиль</div>
+      <div class="avatar-block">
+        <div class="avatar-large">
+          А
+          <div class="avatar-edit">✎</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Имя пользователя</label>
+        <input class="form-input" value="Анна" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" value="anna@example.com" readonly>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary">Сохранить</button>
+        <button class="btn btn-danger">Выйти</button>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div style="height:1px;background:var(--divider);margin:20px 0;"></div>
+
+    <!-- Theme section -->
+    <div class="card-section">
+      <div class="section-label">Оформление</div>
+      <div class="theme-options">
+        <label class="theme-option active" onclick="setTheme('light')">
+          <span class="theme-icon">☀️</span>
+          <div>
+            <div>Светлая</div>
+            <div class="theme-desc">Тёплая кремовая гамма</div>
+          </div>
+          <span class="radio" style="margin-left:auto;"></span>
+        </label>
+        <label class="theme-option" onclick="setTheme('dark')">
+          <span class="theme-icon">🌙</span>
+          <div>
+            <div>Тёмная</div>
+            <div class="theme-desc">Глубокий тёмный фон, аккуратные акценты</div>
+          </div>
+          <span class="radio" style="margin-left:auto;"></span>
+        </label>
+        <label class="theme-option" onclick="setTheme('system')">
+          <span class="theme-icon">💻</span>
+          <div>
+            <div>Системная</div>
+            <div class="theme-desc">Автоматически следует за настройками системы</div>
+          </div>
+          <span class="radio" style="margin-left:auto;"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  let currentTheme = 'light';
+
+  function applyTheme(mode) {
+    const body = document.getElementById('app-body');
+    if (mode === 'light') body.className = 'theme-light';
+    else if (mode === 'dark') body.className = 'theme-dark';
+    else body.className = systemDark ? 'theme-dark' : 'theme-light';
+
+    document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
+    const label = document.querySelectorAll('.theme-option')[mode === 'light' ? 0 : mode === 'dark' ? 1 : 2];
+    if (label) label.classList.add('active');
+  }
+
+  function setTheme(mode) {
+    currentTheme = mode;
+    localStorage.setItem('theme', mode); /* simulated */
+    applyTheme(mode);
+  }
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    systemDark = e.matches;
+    if (currentTheme === 'system') applyTheme('system');
+  });
+</script>
+</body>
+</html>
