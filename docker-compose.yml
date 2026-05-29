@@ -1,6 +1,9 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        HOME: /tmp
     ports:
       - "8080:8080"
     environment:
@@ -11,7 +14,10 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        HOME: /tmp
     ports:
       - "3000:80"
     depends_on:
