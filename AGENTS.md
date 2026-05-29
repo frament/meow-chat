@@ -32,6 +32,7 @@ frontend/
 make build       # docker compose build
 make up          # docker compose up -d
 make down        # docker compose down
+make restart-backend  # docker compose build backend && docker compose up -d --no-deps backend
 
 # Development (local)
 make dev-backend      # bash: cd backend && DB_PATH=./data/chat.db go run .

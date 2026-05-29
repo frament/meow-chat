@@ -8,8 +8,8 @@ import { ApiService } from '../../services/api.service';
   standalone: true,
   imports: [FormsModule, RouterLink],
   template: `
-    <div class="min-h-screen flex items-center justify-center" style="background:var(--bg-body);">
-      <div class="card" style="padding:24px 28px;width:100%;max-width:400px;margin:0 16px;">
+    <div class="min-h-screen flex items-center justify-center px-4" style="background:var(--bg-body);">
+      <div class="card" style="padding:24px 28px;width:100%;max-width:400px;">
         <h1 class="text-2xl font-bold text-center mb-6" style="color:var(--text-primary);">Вход</h1>
         <form (ngSubmit)="onSubmit()" class="space-y-4">
           <div>

@@ -1,4 +1,4 @@
-.PHONY: build up down logs dev-backend dev-backend-win dev-frontend
+.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend
 
 build:
 	docker compose build
@@ -11,6 +11,9 @@ down:
 
 logs:
 	docker compose logs -f
+
+restart-backend:
+	docker compose build backend && docker compose up -d --no-deps backend
 
 dev-backend:
 	cd backend && DB_PATH=./data/chat.db go run .
