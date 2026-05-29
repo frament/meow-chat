@@ -196,8 +196,7 @@ export class SettingsComponent implements OnInit {
   }
 
   logout() {
-    this.api.currentUser.set(null);
-    localStorage.removeItem('currentUser');
+    this.api.logout();
     this.router.navigate(['/login']);
   }
 }

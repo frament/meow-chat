@@ -67,6 +67,14 @@ func migrate() {
 			image_url TEXT NOT NULL,
 			FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			token_id TEXT UNIQUE NOT NULL,
+			expires_at DATETIME NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
 	}
 
 	for _, q := range queries {

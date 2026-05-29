@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"my-chat-backend/auth"
 	"my-chat-backend/database"
 	"my-chat-backend/models"
 
@@ -122,11 +123,27 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
-	return c.JSON(fiber.Map{
-		"id":         user.ID,
-		"username":   user.Username,
-		"email":      user.Email,
-		"avatar_url": user.AvatarURL,
+	accessToken, err := auth.GenerateAccessToken(user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
+	}
+
+	refreshToken, tokenID, err := auth.GenerateRefreshToken(user.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate refresh token"})
+	}
+
+	database.SaveRefreshToken(user.ID, tokenID, time.Now().Add(7*24*time.Hour))
+
+	return c.JSON(models.AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User: models.LoginResponse{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			AvatarURL: user.AvatarURL,
+		},
 	})
 }
 
@@ -149,10 +166,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreatePost(c *fiber.Ctx) error {
-	userID, err := c.ParamsInt("userId")
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
+	userID := c.Locals("userId").(int64)
 
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -265,8 +279,15 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetMessages(c *fiber.Ctx) error {
+	authUserID := c.Locals("userId").(int64)
 	userID1 := c.Query("user1")
 	userID2 := c.Query("user2")
+
+	id1, _ := strconv.ParseInt(userID1, 10, 64)
+	id2, _ := strconv.ParseInt(userID2, 10, 64)
+	if id1 != authUserID && id2 != authUserID {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
 
 	rows, err := database.DB.Query(`
 		SELECT m.id, m.from_user_id, m.to_user_id, m.content, m.created_at, u.username
@@ -294,10 +315,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SendMessage(c *fiber.Ctx) error {
-	fromUserID, err := c.ParamsInt("userId")
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
+	fromUserID := c.Locals("userId").(int64)
 
 	var req models.CreateMessageRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -319,10 +337,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
-	userID, err := c.ParamsInt("userId")
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
+	userID := c.Locals("userId").(int64)
 
 	file, err := c.FormFile("avatar")
 	if err != nil {
@@ -356,10 +371,7 @@ func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
-	userID, err := c.ParamsInt("userId")
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
+	userID := c.Locals("userId").(int64)
 
 	var req models.UpdateProfileRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -370,7 +382,7 @@ func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Username and email are required"})
 	}
 
-	_, err = database.DB.Exec(
+	_, err := database.DB.Exec(
 		"UPDATE users SET username = ?, email = ? WHERE id = ?",
 		req.Username, req.Email, userID,
 	)
@@ -394,11 +406,12 @@ func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	v := c.Locals("userId")
 	if v == nil {
+		log.Println("Missing userId in WebSocket locals")
 		return
 	}
-	uid, err := strconv.ParseInt(v.(string), 10, 64)
-	if err != nil {
-		log.Println("Invalid userId in WebSocket:", err)
+	uid, ok := v.(int64)
+	if !ok {
+		log.Println("Invalid userId type in WebSocket")
 		return
 	}
 

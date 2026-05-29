@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"my-chat-backend/auth"
 	"my-chat-backend/database"
 	"my-chat-backend/handlers"
 
@@ -25,7 +26,7 @@ func main() {
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, X-User-Id",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET,POST,PUT,DELETE",
 	}))
 
@@ -33,20 +34,34 @@ func main() {
 
 	api.Post("/register", h.Register)
 	api.Post("/login", h.Login)
+	api.Post("/refresh", h.Refresh)
 
+	api.Use(handlers.AuthRequired)
+
+	api.Post("/logout", h.Logout)
 	api.Get("/users", h.GetUsers)
 
-	api.Post("/posts/:userId", h.CreatePost)
+	api.Post("/posts", h.CreatePost)
 	api.Get("/feed", h.GetFeed)
 
 	api.Get("/messages", h.GetMessages)
-	api.Post("/messages/:userId", h.SendMessage)
+	api.Post("/messages", h.SendMessage)
 
-	api.Post("/upload-avatar/:userId", h.UploadAvatar)
-	api.Put("/profile/:userId", h.UpdateProfile)
+	api.Post("/upload-avatar", h.UploadAvatar)
+	api.Put("/profile", h.UpdateProfile)
 
-	api.Get("/ws/:userId", websocket.New(func(c *websocket.Conn) {
-		c.Locals("userId", c.Params("userId"))
+	api.Get("/ws", func(c *fiber.Ctx) error {
+		token := c.Query("token")
+		if token == "" {
+			return c.Status(401).JSON(fiber.Map{"error": "Missing token"})
+		}
+		claims, err := auth.ValidateAccessToken(token)
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		c.Locals("userId", claims.UserID)
+		return c.Next()
+	}, websocket.New(func(c *websocket.Conn) {
 		h.HandleWebSocket(c)
 	}))
 

@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/gofiber/contrib/websocket v1.3.2
 	github.com/gofiber/fiber/v2 v2.52.5
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/mattn/go-sqlite3 v1.14.22
 	golang.org/x/crypto v0.28.0
 )

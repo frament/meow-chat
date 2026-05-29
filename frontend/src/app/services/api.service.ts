@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 
 export interface User {
   id: number;
@@ -41,25 +41,25 @@ export interface LoginResponse {
   avatar_url: string;
 }
 
+export interface AuthResponse {
+  access_token: string;
+  refresh_token: string;
+  user: LoginResponse;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
+  readonly accessToken = signal<string | null>(null);
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
     const saved = localStorage.getItem('currentUser');
-    if (saved) {
+    const token = localStorage.getItem('accessToken');
+    if (saved && token) {
       this.currentUser.set(JSON.parse(saved));
+      this.accessToken.set(token);
     }
-  }
-
-  private getHeaders(): HttpHeaders {
-    const user = this.currentUser();
-    let headers = new HttpHeaders();
-    if (user) {
-      headers = headers.set('X-User-Id', String(user.id));
-    }
-    return headers;
   }
 
   register(username: string, email: string, password: string) {
@@ -70,10 +70,35 @@ export class ApiService {
   }
 
   login(username: string, password: string) {
-    return this.http.post<LoginResponse>(
+    return this.http.post<AuthResponse>(
       `${this.baseUrl}/login`,
       { username, password }
     );
+  }
+
+  refreshToken() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    return this.http.post<{ access_token: string; refresh_token: string }>(
+      `${this.baseUrl}/refresh`,
+      { refresh_token: refreshToken || '' }
+    );
+  }
+
+  logout() {
+    this.http.post(`${this.baseUrl}/logout`, {}).subscribe({ error: () => {} });
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    this.currentUser.set(null);
+    this.accessToken.set(null);
+  }
+
+  storeAuth(auth: AuthResponse) {
+    localStorage.setItem('accessToken', auth.access_token);
+    localStorage.setItem('refreshToken', auth.refresh_token);
+    localStorage.setItem('currentUser', JSON.stringify(auth.user));
+    this.accessToken.set(auth.access_token);
+    this.currentUser.set(auth.user);
   }
 
   getUsers() {
@@ -85,57 +110,49 @@ export class ApiService {
   }
 
   createPost(content: string, files: File[] = []) {
-    const user = this.currentUser();
     const formData = new FormData();
     formData.append('content', content);
     for (const file of files) {
       formData.append('images', file);
     }
     return this.http.post<{ id: number; message: string }>(
-      `${this.baseUrl}/posts/${user!.id}`,
-      formData,
-      { headers: new HttpHeaders().set('X-User-Id', String(user!.id)) }
+      `${this.baseUrl}/posts`,
+      formData
     );
   }
 
   getMessages(user1: number, user2: number) {
     return this.http.get<Message[]>(
-      `${this.baseUrl}/messages?user1=${user1}&user2=${user2}`,
-      { headers: this.getHeaders() }
+      `${this.baseUrl}/messages?user1=${user1}&user2=${user2}`
     );
   }
 
   sendMessage(toUserId: number, content: string) {
-    const user = this.currentUser();
     return this.http.post<{ id: number; message: string }>(
-      `${this.baseUrl}/messages/${user!.id}`,
-      { to_user_id: toUserId, content },
-      { headers: this.getHeaders() }
+      `${this.baseUrl}/messages`,
+      { to_user_id: toUserId, content }
     );
   }
 
   uploadAvatar(file: File) {
-    const user = this.currentUser();
     const formData = new FormData();
     formData.append('avatar', file);
     return this.http.post<{ avatar_url: string }>(
-      `${this.baseUrl}/upload-avatar/${user!.id}`,
-      formData,
-      { headers: new HttpHeaders().set('X-User-Id', String(user!.id)) }
+      `${this.baseUrl}/upload-avatar`,
+      formData
     );
   }
 
   updateProfile(username: string, email: string) {
-    const user = this.currentUser();
     return this.http.put<LoginResponse>(
-      `${this.baseUrl}/profile/${user!.id}`,
-      { username, email },
-      { headers: this.getHeaders() }
+      `${this.baseUrl}/profile`,
+      { username, email }
     );
   }
 
-  connectWebSocket(userId: number): WebSocket {
+  connectWebSocket(): WebSocket {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return new WebSocket(`${protocol}//${window.location.host}/api/ws/${userId}`);
+    const token = this.accessToken();
+    return new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
   }
 }

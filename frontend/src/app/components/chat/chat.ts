@@ -142,7 +142,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   connectWebSocket() {
-    this.ws = this.api.connectWebSocket(this.currentUserId);
+    this.ws = this.api.connectWebSocket();
 
     this.ws.onmessage = (event) => {
       const data = JSON.parse(event.data);

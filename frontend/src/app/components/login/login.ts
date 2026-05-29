@@ -44,8 +44,7 @@ export class LoginComponent {
   onSubmit() {
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
-        this.api.currentUser.set(res);
-        localStorage.setItem('currentUser', JSON.stringify(res));
+        this.api.storeAuth(res);
         this.router.navigate(['/feed']);
       },
       error: () => {
