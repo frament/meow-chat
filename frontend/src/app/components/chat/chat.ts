@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { ApiService, User, Message } from '../../services/api.service';
 
 @Component({
@@ -12,8 +13,32 @@ import { ApiService, User, Message } from '../../services/api.service';
     <!-- Desktop -->
     <div class="hidden md:flex gap-4 h-[calc(100vh-6rem)]">
       <div class="w-72 card p-3 overflow-y-auto shrink-0">
-        <h3 class="section-label" style="margin-bottom:12px;">Пользователи</h3>
-        @for (user of users; track user.id) {
+        @if (getPinnedUsers().length > 0) {
+          <h3 class="section-label" style="margin-bottom:12px;">📌 Закреплённые</h3>
+          @for (user of getPinnedUsers(); track user.id) {
+            <div (click)="openChat(user)"
+              class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
+              [style.background]="selectedUser?.id === user.id ? 'var(--accent-light)' : 'transparent'"
+              [class.hover-bg]="selectedUser?.id !== user.id">
+              @if (user.avatar_url) {
+                <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
+              } @else {
+                <div class="post-avatar" style="width:32px;height:32px;font-size:13px;">
+                  {{ user.username[0] }}
+                </div>
+              }
+              <span class="flex-1 text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
+              @if (user.is_online) {
+                <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
+              }
+              <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Открепить">📌</button>
+            </div>
+          }
+          <div class="divider" style="margin:8px 0;"></div>
+        }
+
+        <h3 class="section-label" style="margin-bottom:12px;">Все пользователи</h3>
+        @for (user of getUnpinnedUsers(); track user.id) {
           <div (click)="openChat(user)"
             class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
             [style.background]="selectedUser?.id === user.id ? 'var(--accent-light)' : 'transparent'"
@@ -25,7 +50,11 @@ import { ApiService, User, Message } from '../../services/api.service';
                 {{ user.username[0] }}
               </div>
             }
-            <span class="text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
+            <span class="flex-1 text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
+            @if (user.is_online) {
+              <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
+            }
+            <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Закрепить">📌</button>
           </div>
         }
       </div>
@@ -72,8 +101,31 @@ import { ApiService, User, Message } from '../../services/api.service';
     <div class="md:hidden">
       @if (!showMobileChat) {
         <div class="px-4 py-6 pb-20">
-          <h3 class="section-label" style="margin-bottom:12px;">Пользователи</h3>
-          @for (user of users; track user.id) {
+          @if (getPinnedUsers().length > 0) {
+            <h3 class="section-label" style="margin-bottom:12px;">📌 Закреплённые</h3>
+            @for (user of getPinnedUsers(); track user.id) {
+              <div (click)="openChat(user)"
+                class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg"
+                style="border-bottom:1px solid var(--divider);">
+                @if (user.avatar_url) {
+                  <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
+                } @else {
+                  <div class="post-avatar" style="width:40px;height:40px;font-size:16px;">
+                    {{ user.username[0] }}
+                  </div>
+                }
+                <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
+                @if (user.is_online) {
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
+                }
+                <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить">📌</button>
+              </div>
+            }
+            <div class="divider" style="margin:8px 0;"></div>
+          }
+
+          <h3 class="section-label" style="margin-bottom:12px;">Все пользователи</h3>
+          @for (user of getUnpinnedUsers(); track user.id) {
             <div (click)="openChat(user)"
               class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg"
               style="border-bottom:1px solid var(--divider);">
@@ -84,7 +136,11 @@ import { ApiService, User, Message } from '../../services/api.service';
                   {{ user.username[0] }}
                 </div>
               }
-              <span class="text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
+              <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
+              @if (user.is_online) {
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
+              }
+              <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Закрепить">📌</button>
             </div>
           }
         </div>
@@ -146,7 +202,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   messageContent = '';
   currentUserId = 0;
   showMobileChat = false;
+  pinnedIds: Set<number> = new Set();
   private ws: WebSocket | null = null;
+  private wsSubscription: Subscription | null = null;
 
   constructor(
     private api: ApiService,
@@ -168,22 +226,62 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
     });
 
+    this.loadFromCache();
+    this.loadFromServer();
+    this.listenWsOnlineEvents();
+    this.connectWebSocket();
+  }
+
+  private loadFromCache() {
+    const cached = localStorage.getItem('cachedUsers');
+    const cachedPins = localStorage.getItem('cachedPins');
+    if (cached) {
+      const users: User[] = JSON.parse(cached);
+      this.users = users.filter((u) => u.id !== this.currentUserId);
+    }
+    if (cachedPins) {
+      this.pinnedIds = new Set<number>(JSON.parse(cachedPins));
+    }
+  }
+
+  private loadFromServer() {
     this.api.getUsers().subscribe((users: User[]) => {
       this.users = users.filter((u) => u.id !== this.currentUserId);
-      const userId = this.route.snapshot.paramMap.get('userId');
-      if (userId) {
-        const user = this.users.find((u) => u.id === Number(userId));
-        if (user) {
-          this.selectUser(user);
+      localStorage.setItem('cachedUsers', JSON.stringify(users));
+      this.resolvePendingChat();
+    });
+    this.api.getPinned().subscribe((res) => {
+      this.pinnedIds = new Set(res.pinned_user_ids);
+      localStorage.setItem('cachedPins', JSON.stringify(res.pinned_user_ids));
+    });
+  }
+
+  private resolvePendingChat() {
+    const userId = this.route.snapshot.paramMap.get('userId');
+    if (userId) {
+      const user = this.users.find((u) => u.id === Number(userId));
+      if (user) {
+        this.selectUser(user);
+      }
+    }
+  }
+
+  private listenWsOnlineEvents() {
+    this.wsSubscription = this.api.wsOnlineEvent.subscribe((event) => {
+      for (const u of this.users) {
+        if (u.id === event.user_id) {
+          u.is_online = event.type === 'user_online';
+          break;
         }
       }
+      // Force change detection by replacing array reference
+      this.users = [...this.users];
     });
-
-    this.connectWebSocket();
   }
 
   ngOnDestroy() {
     this.ws?.close();
+    this.wsSubscription?.unsubscribe();
   }
 
   connectWebSocket() {
@@ -191,6 +289,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
       if (data.type === 'message' && this.selectedUser) {
         if (data.from === this.selectedUser.id) {
           this.messages.push({
@@ -202,6 +301,10 @@ export class ChatComponent implements OnInit, OnDestroy {
             from_user: this.selectedUser.username,
           });
         }
+      }
+
+      if (data.type === 'user_online' || data.type === 'user_offline') {
+        this.api.wsOnlineEvent.next(data);
       }
     };
   }
@@ -215,6 +318,27 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   openChat(user: User) {
     this.router.navigate(['/chat', user.id]);
+  }
+
+  togglePin(userId: number, event: MouseEvent) {
+    event.stopPropagation();
+    if (this.pinnedIds.has(userId)) {
+      this.pinnedIds.delete(userId);
+      this.api.unpinUser(userId).subscribe({ error: () => this.pinnedIds.add(userId) });
+    } else {
+      this.pinnedIds.add(userId);
+      this.api.pinUser(userId).subscribe({ error: () => this.pinnedIds.delete(userId) });
+    }
+    this.pinnedIds = new Set(this.pinnedIds);
+    localStorage.setItem('cachedPins', JSON.stringify([...this.pinnedIds]));
+  }
+
+  getPinnedUsers(): User[] {
+    return this.users.filter((u) => this.pinnedIds.has(u.id));
+  }
+
+  getUnpinnedUsers(): User[] {
+    return this.users.filter((u) => !this.pinnedIds.has(u.id));
   }
 
   sendMessage() {
