@@ -87,3 +87,4 @@ cd frontend && npm run build   # production build with service-worker
 - Frontend: custom `sw-push-handler.js` SW with `push`/`notificationclick` handlers
 - Frontend: register custom SW (`sw-push-handler.js` imports `ngsw-worker.js`) — `app.config.ts`, `angular.json`, `ngsw-config.json`
 - Frontend: `SwPush` subscription lifecycle (subscribe on init, VAPID key fetch) — `app.ts`, `api.service.ts`
+- Frontend: "Проверить обновления" button in settings — `settings.ts`
