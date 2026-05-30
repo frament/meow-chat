@@ -30,7 +30,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
 
-        return api.refreshToken().pipe(
+          return api.refreshToken().pipe(
           switchMap((res) => {
             localStorage.setItem('accessToken', res.access_token);
             localStorage.setItem('refreshToken', res.refresh_token);
@@ -41,9 +41,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             });
             return next(newReq);
           }),
-          catchError(() => {
-            api.logout();
-            router.navigate(['/login']);
+          catchError((refreshError) => {
+            if (refreshError instanceof HttpErrorResponse && refreshError.status === 401) {
+              api.logout();
+              router.navigate(['/login']);
+            }
             return throwError(() => error);
           })
         );
