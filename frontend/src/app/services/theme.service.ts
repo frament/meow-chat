@@ -26,7 +26,7 @@ export class ThemeService {
   }
 
   private getStoredMode(): ThemeMode {
-    return (localStorage.getItem('theme') as ThemeMode) || 'system';
+    return (localStorage.getItem('theme') as ThemeMode) || 'light';
   }
 
   get currentMode(): ThemeMode {
