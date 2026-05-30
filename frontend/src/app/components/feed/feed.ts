@@ -8,7 +8,7 @@ import { ApiService, Post } from '../../services/api.service';
   standalone: true,
   imports: [DatePipe, FormsModule],
   template: `
-    <div class="space-y-4 sm:space-y-6">
+    <div class="px-4 py-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
       <div class="card new-post">
         <h2 class="text-lg font-semibold mb-3" style="color:var(--text-primary);">Новый пост</h2>
         <textarea [(ngModel)]="newPostContent" rows="3" placeholder="Что у вас нового?"></textarea>

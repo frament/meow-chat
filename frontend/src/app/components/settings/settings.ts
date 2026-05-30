@@ -9,7 +9,7 @@ import { ThemeService, ThemeMode } from '../../services/theme.service';
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div class="max-w-lg mx-auto">
+    <div class="max-w-lg mx-auto px-4 py-6 pb-20 sm:pb-6">
       <div class="card" style="padding:24px;">
         <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Настройки</h1>
 
