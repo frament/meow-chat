@@ -100,13 +100,12 @@ import { ApiService, User, Message } from '../../services/api.service';
     <!-- Mobile -->
     <div class="md:hidden">
       @if (!showMobileChat) {
-        <div class="px-4 py-6 pb-20">
+        <div class="px-4 py-6 pb-20 space-y-2">
           @if (getPinnedUsers().length > 0) {
             <h3 class="section-label" style="margin-bottom:12px;">📌 Закреплённые</h3>
             @for (user of getPinnedUsers(); track user.id) {
               <div (click)="openChat(user)"
-                class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg"
-                style="border-bottom:1px solid var(--divider);">
+                class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
                 @if (user.avatar_url) {
                   <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
                 } @else {
@@ -121,14 +120,12 @@ import { ApiService, User, Message } from '../../services/api.service';
                 <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить">📌</button>
               </div>
             }
-            <div class="divider" style="margin:8px 0;"></div>
           }
 
           <h3 class="section-label" style="margin-bottom:12px;">Все пользователи</h3>
           @for (user of getUnpinnedUsers(); track user.id) {
             <div (click)="openChat(user)"
-              class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg"
-              style="border-bottom:1px solid var(--divider);">
+              class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
               @if (user.avatar_url) {
                 <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
               } @else {
