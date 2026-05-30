@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -10,6 +10,7 @@ import { ApiService, User, Message } from '../../services/api.service';
   standalone: true,
   imports: [DatePipe, FormsModule],
   template: `
+    <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
     <div class="hidden md:flex gap-4 h-[calc(100vh-6rem)]">
       <div class="w-72 card p-3 overflow-y-auto shrink-0">
@@ -76,22 +77,51 @@ import { ApiService, User, Message } from '../../services/api.service';
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
                   [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
-                  <p>{{ msg.content }}</p>
+                  @if (msg.content) { <p>{{ msg.content }}</p> }
+                    @if (msg.images && msg.images.length > 0) {
+                    <div class="flex flex-wrap gap-1 mt-1">
+                      @for (img of msg.images; track img.id || $index) {
+                      <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                      (click)="openImage(img.image_url)">
+                      }
+                    </div>
+                    }
                   <p class="text-xs mt-1 opacity-70">{{ msg.created_at | date:'HH:mm' }}</p>
                 </div>
               </div>
             }
           </div>
 
-          <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
-            <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
+          <!-- Desktop chat input -->
+          <div>
+            @if (previews.length > 0) {
+            <div class="flex gap-2 px-4 py-2 overflow-x-auto" style="border-top:1px solid var(--divider);">
+              @for (preview of previews; track $index) {
+              <div class="relative shrink-0">
+                <img [src]="preview" class="w-16 h-16 rounded-lg object-cover">
+                <button (click)="removeFile($index)"
+                class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs rounded-full"
+                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);">✕</button>
+              </div>
+              }
+            </div>
+            }
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
+              <button (click)="triggerFileInput()" title="Прикрепить изображение"
+              style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
+              <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              </button>
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;" placeholder="Напишите сообщение...">
-            <button (click)="sendMessage()" title="Отправить"
+              <button (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </button>
+              </button>
+            </div>
           </div>
         }
       </div>
@@ -170,22 +200,51 @@ import { ApiService, User, Message } from '../../services/api.service';
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
                   [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
-                  <p>{{ msg.content }}</p>
+                  @if (msg.content) { <p>{{ msg.content }}</p> }
+                    @if (msg.images && msg.images.length > 0) {
+                    <div class="flex flex-wrap gap-1 mt-1">
+                      @for (img of msg.images; track img.id || $index) {
+                      <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                      (click)="openImage(img.image_url)">
+                      }
+                    </div>
+                    }
                   <p class="text-xs mt-1 opacity-70">{{ msg.created_at | date:'HH:mm' }}</p>
                 </div>
               </div>
             }
           </div>
 
-          <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
-            <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
+          <!-- Mobile chat input -->
+          <div>
+            @if (previews.length > 0) {
+            <div class="flex gap-2 px-4 py-2 overflow-x-auto" style="border-top:1px solid var(--divider);">
+              @for (preview of previews; track $index) {
+              <div class="relative shrink-0">
+                <img [src]="preview" class="w-16 h-16 rounded-lg object-cover">
+                <button (click)="removeFile($index)"
+                class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs rounded-full"
+                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);">✕</button>
+              </div>
+              }
+            </div>
+            }
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
+              <button (click)="triggerFileInput()" title="Прикрепить изображение"
+              style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
+              <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              </button>
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;" placeholder="Напишите сообщение...">
-            <button (click)="sendMessage()" title="Отправить"
+              <button (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </button>
+              </button>
+            </div>
           </div>
         </div>
       }
@@ -197,6 +256,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectedUser: User | null = null;
   messages: Message[] = [];
   messageContent = '';
+  selectedFiles: File[] = [];
+  previews: string[] = [];
   currentUserId = 0;
   showMobileChat = false;
   pinnedIds: Set<number> = new Set();
@@ -289,14 +350,17 @@ export class ChatComponent implements OnInit, OnDestroy {
 
       if (data.type === 'message' && this.selectedUser) {
         if (data.from === this.selectedUser.id) {
-          this.messages.push({
+          const msg: Message = {
             id: Date.now(),
             from_user_id: data.from,
             to_user_id: this.currentUserId,
             content: data.content,
             created_at: new Date().toISOString(),
             from_user: this.selectedUser.username,
-          });
+            images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
+          };
+          this.messages.push(msg);
+          localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
         }
       }
 
@@ -306,10 +370,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     };
   }
 
+  private messageCacheKey(otherUserId: number): string {
+    const ids = [this.currentUserId, otherUserId].sort((a, b) => a - b);
+    return `cached_messages_${ids[0]}_${ids[1]}`;
+  }
+
   selectUser(user: User) {
     this.selectedUser = user;
+
+    const cached = localStorage.getItem(this.messageCacheKey(user.id));
+    this.messages = cached ? JSON.parse(cached) : [];
+
     this.api.getMessages(this.currentUserId, user.id).subscribe((msgs: Message[]) => {
       this.messages = msgs;
+      localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(msgs));
     });
   }
 
@@ -339,20 +413,57 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   sendMessage() {
-    if (!this.messageContent.trim() || !this.selectedUser) return;
+    if ((!this.messageContent.trim() && this.selectedFiles.length === 0) || !this.selectedUser) return;
 
-    this.api.sendMessage(this.selectedUser.id, this.messageContent).subscribe({
+    const content = this.messageContent;
+    const files = [...this.selectedFiles];
+    this.api.sendMessage(this.selectedUser.id, content, files).subscribe({
       next: () => {
-        this.messages.push({
+        const msg: Message = {
           id: Date.now(),
           from_user_id: this.currentUserId,
           to_user_id: this.selectedUser!.id,
-          content: this.messageContent,
+          content: content,
           created_at: new Date().toISOString(),
           from_user: this.api.currentUser()?.username ?? '',
-        });
+        };
+        this.messages.push(msg);
+        localStorage.setItem(this.messageCacheKey(this.selectedUser!.id), JSON.stringify(this.messages));
         this.messageContent = '';
+        this.clearFiles();
       },
     });
+  }
+
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files) return;
+    const remaining = 10 - this.selectedFiles.length;
+    for (let i = 0; i < Math.min(input.files.length, remaining); i++) {
+      this.selectedFiles.push(input.files[i]);
+      const reader = new FileReader();
+      reader.onload = (e) => this.previews.push(e.target!.result as string);
+      reader.readAsDataURL(input.files[i]);
+    }
+    input.value = '';
+  }
+
+  removeFile(index: number) {
+    this.selectedFiles.splice(index, 1);
+    this.previews.splice(index, 1);
+  }
+
+  private clearFiles() {
+    this.selectedFiles = [];
+    this.previews = [];
+  }
+
+  @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;
+  triggerFileInput() {
+    this.fileInputRef?.nativeElement.click();
+  }
+
+  openImage(url: string) {
+    window.open(url, '_blank');
   }
 }
