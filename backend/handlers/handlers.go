@@ -39,6 +39,7 @@ type wsMessage struct {
 	from    int64
 	to      int64
 	content string
+	images  []string
 }
 
 func NewHandler() *Handler {
@@ -111,11 +112,15 @@ func (h *Handler) runHub() {
 		case msg := <-h.broadcast:
 			for conn, uid := range h.clients {
 				if uid == msg.to {
-					err := conn.WriteJSON(fiber.Map{
+					payload := fiber.Map{
 						"type":    "message",
 						"from":    msg.from,
 						"content": msg.content,
-					})
+					}
+					if len(msg.images) > 0 {
+						payload["images"] = msg.images
+					}
+					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
 						conn.Close()
@@ -377,23 +382,75 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	fromUserID := c.Locals("userId").(int64)
 
-	var req models.CreateMessageRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid form data"})
 	}
 
-	result, err := database.DB.Exec(
+	toUserID, err := strconv.ParseInt(form.Value["to_user_id"][0], 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid recipient"})
+	}
+
+	content := ""
+	if vals, ok := form.Value["content"]; ok && len(vals) > 0 {
+		content = vals[0]
+	}
+
+	files := form.File["images"]
+	if len(files) > 10 {
+		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		"INSERT INTO messages (from_user_id, to_user_id, content) VALUES (?, ?, ?)",
-		fromUserID, req.ToUserID, req.Content,
+		fromUserID, toUserID, content,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
 	}
 
-	id, _ := result.LastInsertId()
-	h.broadcast <- wsMessage{from: int64(fromUserID), to: req.ToUserID, content: req.Content}
+	messageID, _ := result.LastInsertId()
 
-	return c.Status(201).JSON(fiber.Map{"id": id, "message": "Message sent"})
+	var images []string
+	for _, file := range files {
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
+			continue
+		}
+		if file.Size > 10*1024*1024 {
+			continue
+		}
+
+		filename := fmt.Sprintf("%d_%s", messageID, file.Filename)
+		savePath := filepath.Join("./uploads/messages", filename)
+		if err := c.SaveFile(file, savePath); err != nil {
+			continue
+		}
+		imageURL := "/uploads/messages/" + filename
+		images = append(images, imageURL)
+
+		tx.Exec("INSERT INTO message_images (message_id, image_url) VALUES (?, ?)", messageID, imageURL)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save message"})
+	}
+
+	h.broadcast <- wsMessage{
+		from:    fromUserID,
+		to:      toUserID,
+		content: content,
+		images:  images,
+	}
+
+	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})
 }
 
 func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
