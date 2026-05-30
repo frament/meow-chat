@@ -20,10 +20,14 @@ import (
 )
 
 type Handler struct {
-	clients    map[*websocket.Conn]int64
-	register   chan *wsClient
-	unregister chan *wsClient
-	broadcast  chan wsMessage
+	clients      map[*websocket.Conn]int64
+	register     chan *wsClient
+	unregister   chan *wsClient
+	broadcast    chan wsMessage
+	broadcastAll chan fiber.Map
+	graceExpired chan int64
+	onlineUsers  map[int64]bool
+	graceTimers  map[int64]*time.Timer
 }
 
 type wsClient struct {
@@ -39,10 +43,14 @@ type wsMessage struct {
 
 func NewHandler() *Handler {
 	h := &Handler{
-		clients:    make(map[*websocket.Conn]int64),
-		register:   make(chan *wsClient),
-		unregister: make(chan *wsClient),
-		broadcast:  make(chan wsMessage),
+		clients:      make(map[*websocket.Conn]int64),
+		register:     make(chan *wsClient),
+		unregister:   make(chan *wsClient),
+		broadcast:    make(chan wsMessage),
+		broadcastAll: make(chan fiber.Map),
+		graceExpired: make(chan int64),
+		onlineUsers:  make(map[int64]bool),
+		graceTimers:  make(map[int64]*time.Timer),
 	}
 	go h.runHub()
 	return h
@@ -53,11 +61,53 @@ func (h *Handler) runHub() {
 		select {
 		case client := <-h.register:
 			h.clients[client.conn] = client.uid
+			// Cancel any existing grace timer (reconnect within grace period)
+			if t, ok := h.graceTimers[client.uid]; ok {
+				t.Stop()
+				delete(h.graceTimers, client.uid)
+			}
+			if !h.onlineUsers[client.uid] {
+				h.onlineUsers[client.uid] = true
+				for conn := range h.clients {
+					conn.WriteJSON(fiber.Map{"type": "user_online", "user_id": client.uid})
+				}
+			}
+
 		case client := <-h.unregister:
 			if _, ok := h.clients[client.conn]; ok {
 				delete(h.clients, client.conn)
 				client.conn.Close()
 			}
+			hasOthers := false
+			for _, uid := range h.clients {
+				if uid == client.uid {
+					hasOthers = true
+					break
+				}
+			}
+			if !hasOthers && h.onlineUsers[client.uid] {
+				h.graceTimers[client.uid] = time.AfterFunc(30*time.Second, func() {
+					h.graceExpired <- client.uid
+				})
+			}
+
+		case uid := <-h.graceExpired:
+			delete(h.graceTimers, uid)
+			// Verify user hasn't reconnected while timer was pending
+			stillOffline := true
+			for _, cu := range h.clients {
+				if cu == uid {
+					stillOffline = false
+					break
+				}
+			}
+			if stillOffline && h.onlineUsers[uid] {
+				h.onlineUsers[uid] = false
+				for conn := range h.clients {
+					conn.WriteJSON(fiber.Map{"type": "user_offline", "user_id": uid})
+				}
+			}
+
 		case msg := <-h.broadcast:
 			for conn, uid := range h.clients {
 				if uid == msg.to {
@@ -71,6 +121,15 @@ func (h *Handler) runHub() {
 						conn.Close()
 						delete(h.clients, conn)
 					}
+				}
+			}
+
+		case msg := <-h.broadcastAll:
+			for conn := range h.clients {
+				if err := conn.WriteJSON(msg); err != nil {
+					log.Println("WebSocket broadcastAll write error:", err)
+					conn.Close()
+					delete(h.clients, conn)
 				}
 			}
 		}
