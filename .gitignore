@@ -10,3 +10,6 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Built binaries
+my-chat-backend.exe
