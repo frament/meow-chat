@@ -179,8 +179,8 @@ export class ApiService {
   pushSubscribe(subscription: PushSubscriptionJSON) {
     return this.http.post(`${this.baseUrl}/push/subscribe`, {
       endpoint: subscription.endpoint,
-      p256dh: subscription.keys?.p256dh,
-      auth: subscription.keys?.auth,
+      p256dh: subscription.keys?.['p256dh'],
+      auth: subscription.keys?.['auth'],
     });
   }
 
