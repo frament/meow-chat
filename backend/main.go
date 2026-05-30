@@ -17,6 +17,9 @@ func main() {
 	database.InitDB()
 
 	h := handlers.NewHandler()
+	if err := h.LoadVAPIDKeys(); err != nil {
+		log.Fatal("Failed to init VAPID keys:", err)
+	}
 
 	app := fiber.New(fiber.Config{
 		AppName: "MyChat",
@@ -35,6 +38,7 @@ func main() {
 	api.Post("/register", h.Register)
 	api.Post("/login", h.Login)
 	api.Post("/refresh", h.Refresh)
+	api.Get("/push/vapid-public-key", h.VAPIDPublicKey)
 
 	api.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
@@ -52,6 +56,9 @@ func main() {
 	}))
 
 	api.Use(handlers.AuthRequired)
+
+	api.Post("/push/subscribe", h.SubscribePush)
+	api.Delete("/push/subscribe", h.UnsubscribePush)
 
 	api.Get("/pinned", h.GetPinned)
 	api.Post("/pin/:id", h.PinUser)
