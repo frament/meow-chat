@@ -34,6 +34,7 @@ export interface Message {
   content: string;
   created_at: string;
   from_user: string;
+  images?: { id: number; image_url: string }[];
 }
 
 export interface LoginResponse {
@@ -142,10 +143,16 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string) {
+  sendMessage(toUserId: number, content: string, files: File[] = []) {
+    const formData = new FormData();
+    formData.append('to_user_id', String(toUserId));
+    formData.append('content', content);
+    for (const file of files) {
+      formData.append('images', file);
+    }
     return this.http.post<{ id: number; message: string }>(
       `${this.baseUrl}/messages`,
-      { to_user_id: toUserId, content }
+      formData
     );
   }
 
