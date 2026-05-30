@@ -34,7 +34,7 @@ import { ApiService } from '../../services/api.service';
           </div>
         </div>
       </nav>
-      <main class="max-w-4xl mx-auto">
+      <main class="max-w-4xl mx-auto md:min-h-[calc(100vh-3.5rem)] md:py-6">
         <router-outlet />
       </main>
       <nav class="bottom-nav fixed bottom-0 left-0 right-0 sm:hidden z-50">
