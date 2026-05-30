@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { interval, fromEvent, filter, tap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
+import { ThemeService } from './services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -48,6 +49,7 @@ export class App implements OnInit, OnDestroy {
   readonly #sw = inject(SwUpdate);
   readonly #swPush = inject(SwPush);
   readonly #api = inject(ApiService);
+  readonly #theme = inject(ThemeService);
   readonly updateAvailable = signal(false);
   readonly #sub = new Subscription();
 
