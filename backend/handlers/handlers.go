@@ -219,6 +219,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
 			continue
 		}
+		u.IsOnline = h.onlineUsers[u.ID]
 		users = append(users, u)
 	}
 	return c.JSON(users)
