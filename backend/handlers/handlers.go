@@ -463,6 +463,62 @@ func (h *Handler) UpdateProfile(c *fiber.Ctx) error {
 	})
 }
 
+func (h *Handler) GetPinned(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	rows, err := database.DB.Query("SELECT pinned_user_id FROM pinned_users WHERE user_id = ?", userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch pinned users"})
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return c.JSON(fiber.Map{"pinned_user_ids": ids})
+}
+
+func (h *Handler) PinUser(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	pinnedID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+	if userID == pinnedID {
+		return c.Status(400).JSON(fiber.Map{"error": "Cannot pin yourself"})
+	}
+
+	_, err = database.DB.Exec(
+		"INSERT OR IGNORE INTO pinned_users (user_id, pinned_user_id) VALUES (?, ?)",
+		userID, pinnedID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to pin user"})
+	}
+	return c.JSON(fiber.Map{"message": "User pinned"})
+}
+
+func (h *Handler) UnpinUser(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	pinnedID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	_, err = database.DB.Exec(
+		"DELETE FROM pinned_users WHERE user_id = ? AND pinned_user_id = ?",
+		userID, pinnedID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to unpin user"})
+	}
+	return c.JSON(fiber.Map{"message": "User unpinned"})
+}
+
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	v := c.Locals("userId")
 	if v == nil {
