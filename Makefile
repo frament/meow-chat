@@ -1,4 +1,7 @@
-.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend
+.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update
+
+update:
+	git pull && docker compose build && docker compose up -d
 
 build:
 	docker compose build
