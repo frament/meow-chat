@@ -65,3 +65,13 @@ cd frontend && npm run build   # production build with service-worker
 - **Online status**: Backend tracks online users via WebSocket hub (`onlineUsers map[int64]bool`). 30s grace period on disconnect via `time.AfterFunc` — reconnect cancels timer. `GET /api/users` returns `is_online`. WS broadcasts `user_online`/`user_offline` events. Frontend caches users in `cachedUsers` localStorage.
 - **Pinned users**: `pinned_users` DB table (`user_id`, `pinned_user_id`). API: `GET /api/pinned`, `POST /api/pin/:id`, `DELETE /api/pin/:id`. Frontend stores pins in `cachedPins` localStorage, sorted into separate "📌 Закреплённые" section above "Все пользователи". Each item has pin toggle button.
 - **Mobile user list items**: Each user in mobile chat list is a standalone `.card` with `space-y-2` gap — no container background, individual cards per user.
+- **Message images**: `message_images` DB table (`id`, `message_id`, `image_url`). `POST /api/messages` accepts `multipart/form-data` with `content` + `images` (max 10, jpg/png/gif/webp, 10MB each). Images saved to `./uploads/messages/`. `GET /api/messages` returns `images[]` per message. WS broadcasts `images: string[]`. Frontend has image picker button, preview strip, renders images inside bubbles (clickable to open in new tab).
+
+## Session (2026-05-30)
+- Implemented message images feature end-to-end
+- Added `message_images` table + uploads dir — `database/database.go`
+- Rewrote `SendMessage` to `multipart/form-data` with image validation + save — `handlers/handlers.go`
+- Updated `GetMessages` to fetch images via IN query — `handlers/handlers.go`
+- Updated `wsMessage` struct + WS broadcast to include `images` — `handlers/handlers.go`
+- Frontend: `Message` interface gains `images`, `sendMessage` accepts `File[]` as FormData — `api.service.ts`
+- Frontend: image picker button, preview strip with remove, inline image rendering in bubbles, mobile + desktop — `chat.ts`
