@@ -1,6 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { SwUpdate } from '@angular/service-worker';
 import { ApiService } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 
@@ -98,11 +99,26 @@ import { ThemeService, ThemeMode } from '../../services/theme.service';
             </label>
           </div>
         </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="section-label">Обновления</div>
+          <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
+            class="btn-secondary" style="width:100%;padding:12px 20px;">
+            {{ updateChecking ? 'Проверка...' : 'Проверить обновления' }}
+          </button>
+          @if (updateStatus) {
+            <p class="mt-2 text-sm text-center" [style.color]="updateStatusColor">{{ updateStatus }}</p>
+          }
+        </div>
       </div>
     </div>
   `,
 })
 export class SettingsComponent implements OnInit {
+  readonly #sw = inject(SwUpdate);
+
   username = '';
   email = '';
   saving = false;
@@ -113,6 +129,9 @@ export class SettingsComponent implements OnInit {
   uploading = false;
   avatarSuccess = false;
   selectedTheme: ThemeMode = 'light';
+  updateChecking = false;
+  updateStatus = '';
+  updateStatusColor = '';
 
   constructor(
     private api: ApiService,
@@ -120,6 +139,32 @@ export class SettingsComponent implements OnInit {
     private theme: ThemeService,
   ) {
     this.selectedTheme = this.theme.currentMode;
+  }
+
+  async checkForUpdates() {
+    if (!this.#sw.isEnabled) {
+      this.updateStatus = 'Service worker неактивен';
+      this.updateStatusColor = '#e74c3c';
+      return;
+    }
+    this.updateChecking = true;
+    this.updateStatus = '';
+    try {
+      const hasUpdate = await this.#sw.checkForUpdate();
+      if (hasUpdate) {
+        this.updateStatus = 'Доступно обновление — перезагрузите страницу';
+        this.updateStatusColor = '#e67e22';
+      } else {
+        this.updateStatus = 'Версия актуальна';
+        this.updateStatusColor = '#27ae60';
+      }
+    } catch {
+      this.updateStatus = 'Ошибка проверки обновлений';
+      this.updateStatusColor = '#e74c3c';
+    } finally {
+      this.updateChecking = false;
+      setTimeout(() => (this.updateStatus = ''), 5000);
+    }
   }
 
   get currentUsername() {
