@@ -88,6 +88,14 @@ func migrate() {
 			image_url TEXT NOT NULL,
 			FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS push_subscriptions (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			endpoint    TEXT    NOT NULL,
+			p256dh      TEXT    NOT NULL,
+			auth        TEXT    NOT NULL,
+			UNIQUE(user_id, endpoint)
+		)`,
 	}
 
 	for _, q := range queries {
