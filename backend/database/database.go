@@ -75,6 +75,13 @@ func migrate() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS pinned_users (
+			user_id INTEGER NOT NULL,
+			pinned_user_id INTEGER NOT NULL,
+			PRIMARY KEY (user_id, pinned_user_id),
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (pinned_user_id) REFERENCES users(id)
+		)`,
 	}
 
 	for _, q := range queries {
