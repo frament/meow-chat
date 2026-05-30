@@ -172,6 +172,24 @@ export class ApiService {
     );
   }
 
+  getVapidPublicKey() {
+    return this.http.get<{ publicKey: string }>(`${this.baseUrl}/push/vapid-public-key`);
+  }
+
+  pushSubscribe(subscription: PushSubscriptionJSON) {
+    return this.http.post(`${this.baseUrl}/push/subscribe`, {
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys?.p256dh,
+      auth: subscription.keys?.auth,
+    });
+  }
+
+  pushUnsubscribe(endpoint: string) {
+    return this.http.delete(`${this.baseUrl}/push/subscribe`, {
+      body: { endpoint },
+    });
+  }
+
   connectWebSocket(): WebSocket {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = this.accessToken();
