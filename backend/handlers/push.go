@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"my-chat-backend/database"
@@ -83,4 +84,54 @@ func (h *Handler) UnsubscribePush(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Unsubscribed"})
+}
+
+func (h *Handler) sendPushNotification(toUserID int64, title, body string, data map[string]interface{}) {
+	rows, err := database.DB.Query(
+		"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
+		toUserID,
+	)
+	if err != nil {
+		log.Println("Failed to query push subscriptions:", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var endpoint, p256dh, auth string
+		if err := rows.Scan(&endpoint, &p256dh, &auth); err != nil {
+			continue
+		}
+
+		sub := &webpush.Subscription{
+			Endpoint: endpoint,
+			Keys: webpush.Keys{
+				P256dh: p256dh,
+				Auth:   auth,
+			},
+		}
+
+		payload, _ := json.Marshal(map[string]interface{}{
+			"title": title,
+			"body":  body,
+			"icon":  "/favicon.ico",
+			"data":  data,
+		})
+
+		resp, err := webpush.SendNotification(payload, sub, &webpush.Options{
+			Subscriber:      "admin@mychat.local",
+			VAPIDPublicKey:  vapid.Public,
+			VAPIDPrivateKey: vapid.Private,
+			TTL:             86400,
+		})
+		if err != nil {
+			log.Println("Web Push send error:", err)
+			continue
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == 410 || resp.StatusCode == 404 {
+			database.DB.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
+		}
+	}
 }

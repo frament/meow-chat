@@ -485,6 +485,23 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		images:  images,
 	}
 
+	if !h.onlineUsers[toUserID] {
+		var senderName string
+		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
+		preview := content
+		if len(preview) > 120 {
+			preview = preview[:120] + "..."
+		}
+		if preview == "" && len(images) > 0 {
+			preview = "[Image]"
+		}
+		h.sendPushNotification(toUserID,
+			"New message from "+senderName,
+			preview,
+			map[string]interface{}{"url": fmt.Sprintf("/chat/%d", fromUserID), "senderId": fromUserID},
+		)
+	}
+
 	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})
 }
 
