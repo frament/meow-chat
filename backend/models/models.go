@@ -84,3 +84,13 @@ type RefreshResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+type PushSubscriptionRequest struct {
+	Endpoint string `json:"endpoint"`
+	P256dh   string `json:"p256dh"`
+	Auth     string `json:"auth"`
+}
+
+type DeleteSubscriptionRequest struct {
+	Endpoint string `json:"endpoint"`
+}
