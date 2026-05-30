@@ -9,6 +9,7 @@ type User struct {
 	Password  string    `json:"-"`
 	AvatarURL string    `json:"avatar_url"`
 	CreatedAt time.Time `json:"created_at"`
+	IsOnline  bool      `json:"is_online"`
 }
 
 type Message struct {
