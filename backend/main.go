@@ -53,6 +53,10 @@ func main() {
 
 	api.Use(handlers.AuthRequired)
 
+	api.Get("/pinned", h.GetPinned)
+	api.Post("/pin/:id", h.PinUser)
+	api.Delete("/pin/:id", h.UnpinUser)
+
 	api.Post("/logout", h.Logout)
 	api.Get("/users", h.GetUsers)
 
