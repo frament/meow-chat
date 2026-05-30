@@ -89,3 +89,7 @@ cd frontend && npm run build   # production build with service-worker
 - Frontend: `SwPush` subscription lifecycle (subscribe on init, VAPID key fetch) — `app.ts`, `api.service.ts`
 - Frontend: "Проверить обновления" button in settings — `settings.ts`
 - Fixed default theme from `system` to `light` — `theme.service.ts`
+- Fixed `ThemeService` not applied on startup (injected in `App` component) — `app.ts`
+- Fixed FOUC — added inline `<script>` in `index.html` to apply theme before Angular loads
+- Fixed auth interceptor: don't logout on network/server errors (5xx) during token refresh — `auth.interceptor.ts`
+- Fixed root `/` route: redirect to `/feed` if logged in, `/login` otherwise — `app.routes.ts`

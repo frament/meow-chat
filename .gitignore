@@ -13,3 +13,6 @@ Thumbs.db
 
 # Built binaries
 my-chat-backend.exe
+
+# Generated keys (contains private key)
+vapid_keys.json
