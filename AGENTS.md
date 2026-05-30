@@ -80,3 +80,10 @@ cd frontend && npm run build   # production build with service-worker
 - Added `make update` target (git pull → docker compose build → up -d) — `Makefile`
 - Added PWA update check: `SwUpdate.versionUpdates` listener, 30min interval + `window:focus` trigger, update banner with "Обновить" button in `app.ts`
 - Added `my-chat-backend.exe` to `.gitignore`
+- Added push notifications via Web Push API
+- Backend: `push_subscriptions` table + VAPID key generation — `database/database.go`, `handlers/push.go`
+- Backend: push subscription endpoints (`GET /api/push/vapid-public-key`, `POST/DELETE /api/push/subscribe`) — `main.go`, `handlers/push.go`
+- Backend: push trigger in `SendMessage` when recipient offline — `handlers/handlers.go`
+- Frontend: custom `sw-push-handler.js` SW with `push`/`notificationclick` handlers
+- Frontend: register custom SW (`sw-push-handler.js` imports `ngsw-worker.js`) — `app.config.ts`, `angular.json`, `ngsw-config.json`
+- Frontend: `SwPush` subscription lifecycle (subscribe on init, VAPID key fetch) — `app.ts`, `api.service.ts`
