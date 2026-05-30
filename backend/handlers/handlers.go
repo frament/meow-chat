@@ -376,6 +376,41 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 		}
 		messages = append(messages, m)
 	}
+
+	// Fetch images for all messages
+	msgIDs := make([]interface{}, 0, len(messages))
+	idPos := make([]int64, 0, len(messages))
+	for _, m := range messages {
+		msgIDs = append(msgIDs, m.ID)
+		idPos = append(idPos, m.ID)
+	}
+	if len(msgIDs) > 0 {
+		placeholders := make([]string, len(msgIDs))
+		for i := range msgIDs {
+			placeholders[i] = "?"
+		}
+		imgRows, err := database.DB.Query(
+			"SELECT id, message_id, image_url FROM message_images WHERE message_id IN ("+strings.Join(placeholders, ",")+")",
+			msgIDs...,
+		)
+		if err == nil {
+			defer imgRows.Close()
+			imgMap := make(map[int64][]models.PostImage)
+			for imgRows.Next() {
+				var img models.PostImage
+				var msgID int64
+				if err := imgRows.Scan(&img.ID, &msgID, &img.ImageURL); err == nil {
+					imgMap[msgID] = append(imgMap[msgID], img)
+				}
+			}
+			for i := range messages {
+				if imgs, ok := imgMap[messages[i].ID]; ok {
+					messages[i].Images = imgs
+				}
+			}
+		}
+	}
+
 	return c.JSON(messages)
 }
 
