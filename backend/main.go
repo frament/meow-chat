@@ -36,20 +36,6 @@ func main() {
 	api.Post("/login", h.Login)
 	api.Post("/refresh", h.Refresh)
 
-	api.Use(handlers.AuthRequired)
-
-	api.Post("/logout", h.Logout)
-	api.Get("/users", h.GetUsers)
-
-	api.Post("/posts", h.CreatePost)
-	api.Get("/feed", h.GetFeed)
-
-	api.Get("/messages", h.GetMessages)
-	api.Post("/messages", h.SendMessage)
-
-	api.Post("/upload-avatar", h.UploadAvatar)
-	api.Put("/profile", h.UpdateProfile)
-
 	api.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
 		if token == "" {
@@ -64,6 +50,20 @@ func main() {
 	}, websocket.New(func(c *websocket.Conn) {
 		h.HandleWebSocket(c)
 	}))
+
+	api.Use(handlers.AuthRequired)
+
+	api.Post("/logout", h.Logout)
+	api.Get("/users", h.GetUsers)
+
+	api.Post("/posts", h.CreatePost)
+	api.Get("/feed", h.GetFeed)
+
+	api.Get("/messages", h.GetMessages)
+	api.Post("/messages", h.SendMessage)
+
+	api.Post("/upload-avatar", h.UploadAvatar)
+	api.Put("/profile", h.UpdateProfile)
 
 	port := os.Getenv("PORT")
 	if port == "" {

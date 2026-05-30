@@ -11,8 +11,7 @@ import { ApiService, User, Message } from '../../services/api.service';
   template: `
     <div class="flex gap-4 h-[calc(100vh-8rem)] md:h-[calc(100vh-6rem)]">
       <!-- User list: hidden on mobile when chat is open -->
-      <div class="w-72 card p-3 overflow-y-auto shrink-0 hidden md:block"
-        [class.hidden]="showMobileChat">
+      <div class="w-72 card p-3 overflow-y-auto shrink-0 hidden md:block">
         <h3 class="section-label" style="margin-bottom:12px;">Пользователи</h3>
         @for (user of users; track user.id) {
           <div (click)="openChat(user)"
