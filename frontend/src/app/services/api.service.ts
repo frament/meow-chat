@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Subject } from 'rxjs';
 
 export interface User {
   id: number;
@@ -7,6 +8,7 @@ export interface User {
   email: string;
   avatar_url: string;
   created_at: string;
+  is_online: boolean;
 }
 
 export interface PostImage {
@@ -51,6 +53,7 @@ export interface AuthResponse {
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
   readonly accessToken = signal<string | null>(null);
+  readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -103,6 +106,18 @@ export class ApiService {
 
   getUsers() {
     return this.http.get<User[]>(`${this.baseUrl}/users`);
+  }
+
+  getPinned() {
+    return this.http.get<{ pinned_user_ids: number[] }>(`${this.baseUrl}/pinned`);
+  }
+
+  pinUser(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/pin/${id}`, {});
+  }
+
+  unpinUser(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/pin/${id}`);
   }
 
   getFeed() {
