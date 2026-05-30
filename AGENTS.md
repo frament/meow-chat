@@ -33,6 +33,7 @@ make build       # docker compose build
 make up          # docker compose up -d
 make down        # docker compose down
 make restart-backend  # docker compose build backend && docker compose up -d --no-deps backend
+make update          # git pull && docker compose build && docker compose up -d
 
 # Development (local)
 make dev-backend      # bash: cd backend && DB_PATH=./data/chat.db go run .
@@ -75,3 +76,7 @@ cd frontend && npm run build   # production build with service-worker
 - Updated `wsMessage` struct + WS broadcast to include `images` — `handlers/handlers.go`
 - Frontend: `Message` interface gains `images`, `sendMessage` accepts `File[]` as FormData — `api.service.ts`
 - Frontend: image picker button, preview strip with remove, inline image rendering in bubbles, mobile + desktop — `chat.ts`
+- Added root `.gitignore` (`data/`, `uploads/`, `_ref/`, `.idea/`, etc.)
+- Added `make update` target (git pull → docker compose build → up -d) — `Makefile`
+- Added PWA update check: `SwUpdate.versionUpdates` listener, 30min interval + `window:focus` trigger, update banner with "Обновить" button in `app.ts`
+- Added `my-chat-backend.exe` to `.gitignore`
