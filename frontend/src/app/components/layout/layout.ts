@@ -37,7 +37,7 @@ import { ApiService } from '../../services/api.service';
       <main class="max-w-4xl mx-auto md:min-h-[calc(100vh-3.5rem)] md:py-6">
         <router-outlet />
       </main>
-      <nav class="bottom-nav fixed bottom-0 left-0 right-0 sm:hidden z-50">
+      <nav class="bottom-nav fixed bottom-0 left-0 right-0 sm:hidden z-50" style="padding-bottom:env(safe-area-inset-bottom,0px);">
         <div class="flex items-center justify-around h-14">
           <a routerLink="/feed" routerLinkActive="active-link" class="nav-link bottom-nav-link">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
