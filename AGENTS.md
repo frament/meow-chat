@@ -111,3 +111,5 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed mobile chat height to account for both top and bottom nav with safe areas — `chat.ts`
 - Added notification chime via Web Audio API, then replaced with custom `notification.mp3` — `notification.service.ts`
 - Fixed favicon transparency for dark theme — `favicon.png`
+- **Badging API**: `navigator.setAppBadge()` unread count on PWA icon, cleared on focus/chat navigation — `app.ts`
+- **WS connection fix**: Moved `connectWebSocket()` from `ApiService` constructor to `App.ngOnInit()`, added 3s auto-reconnect on close — `api.service.ts`, `app.ts`
