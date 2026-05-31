@@ -160,7 +160,7 @@ export class App implements OnInit, OnDestroy {
         const isHidden = document.hidden;
         const isCorrectChat = this.#router.url.startsWith(`/chat/${msg.from}`);
         if (isHidden || !isCorrectChat) {
-          this.#api.incrementUnread(msg.from);
+          this.#api.incrementUnread(msg.from, msg.created_at);
           const n = this.#notif.show(
             `New message from ${msg.from_name || 'Someone'}`,
             {

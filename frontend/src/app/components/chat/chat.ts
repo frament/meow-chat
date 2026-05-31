@@ -79,7 +79,10 @@ import { ApiService, User, Message } from '../../services/api.service';
           </div>
 
           <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
-            @for (msg of messages; track msg.id) {
+            @for (msg of messages; track msg.id; let i = $index) {
+              @if (i === unreadDividerIdx) {
+                <div class="unread-divider"><span>Новые сообщения</span></div>
+              }
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
                   [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
@@ -208,7 +211,10 @@ import { ApiService, User, Message } from '../../services/api.service';
           </div>
 
           <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
-            @for (msg of messages; track msg.id) {
+            @for (msg of messages; track msg.id; let i = $index) {
+              @if (i === unreadDividerIdx) {
+                <div class="unread-divider"><span>Новые сообщения</span></div>
+              }
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
                   [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
@@ -273,7 +279,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   currentUserId = 0;
   showMobileChat = false;
   pinnedIds: Set<number> = new Set();
+  unreadDividerIdx = -1;
   private subscriptions: Subscription[] = [];
+  private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
 
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
@@ -380,6 +388,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     for (const sub of this.subscriptions) sub.unsubscribe();
+    if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
 
   private messageCacheKey(otherUserId: number): string {
@@ -389,6 +398,8 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   selectUser(user: User) {
     this.selectedUser = user;
+
+    const boundary = this.api.unreadBoundaries()[user.id] ?? null;
     this.api.clearUnread(user.id);
 
     const cached = localStorage.getItem(this.messageCacheKey(user.id));
@@ -397,6 +408,17 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.api.getMessages(this.currentUserId, user.id).subscribe((msgs: Message[]) => {
       this.messages = msgs;
       localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(msgs));
+      if (boundary) {
+        const idx = msgs.findIndex(m => new Date(m.created_at) >= new Date(boundary));
+        this.unreadDividerIdx = idx >= 0 ? idx : -1;
+        if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
+        this.boundaryTimer = setTimeout(() => {
+          this.api.clearUnreadBoundary(user.id);
+          this.boundaryTimer = null;
+        }, 30000);
+      } else {
+        this.unreadDividerIdx = -1;
+      }
       this.scrollToBottom();
     });
   }

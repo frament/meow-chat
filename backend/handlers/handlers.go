@@ -36,11 +36,12 @@ type wsClient struct {
 }
 
 type wsMessage struct {
-	from     int64
-	to       int64
-	content  string
-	images   []string
-	fromName string
+	from      int64
+	to        int64
+	content   string
+	images    []string
+	fromName  string
+	createdAt string
 }
 
 func NewHandler() *Handler {
@@ -114,12 +115,13 @@ func (h *Handler) runHub() {
 			delivered := false
 			for conn, uid := range h.clients {
 				if uid == msg.to {
-					payload := fiber.Map{
-						"type":      "message",
-						"from":      msg.from,
-						"from_name": msg.fromName,
-						"content":   msg.content,
-					}
+				payload := fiber.Map{
+					"type":       "message",
+					"from":       msg.from,
+					"from_name":  msg.fromName,
+					"content":    msg.content,
+					"created_at": msg.createdAt,
+				}
 					if len(msg.images) > 0 {
 						payload["images"] = msg.images
 					}
@@ -504,11 +506,12 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
 
 	h.broadcast <- wsMessage{
-		from:     fromUserID,
-		to:       toUserID,
-		content:  content,
-		images:   images,
-		fromName: senderName,
+		from:      fromUserID,
+		to:        toUserID,
+		content:   content,
+		images:    images,
+		fromName:  senderName,
+		createdAt: time.Now().Format(time.RFC3339),
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})

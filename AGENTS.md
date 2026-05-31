@@ -113,3 +113,20 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed favicon transparency for dark theme — `favicon.png`
 - **Badging API**: `navigator.setAppBadge()` unread count on PWA icon, cleared on focus/chat navigation — `app.ts`
 - **WS connection fix**: Moved `connectWebSocket()` from `ApiService` constructor to `App.ngOnInit()`, added 3s auto-reconnect on close — `api.service.ts`, `app.ts`
+
+## Session (2026-05-31) — Push notifications + WS reconnect + badges
+- **Push fix**: Moved push trigger from `SendMessage` HTTP handler to hub broadcast handler. Push sent when `!delivered` (no WS client received the message) instead of `!onlineUsers[toUserID]` — eliminates iOS background message loss during 30s grace period — `handlers/handlers.go`
+- **Early permission request**: `this.#notif.requestPermission()` in `App.ngOnInit()` regardless of SW state — `app.ts`
+- **Persistent WS reconnect**: Reconnect timer moved into `onclose` handler so it fires on EVERY disconnect — `api.service.ts`
+- **Token refresh before WS reconnect**: `isJwtExpired()` check, refresh via `refreshToken()` if expired, prevents infinite reconnect loop with stale token — `api.service.ts`
+- **Auto-scroll chat**: `data-scroll-container` attribute + `document.querySelectorAll` + double `requestAnimationFrame` for reliable scroll-to-bottom — `chat.ts`
+- **Update banner safe area**: `padding: calc(10px + env(safe-area-inset-top, 0px))` — `app.ts`
+- **Unread badges**: `unreadCounts` signal + `totalUnread` computed in `ApiService`, badges on nav links (`.badge-nav`/`.badge-nav-sm`) and user list items (`.badge-user`), cleared on `selectUser()` and `/chat/:id` route — `api.service.ts`, `app.ts`, `layout.ts`, `chat.ts`, `styles.css`
+
+## Session (2026-05-31) — Unread message divider
+- **Unread divider**: Visual separator between read and unread messages in chat — `chat.ts`, `chat.html`
+- **Backend `created_at`**: Added `createdAt` to `wsMessage` struct + WS broadcast payload for boundary tracking — `handlers/handlers.go`
+- **`unreadBoundaries` signal**: Tracks first unread message timestamp per user in `ApiService`, set via `incrementUnread(createdAt)` — `api.service.ts`
+- **30s boundary timeout**: Divider stays visible for 30s after opening chat (survives duplicate `selectUser` calls from `route.paramMap` + `resolvePendingChat`), then clears — `chat.ts`
+- **Separated clear**: `clearUnread` no longer clears boundary; new `clearUnreadBoundary` for explicit boundary cleanup — `api.service.ts`
+- **Divider CSS**: `.unread-divider` with accent horizontal lines + "Новые сообщения" label — `styles.css`

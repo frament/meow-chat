@@ -33,6 +33,7 @@ export interface WsMessage {
   from_name: string;
   content: string;
   images?: string[];
+  created_at: string;
 }
 
 export interface Message {
@@ -64,6 +65,7 @@ export class ApiService {
   readonly accessToken = signal<string | null>(null);
   readonly unreadCounts = signal<Record<number, number>>({});
   readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
+  readonly unreadBoundaries = signal<Record<number, string>>({});
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
   readonly wsMessages$ = new Subject<WsMessage>();
   private ws: WebSocket | null = null;
@@ -285,14 +287,26 @@ export class ApiService {
     }, 3000);
   }
 
-  incrementUnread(userId: number): void {
+  incrementUnread(userId: number, createdAt?: string): void {
     this.unreadCounts.update(c => ({ ...c, [userId]: (c[userId] ?? 0) + 1 }));
+    if (createdAt && !this.unreadBoundaries()[userId]) {
+      this.unreadBoundaries.update(b => ({ ...b, [userId]: createdAt }));
+    }
   }
 
   clearUnread(userId: number): void {
     this.unreadCounts.update(c => {
       if (!c[userId]) return c;
       const next = { ...c };
+      delete next[userId];
+      return next;
+    });
+  }
+
+  clearUnreadBoundary(userId: number): void {
+    this.unreadBoundaries.update(b => {
+      if (!b[userId]) return b;
+      const next = { ...b };
       delete next[userId];
       return next;
     });
