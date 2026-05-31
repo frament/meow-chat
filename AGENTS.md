@@ -93,3 +93,11 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed FOUC — added inline `<script>` in `index.html` to apply theme before Angular loads
 - Fixed auth interceptor: don't logout on network/server errors (5xx) during token refresh — `auth.interceptor.ts`
 - Fixed root `/` route: redirect to `/feed` if logged in, `/login` otherwise — `app.routes.ts`
+
+## Session (2026-05-31)
+- **System notifications**: Added `from_name` to backend WS message struct + broadcast payload — `handlers/handlers.go`
+- **NotificationService**: New service managing `Notification` API permission, `show()`, tab visibility tracking (`document.visibilitychange` + `blur`/`focus`) — `notification.service.ts`
+- **Global WebSocket**: Refactored WS from chat component to `ApiService` singleton — persists across pages, auto-connect on auth, auto-disconnect on logout — `api.service.ts`
+- **Notification logic**: `App` component subscribes to `wsMessages$`, shows browser notification when tab is hidden OR user is not on the correct chat route; click navigates to `/chat/:senderId` — `app.ts`
+- **Chat component cleanup**: Removed local WS management, subscribes to `api.wsMessages$` instead, uses `data.from_name` from server — `chat.ts`
+- WS connection lifecycle: constructor → `connectWebSocket()` if saved token, `storeAuth()` → `connectWebSocket()`, `logout()` → `disconnectWebSocket()`
