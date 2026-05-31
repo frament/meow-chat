@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ViewChildren, ElementRef, QueryList } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -72,7 +72,7 @@ import { ApiService, User, Message } from '../../services/api.service';
             <h3 class="font-medium" style="color:var(--text-primary);">{{ selectedUser.username }}</h3>
           </div>
 
-          <div #scrollContainer class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
+          <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
             @for (msg of messages; track msg.id) {
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
@@ -195,7 +195,7 @@ import { ApiService, User, Message } from '../../services/api.service';
             </div>
           </div>
 
-          <div #scrollContainer class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
+          <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
             @for (msg of messages; track msg.id) {
               <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
                 <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
@@ -261,13 +261,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   currentUserId = 0;
   showMobileChat = false;
   pinnedIds: Set<number> = new Set();
-  @ViewChildren('scrollContainer') scrollContainers!: QueryList<ElementRef<HTMLDivElement>>;
   private subscriptions: Subscription[] = [];
 
   private scrollToBottom(): void {
     setTimeout(() => {
-      this.scrollContainers.forEach(ref => {
-        ref.nativeElement.scrollTop = ref.nativeElement.scrollHeight;
+      const containers = document.querySelectorAll<HTMLDivElement>('[data-scroll-container]');
+      containers.forEach(el => {
+        el.scrollTop = el.scrollHeight;
       });
     });
   }
