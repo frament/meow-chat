@@ -1,8 +1,9 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { interval, fromEvent, filter, tap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
+import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 
 @Component({
@@ -49,6 +50,8 @@ export class App implements OnInit, OnDestroy {
   readonly #sw = inject(SwUpdate);
   readonly #swPush = inject(SwPush);
   readonly #api = inject(ApiService);
+  readonly #notif = inject(NotificationService);
+  readonly #router = inject(Router);
   readonly #theme = inject(ThemeService);
   readonly updateAvailable = signal(false);
   readonly #sub = new Subscription();
@@ -72,6 +75,33 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.#notif.requestPermission();
+
+    this.#sub.add(
+      this.#api.wsMessages$.subscribe((msg) => {
+        const isHidden = document.hidden;
+        const isCorrectChat = this.#router.url.startsWith(`/chat/${msg.from}`);
+        if (isHidden || !isCorrectChat) {
+          const n = this.#notif.show(
+            `New message from ${msg.from_name || 'Someone'}`,
+            {
+              body: msg.content || (msg.images?.length ? '[Image]' : ''),
+              icon: '/favicon.ico',
+              tag: `chat-${msg.from}`,
+              data: { url: `/chat/${msg.from}`, senderId: msg.from },
+            }
+          );
+          if (n) {
+            n.onclick = () => {
+              window.focus();
+              this.#router.navigate(['/chat', msg.from]);
+              n.close();
+            };
+          }
+        }
+      })
+    );
+
     if (!this.#swPush.isEnabled) return;
 
     this.#api.getVapidPublicKey().subscribe({

@@ -36,10 +36,11 @@ type wsClient struct {
 }
 
 type wsMessage struct {
-	from    int64
-	to      int64
-	content string
-	images  []string
+	from     int64
+	to       int64
+	content  string
+	images   []string
+	fromName string
 }
 
 func NewHandler() *Handler {
@@ -112,11 +113,12 @@ func (h *Handler) runHub() {
 		case msg := <-h.broadcast:
 			for conn, uid := range h.clients {
 				if uid == msg.to {
-					payload := fiber.Map{
-						"type":    "message",
-						"from":    msg.from,
-						"content": msg.content,
-					}
+			payload := fiber.Map{
+					"type":      "message",
+					"from":      msg.from,
+					"from_name": msg.fromName,
+					"content":   msg.content,
+				}
 					if len(msg.images) > 0 {
 						payload["images"] = msg.images
 					}
@@ -478,16 +480,18 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save message"})
 	}
 
+	var senderName string
+	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
+
 	h.broadcast <- wsMessage{
-		from:    fromUserID,
-		to:      toUserID,
-		content: content,
-		images:  images,
+		from:     fromUserID,
+		to:       toUserID,
+		content:  content,
+		images:   images,
+		fromName: senderName,
 	}
 
 	if !h.onlineUsers[toUserID] {
-		var senderName string
-		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
 		preview := content
 		if len(preview) > 120 {
 			preview = preview[:120] + "..."
@@ -671,6 +675,9 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 			continue
 		}
 
-		h.broadcast <- wsMessage{from: uid, to: int64(to), content: content}
+		var senderName string
+		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", uid).Scan(&senderName)
+
+		h.broadcast <- wsMessage{from: uid, to: int64(to), content: content, fromName: senderName}
 	}
 }

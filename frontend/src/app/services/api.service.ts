@@ -27,6 +27,14 @@ export interface Post {
   images?: PostImage[];
 }
 
+export interface WsMessage {
+  type: 'message';
+  from: number;
+  from_name: string;
+  content: string;
+  images?: string[];
+}
+
 export interface Message {
   id: number;
   from_user_id: number;
@@ -55,6 +63,8 @@ export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
   readonly accessToken = signal<string | null>(null);
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
+  readonly wsMessages$ = new Subject<WsMessage>();
+  private ws: WebSocket | null = null;
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -63,6 +73,7 @@ export class ApiService {
     if (saved && token) {
       this.currentUser.set(JSON.parse(saved));
       this.accessToken.set(token);
+      this.connectWebSocket();
     }
   }
 
@@ -89,6 +100,7 @@ export class ApiService {
   }
 
   logout() {
+    this.disconnectWebSocket();
     this.http.post(`${this.baseUrl}/logout`, {}).subscribe({ error: () => {} });
     localStorage.removeItem('currentUser');
     localStorage.removeItem('accessToken');
@@ -103,6 +115,7 @@ export class ApiService {
     localStorage.setItem('currentUser', JSON.stringify(auth.user));
     this.accessToken.set(auth.access_token);
     this.currentUser.set(auth.user);
+    this.connectWebSocket();
   }
 
   getUsers() {
@@ -190,9 +203,44 @@ export class ApiService {
     });
   }
 
-  connectWebSocket(): WebSocket {
+  connectWebSocket(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+    if (this.ws) this.ws.close();
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = this.accessToken();
-    return new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+    if (!token) return;
+
+    this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+
+    this.ws.onmessage = (event) => {
+      let data: any;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (data.type === 'message') {
+        this.wsMessages$.next(data as WsMessage);
+      }
+
+      if (data.type === 'user_online' || data.type === 'user_offline') {
+        this.wsOnlineEvent.next(data);
+      }
+    };
+
+    this.ws.onclose = () => {
+      this.ws = null;
+    };
+
+    this.ws.onerror = () => {
+      this.ws?.close();
+    };
+  }
+
+  disconnectWebSocket(): void {
+    this.ws?.close();
+    this.ws = null;
   }
 }

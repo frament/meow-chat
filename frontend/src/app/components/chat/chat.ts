@@ -261,8 +261,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   currentUserId = 0;
   showMobileChat = false;
   pinnedIds: Set<number> = new Set();
-  private ws: WebSocket | null = null;
-  private wsSubscription: Subscription | null = null;
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private api: ApiService,
@@ -287,7 +286,24 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.loadFromCache();
     this.loadFromServer();
     this.listenWsOnlineEvents();
-    this.connectWebSocket();
+
+    this.subscriptions.push(
+      this.api.wsMessages$.subscribe((data) => {
+        if (data.type === 'message' && this.selectedUser && data.from === this.selectedUser.id) {
+          const msg: Message = {
+            id: Date.now(),
+            from_user_id: data.from,
+            to_user_id: this.currentUserId,
+            content: data.content,
+            created_at: new Date().toISOString(),
+            from_user: data.from_name || this.selectedUser.username,
+            images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
+          };
+          this.messages.push(msg);
+          localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+        }
+      })
+    );
   }
 
   private loadFromCache() {
@@ -325,7 +341,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private listenWsOnlineEvents() {
-    this.wsSubscription = this.api.wsOnlineEvent.subscribe((event) => {
+    this.subscriptions.push(
+      this.api.wsOnlineEvent.subscribe((event) => {
       for (const u of this.users) {
         if (u.id === event.user_id) {
           u.is_online = event.type === 'user_online';
@@ -334,40 +351,12 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
       // Force change detection by replacing array reference
       this.users = [...this.users];
-    });
+    })
+    );
   }
 
   ngOnDestroy() {
-    this.ws?.close();
-    this.wsSubscription?.unsubscribe();
-  }
-
-  connectWebSocket() {
-    this.ws = this.api.connectWebSocket();
-
-    this.ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === 'message' && this.selectedUser) {
-        if (data.from === this.selectedUser.id) {
-          const msg: Message = {
-            id: Date.now(),
-            from_user_id: data.from,
-            to_user_id: this.currentUserId,
-            content: data.content,
-            created_at: new Date().toISOString(),
-            from_user: this.selectedUser.username,
-            images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
-          };
-          this.messages.push(msg);
-          localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
-        }
-      }
-
-      if (data.type === 'user_online' || data.type === 'user_offline') {
-        this.api.wsOnlineEvent.next(data);
-      }
-    };
+    for (const sub of this.subscriptions) sub.unsubscribe();
   }
 
   private messageCacheKey(otherUserId: number): string {
