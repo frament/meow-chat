@@ -11,6 +11,7 @@ services:
       - DB_PATH=/data/chat.db
     volumes:
       - chat-data:/data
+      - ./uploads:/app/uploads
     restart: unless-stopped
 
   frontend:
