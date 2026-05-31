@@ -111,14 +111,15 @@ func (h *Handler) runHub() {
 			}
 
 		case msg := <-h.broadcast:
+			delivered := false
 			for conn, uid := range h.clients {
 				if uid == msg.to {
-			payload := fiber.Map{
-					"type":      "message",
-					"from":      msg.from,
-					"from_name": msg.fromName,
-					"content":   msg.content,
-				}
+					payload := fiber.Map{
+						"type":      "message",
+						"from":      msg.from,
+						"from_name": msg.fromName,
+						"content":   msg.content,
+					}
 					if len(msg.images) > 0 {
 						payload["images"] = msg.images
 					}
@@ -127,8 +128,27 @@ func (h *Handler) runHub() {
 						log.Println("WebSocket write error:", err)
 						conn.Close()
 						delete(h.clients, conn)
+					} else {
+						delivered = true
 					}
 				}
+			}
+			if !delivered {
+				preview := msg.content
+				if len(preview) > 120 {
+					preview = preview[:120] + "..."
+				}
+				if preview == "" && len(msg.images) > 0 {
+					preview = "[Image]"
+				}
+				h.sendPushNotification(msg.to,
+					"New message from "+msg.fromName,
+					preview,
+					map[string]interface{}{
+						"url":      fmt.Sprintf("/chat/%d", msg.from),
+						"senderId": msg.from,
+					},
+				)
 			}
 
 		case msg := <-h.broadcastAll:
@@ -489,21 +509,6 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		content:  content,
 		images:   images,
 		fromName: senderName,
-	}
-
-	if !h.onlineUsers[toUserID] {
-		preview := content
-		if len(preview) > 120 {
-			preview = preview[:120] + "..."
-		}
-		if preview == "" && len(images) > 0 {
-			preview = "[Image]"
-		}
-		h.sendPushNotification(toUserID,
-			"New message from "+senderName,
-			preview,
-			map[string]interface{}{"url": fmt.Sprintf("/chat/%d", fromUserID), "senderId": fromUserID},
-		)
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})

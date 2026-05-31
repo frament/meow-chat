@@ -143,6 +143,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit() {
     if (this.#api.currentUser()) this.#api.connectWebSocket();
+    this.#notif.requestPermission();
 
     this.#sub.add(
       this.#router.events.subscribe(() => {
