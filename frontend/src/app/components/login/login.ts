@@ -47,10 +47,10 @@ export class LoginComponent {
   ) {}
 
   onSubmit() {
+    this.notif.requestPermission();
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
         this.api.storeAuth(res);
-        this.notif.requestPermission();
         this.router.navigate(['/feed']);
       },
       error: () => {
