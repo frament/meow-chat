@@ -14,7 +14,7 @@ import { ApiService } from '../../services/api.service';
             <div class="flex items-center gap-6">
               <a routerLink="/feed" class="flex items-center gap-2">
                 <img src="logo.svg" class="w-7 h-7">
-                <span class="font-bold text-lg" style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MyChat</span>
+                <span class="font-bold text-lg" style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MeowChat</span>
               </a>
               <div class="hidden sm:flex items-center gap-6">
                 <a routerLink="/feed" routerLinkActive="active-link"

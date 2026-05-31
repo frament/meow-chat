@@ -1,6 +1,6 @@
 {
-  "name": "MyChat - Чат и Социальная лента",
-  "short_name": "MyChat",
+  "name": "MeowChat - Чат и Социальная лента",
+  "short_name": "MeowChat",
   "description": "Чат и персональная социальная лента",
   "display": "standalone",
   "scope": "./",

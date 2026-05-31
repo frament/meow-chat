@@ -1,4 +1,4 @@
-# MyChat repo guide
+# MeowChat repo guide
 
 ## Stack
 - **Backend**: Go 1.22 + Fiber v2 + SQLite (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
@@ -104,3 +104,4 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed notification permission request: moved from `App.ngOnInit()` to `LoginComponent.onSubmit()` (user gesture required) — `login.ts`, `notification.service.ts`
 - Fixed `uploads/` not persisting in Docker: added volume to `docker-compose.yml`
 - Fixed iOS safe area: added `viewport-fit=cover`, `env(safe-area-inset-bottom)` padding for bottom nav and mobile chat — `index.html`, `layout.ts`, `chat.ts`
+- Rebranded to MeowChat: updated title, manifest, nav logo text — `index.html`, `layout.ts`, `manifest.webmanifest`
