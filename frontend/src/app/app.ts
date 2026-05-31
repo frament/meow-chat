@@ -147,7 +147,11 @@ export class App implements OnInit, OnDestroy {
 
     this.#sub.add(
       this.#router.events.subscribe(() => {
-        if (this.#router.url.startsWith('/chat')) this.#clearBadge();
+        if (this.#router.url.startsWith('/chat')) {
+          this.#clearBadge();
+          const m = this.#router.url.match(/\/chat\/(\d+)/);
+          if (m) this.#api.clearUnread(Number(m[1]));
+        }
       })
     );
 
@@ -156,6 +160,7 @@ export class App implements OnInit, OnDestroy {
         const isHidden = document.hidden;
         const isCorrectChat = this.#router.url.startsWith(`/chat/${msg.from}`);
         if (isHidden || !isCorrectChat) {
+          this.#api.incrementUnread(msg.from);
           const n = this.#notif.show(
             `New message from ${msg.from_name || 'Someone'}`,
             {
@@ -173,6 +178,7 @@ export class App implements OnInit, OnDestroy {
               this.#clearBadge();
               window.focus();
               this.#router.navigate(['/chat', msg.from]);
+              this.#api.clearUnread(msg.from);
               n.close();
             };
           } else if (!document.hidden) {

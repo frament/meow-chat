@@ -29,6 +29,9 @@ import { ApiService, User, Message } from '../../services/api.service';
                 </div>
               }
               <span class="flex-1 text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
+              @if (api.unreadCounts()[user.id]) {
+                <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
+              }
               @if (user.is_online) {
                 <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
               }
@@ -144,6 +147,9 @@ import { ApiService, User, Message } from '../../services/api.service';
                   </div>
                 }
                 <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
+                @if (api.unreadCounts()[user.id]) {
+                  <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
+                }
                 @if (user.is_online) {
                   <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
                 }
@@ -274,7 +280,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   constructor(
-    private api: ApiService,
+    protected api: ApiService,
     private route: ActivatedRoute,
     protected router: Router,
   ) {}
@@ -377,6 +383,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   selectUser(user: User) {
     this.selectedUser = user;
+    this.api.clearUnread(user.id);
 
     const cached = localStorage.getItem(this.messageCacheKey(user.id));
     this.messages = cached ? JSON.parse(cached) : [];

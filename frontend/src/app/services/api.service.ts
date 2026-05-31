@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
 
@@ -62,6 +62,8 @@ export interface AuthResponse {
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
   readonly accessToken = signal<string | null>(null);
+  readonly unreadCounts = signal<Record<number, number>>({});
+  readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
   readonly wsMessages$ = new Subject<WsMessage>();
   private ws: WebSocket | null = null;
@@ -281,6 +283,19 @@ export class ApiService {
         this.connectWebSocket();
       }
     }, 3000);
+  }
+
+  incrementUnread(userId: number): void {
+    this.unreadCounts.update(c => ({ ...c, [userId]: (c[userId] ?? 0) + 1 }));
+  }
+
+  clearUnread(userId: number): void {
+    this.unreadCounts.update(c => {
+      if (!c[userId]) return c;
+      const next = { ...c };
+      delete next[userId];
+      return next;
+    });
   }
 
   disconnectWebSocket(): void {
