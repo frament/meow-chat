@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { NotificationService } from '../../services/notification.service';
 
 @Component({
   selector: 'app-login',
@@ -39,12 +40,17 @@ export class LoginComponent {
   password = '';
   error = '';
 
-  constructor(private api: ApiService, private router: Router) {}
+  constructor(
+    private api: ApiService,
+    private router: Router,
+    private notif: NotificationService,
+  ) {}
 
   onSubmit() {
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
         this.api.storeAuth(res);
+        this.notif.requestPermission();
         this.router.navigate(['/feed']);
       },
       error: () => {

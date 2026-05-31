@@ -7,6 +7,9 @@ export class NotificationService {
   private tabHidden = signal(false);
 
   constructor() {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      this.permission.set('granted');
+    }
     if (typeof document !== 'undefined') {
       fromEvent(document, 'visibilitychange').subscribe(() => {
         this.tabHidden.set(document.hidden);
@@ -35,7 +38,7 @@ export class NotificationService {
   }
 
   show(title: string, options?: NotificationOptions): Notification | null {
-    if (this.permission() !== 'granted') return null;
+    if (this.permission() !== 'granted' && Notification.permission !== 'granted') return null;
     try {
       const n = new Notification(title, options);
       return n;

@@ -75,8 +75,6 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.#notif.requestPermission();
-
     this.#sub.add(
       this.#api.wsMessages$.subscribe((msg) => {
         const isHidden = document.hidden;
