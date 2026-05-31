@@ -66,6 +66,7 @@ export class ApiService {
   readonly wsMessages$ = new Subject<WsMessage>();
   private ws: WebSocket | null = null;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private wsReconnecting = false;
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -233,12 +234,7 @@ export class ApiService {
 
     this.ws.onclose = () => {
       this.ws = null;
-      if (this.accessToken()) {
-        this.wsRetryTimer = setTimeout(() => {
-          this.wsRetryTimer = null;
-          this.connectWebSocket();
-        }, 3000);
-      }
+      this.scheduleReconnect();
     };
 
     this.ws.onerror = () => {
@@ -246,9 +242,51 @@ export class ApiService {
     };
   }
 
+  private isJwtExpired(token: string): boolean {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return Date.now() >= payload.exp * 1000;
+    } catch {
+      return true;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.wsReconnecting || this.wsRetryTimer) return;
+    if (!this.accessToken()) return;
+
+    this.wsReconnecting = true;
+    this.wsRetryTimer = setTimeout(() => {
+      this.wsRetryTimer = null;
+
+      const token = this.accessToken();
+      if (!token) { this.wsReconnecting = false; return; }
+
+      if (this.isJwtExpired(token)) {
+        this.refreshToken().subscribe({
+          next: (res) => {
+            this.accessToken.set(res.access_token);
+            localStorage.setItem('accessToken', res.access_token);
+            localStorage.setItem('refreshToken', res.refresh_token);
+            this.wsReconnecting = false;
+            this.connectWebSocket();
+          },
+          error: () => {
+            this.wsReconnecting = false;
+            this.logout();
+          },
+        });
+      } else {
+        this.wsReconnecting = false;
+        this.connectWebSocket();
+      }
+    }, 3000);
+  }
+
   disconnectWebSocket(): void {
     if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
     this.wsRetryTimer = null;
+    this.wsReconnecting = false;
     this.ws?.close();
     this.ws = null;
   }
