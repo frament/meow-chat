@@ -39,11 +39,28 @@ export class NotificationService {
 
   show(title: string, options?: NotificationOptions): Notification | null {
     if (this.permission() !== 'granted' && Notification.permission !== 'granted') return null;
+    this.playSound();
     try {
       const n = new Notification(title, options);
       return n;
     } catch {
       return null;
     }
+  }
+
+  private playSound(): void {
+    try {
+      const ctx = new AudioContext();
+      const g = ctx.createGain();
+      g.connect(ctx.destination);
+      g.gain.value = 0.15;
+
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = 660;
+      o.connect(g);
+      o.start();
+      o.stop(ctx.currentTime + 0.15);
+    } catch {}
   }
 }
