@@ -142,6 +142,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    if (this.#api.currentUser()) this.#api.connectWebSocket();
+
     this.#sub.add(
       this.#router.events.subscribe(() => {
         if (this.#router.url.startsWith('/chat')) this.#clearBadge();

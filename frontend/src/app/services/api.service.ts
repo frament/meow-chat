@@ -65,6 +65,7 @@ export class ApiService {
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
   readonly wsMessages$ = new Subject<WsMessage>();
   private ws: WebSocket | null = null;
+  private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -73,7 +74,6 @@ export class ApiService {
     if (saved && token) {
       this.currentUser.set(JSON.parse(saved));
       this.accessToken.set(token);
-      this.connectWebSocket();
     }
   }
 
@@ -206,6 +206,7 @@ export class ApiService {
   connectWebSocket(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     if (this.ws) this.ws.close();
+    if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = this.accessToken();
@@ -234,12 +235,22 @@ export class ApiService {
       this.ws = null;
     };
 
+    // Simple auto-reconnect: retry once after 3s on close if still authenticated
+    if (this.accessToken()) {
+      this.wsRetryTimer = setTimeout(() => {
+        this.wsRetryTimer = null;
+        this.connectWebSocket();
+      }, 3000);
+    }
+
     this.ws.onerror = () => {
       this.ws?.close();
     };
   }
 
   disconnectWebSocket(): void {
+    if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
+    this.wsRetryTimer = null;
     this.ws?.close();
     this.ws = null;
   }
