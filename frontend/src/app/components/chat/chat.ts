@@ -264,10 +264,11 @@ export class ChatComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
 
   private scrollToBottom(): void {
-    setTimeout(() => {
-      const containers = document.querySelectorAll<HTMLDivElement>('[data-scroll-container]');
-      containers.forEach(el => {
-        el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.querySelectorAll<HTMLDivElement>('[data-scroll-container]').forEach(el => {
+          el.scrollTop = el.scrollHeight;
+        });
       });
     });
   }
