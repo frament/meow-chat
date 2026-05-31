@@ -101,3 +101,6 @@ cd frontend && npm run build   # production build with service-worker
 - **Notification logic**: `App` component subscribes to `wsMessages$`, shows browser notification when tab is hidden OR user is not on the correct chat route; click navigates to `/chat/:senderId` — `app.ts`
 - **Chat component cleanup**: Removed local WS management, subscribes to `api.wsMessages$` instead, uses `data.from_name` from server — `chat.ts`
 - WS connection lifecycle: constructor → `connectWebSocket()` if saved token, `storeAuth()` → `connectWebSocket()`, `logout()` → `disconnectWebSocket()`
+- Fixed notification permission request: moved from `App.ngOnInit()` to `LoginComponent.onSubmit()` (user gesture required) — `login.ts`, `notification.service.ts`
+- Fixed `uploads/` not persisting in Docker: added volume to `docker-compose.yml`
+- Fixed iOS safe area: added `viewport-fit=cover`, `env(safe-area-inset-bottom)` padding for bottom nav and mobile chat — `index.html`, `layout.ts`, `chat.ts`
