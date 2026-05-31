@@ -12,8 +12,10 @@ import { ApiService } from '../../services/api.service';
         <div class="max-w-4xl mx-auto px-4">
           <div class="flex items-center justify-between h-14">
             <div class="flex items-center gap-6">
-              <a routerLink="/feed" class="font-bold text-lg"
-                style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MyChat</a>
+              <a routerLink="/feed" class="flex items-center gap-2">
+                <img src="logo.svg" class="w-7 h-7">
+                <span class="font-bold text-lg" style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MyChat</span>
+              </a>
               <div class="hidden sm:flex items-center gap-6">
                 <a routerLink="/feed" routerLinkActive="active-link"
                   class="nav-link">Лента</a>
