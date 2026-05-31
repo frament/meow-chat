@@ -233,15 +233,13 @@ export class ApiService {
 
     this.ws.onclose = () => {
       this.ws = null;
+      if (this.accessToken()) {
+        this.wsRetryTimer = setTimeout(() => {
+          this.wsRetryTimer = null;
+          this.connectWebSocket();
+        }, 3000);
+      }
     };
-
-    // Simple auto-reconnect: retry once after 3s on close if still authenticated
-    if (this.accessToken()) {
-      this.wsRetryTimer = setTimeout(() => {
-        this.wsRetryTimer = null;
-        this.connectWebSocket();
-      }, 3000);
-    }
 
     this.ws.onerror = () => {
       this.ws?.close();
