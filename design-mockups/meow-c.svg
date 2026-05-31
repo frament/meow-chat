@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Минималистичный: одна линия, кот + сообщение -->
+  <defs>
+    <linearGradient id="m3-g" x1="0" y1="0" x2="100" y2="100">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#eab308"/>
+    </linearGradient>
+  </defs>
+  <!-- Контурный речевой пузырь -->
+  <path d="M46 10H20C13.4 10 8 15.4 8 22V48C8 54.6 13.4 60 20 60H28L24 74L40 60H46C52.6 60 58 54.6 58 48V22C58 15.4 52.6 10 46 10Z" fill="url(#m3-g)" transform="translate(62,10) scale(0.45)"/>
+  <!-- Силуэт кота внутри пузыря -->
+  <g transform="translate(50,50)">
+    <!-- Тело-пузырь -->
+    <circle cx="0" cy="4" r="24" fill="#fff"/>
+    <!-- Уши -->
+    <path d="M-14 -12 L-20 -30 L-6 -18Z" fill="#fff"/>
+    <path d="M14 -12 L20 -30 L6 -18Z" fill="#fff"/>
+    <!-- Морда -->
+    <circle cx="-8" cy="2" r="2.5" fill="url(#m3-g)"/>
+    <circle cx="8" cy="2" r="2.5" fill="url(#m3-g)"/>
+    <path d="M-2 8 L0 11 L2 8Z" fill="url(#m3-g)"/>
+    <path d="M-5 14 Q0 19 5 14" stroke="url(#m3-g)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <!-- Усы -->
+    <line x1="-20" y1="6" x2="-14" y2="8" stroke="url(#m3-g)" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="-20" y1="12" x2="-14" y2="11" stroke="url(#m3-g)" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="20" y1="6" x2="14" y2="8" stroke="url(#m3-g)" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+    <line x1="20" y1="12" x2="14" y2="11" stroke="url(#m3-g)" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+  </g>
+</svg>

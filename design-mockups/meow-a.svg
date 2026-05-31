@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Кот в речевом пузыре -->
+  <defs>
+    <linearGradient id="m1-g" x1="0" y1="0" x2="100" y2="100">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#e85d3a"/>
+    </linearGradient>
+  </defs>
+  <!-- Речевой пузырь -->
+  <rect x="6" y="14" width="88" height="66" rx="24" fill="url(#m1-g)"/>
+  <path d="M30 82 L38 68 L46 80" fill="url(#m1-g)"/>
+  <!-- Уши кота -->
+  <path d="M30 34 L22 16 L38 28Z" fill="#fff"/>
+  <path d="M70 34 L78 16 L62 28Z" fill="#fff"/>
+  <!-- Морда кота -->
+  <ellipse cx="50" cy="52" rx="18" ry="16" fill="#fff"/>
+  <!-- Глаза -->
+  <ellipse cx="42" cy="48" rx="3" ry="4" fill="#1e293b"/>
+  <ellipse cx="58" cy="48" rx="3" ry="4" fill="#1e293b"/>
+  <!-- Зрачки -->
+  <circle cx="43" cy="47" r="1.5" fill="#fff"/>
+  <circle cx="59" cy="47" r="1.5" fill="#fff"/>
+  <!-- Нос -->
+  <path d="M48 56 L50 58 L52 56" fill="#f59e0b" stroke="#f59e0b" stroke-width="1"/>
+  <!-- Рот -->
+  <path d="M44 60 Q50 66 56 60" stroke="#1e293b" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Усы -->
+  <line x1="26" y1="54" x2="38" y2="56" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="26" y1="60" x2="38" y2="58" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="74" y1="54" x2="62" y2="56" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <line x1="74" y1="60" x2="62" y2="58" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+</svg>

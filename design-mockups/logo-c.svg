@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Вариант C: Речевой пузырь в современном плоском стиле с градиентным ободком -->
+  <defs>
+    <linearGradient id="c-g" x1="0" y1="0" x2="100" y2="100">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <!-- Круглый фон -->
+  <circle cx="50" cy="50" r="48" stroke="url(#c-g)" stroke-width="4"/>
+  <!-- Речевой пузырь -->
+  <g transform="translate(50,50)">
+    <path d="M-18 30C-18 30 20 30 20 30 27.7 30 34 23.7 34 16 34 8.3 27.7 2 20 2L-6 2C-13.7 2-20 8.3-20 16-20 20.4-17.5 24.3-14 26.7L-18 30Z" fill="url(#c-g)" transform="translate(-14,-18)"/>
+    <circle cx="-10" cy="-4" r="2.5" fill="#fff"/>
+    <circle cx="0" cy="-4" r="2.5" fill="#fff"/>
+    <circle cx="10" cy="-4" r="2.5" fill="#fff"/>
+  </g>
+</svg>
