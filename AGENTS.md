@@ -105,3 +105,8 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed `uploads/` not persisting in Docker: added volume to `docker-compose.yml`
 - Fixed iOS safe area: added `viewport-fit=cover`, `env(safe-area-inset-bottom)` padding for bottom nav and mobile chat — `index.html`, `layout.ts`, `chat.ts`
 - Rebranded to MeowChat: updated title, manifest, nav logo text — `index.html`, `layout.ts`, `manifest.webmanifest`
+- Added SVG logo + favicon concepts in `design-mockups/`
+- Replaced favicon with PNG favicon — `index.html`, `favicon.png`
+- Fixed iOS safe area top padding for notch/status bar — `layout.ts`
+- Fixed mobile chat height to account for both top and bottom nav with safe areas — `chat.ts`
+- Added notification chime via Web Audio API, then replaced with custom `notification.mp3` — `notification.service.ts`
