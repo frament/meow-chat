@@ -50,17 +50,9 @@ export class NotificationService {
 
   private playSound(): void {
     try {
-      const ctx = new AudioContext();
-      const g = ctx.createGain();
-      g.connect(ctx.destination);
-      g.gain.value = 0.15;
-
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = 660;
-      o.connect(g);
-      o.start();
-      o.stop(ctx.currentTime + 0.15);
+      const a = new Audio('/notification.mp3');
+      a.volume = 0.3;
+      a.play();
     } catch {}
   }
 }
