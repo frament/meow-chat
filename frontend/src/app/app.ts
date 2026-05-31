@@ -84,7 +84,7 @@ export class App implements OnInit, OnDestroy {
             `New message from ${msg.from_name || 'Someone'}`,
             {
               body: msg.content || (msg.images?.length ? '[Image]' : ''),
-              icon: '/logo.svg',
+              icon: '/favicon.png',
               tag: `chat-${msg.from}`,
               data: { url: `/chat/${msg.from}`, senderId: msg.from },
             }
