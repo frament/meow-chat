@@ -110,3 +110,4 @@ cd frontend && npm run build   # production build with service-worker
 - Fixed iOS safe area top padding for notch/status bar — `layout.ts`
 - Fixed mobile chat height to account for both top and bottom nav with safe areas — `chat.ts`
 - Added notification chime via Web Audio API, then replaced with custom `notification.mp3` — `notification.service.ts`
+- Fixed favicon transparency for dark theme — `favicon.png`
