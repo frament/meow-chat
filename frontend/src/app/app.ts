@@ -118,6 +118,7 @@ export class App implements OnInit, OnDestroy {
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
+  #badgeCount = 0;
 
   constructor() {
     if (this.#sw.isEnabled) {
@@ -126,7 +127,10 @@ export class App implements OnInit, OnDestroy {
         .subscribe(() => this.updateAvailable.set(true));
 
       this.#sub.add(
-        fromEvent(window, 'focus').subscribe(() => this.#sw.checkForUpdate())
+        fromEvent(window, 'focus').subscribe(() => {
+          this.#sw.checkForUpdate();
+          this.#clearBadge();
+        })
       );
 
       this.#sub.add(
@@ -138,6 +142,12 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.#sub.add(
+      this.#router.events.subscribe(() => {
+        if (this.#router.url.startsWith('/chat')) this.#clearBadge();
+      })
+    );
+
     this.#sub.add(
       this.#api.wsMessages$.subscribe((msg) => {
         const isHidden = document.hidden;
@@ -152,8 +162,12 @@ export class App implements OnInit, OnDestroy {
               data: { url: `/chat/${msg.from}`, senderId: msg.from },
             }
           );
+          this.#badgeCount++;
+          this.#setBadge(this.#badgeCount);
+
           if (n) {
             n.onclick = () => {
+              this.#clearBadge();
               window.focus();
               this.#router.navigate(['/chat', msg.from]);
               n.close();
@@ -187,9 +201,27 @@ export class App implements OnInit, OnDestroy {
   }
 
   openChat(userId: number) {
+    this.#clearBadge();
     this.toast.set(null);
     if (this.#toastTimer) clearTimeout(this.#toastTimer);
     this.#router.navigate(['/chat', userId]);
+  }
+
+  async #setBadge(count: number): Promise<void> {
+    try {
+      if ('setAppBadge' in navigator) {
+        await (navigator as any).setAppBadge(count);
+      }
+    } catch {}
+  }
+
+  async #clearBadge(): Promise<void> {
+    this.#badgeCount = 0;
+    try {
+      if ('clearAppBadge' in navigator) {
+        await (navigator as any).clearAppBadge();
+      }
+    } catch {}
   }
 
   applyUpdate() {
