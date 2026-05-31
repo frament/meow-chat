@@ -39,7 +39,7 @@ import { ThemeService } from './services/theme.service';
       align-items: center;
       justify-content: center;
       gap: 12px;
-      padding: 10px 16px;
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
       background: #1d4ed8;
       color: #fff;
       font-size: 14px;
