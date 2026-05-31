@@ -17,6 +17,15 @@ import { ThemeService } from './services/theme.service';
         <button (click)="applyUpdate()">Обновить</button>
       </div>
     }
+    @if (toast(); as t) {
+      <div class="toast" (click)="openChat(t.from)">
+        <div class="toast-avatar"><span>{{ t.from_name[0] }}</span></div>
+        <div class="toast-body">
+          <strong>{{ t.from_name }}</strong>
+          <span>{{ t.body }}</span>
+        </div>
+      </div>
+    }
     <router-outlet />
   `,
   styles: [`
@@ -44,6 +53,58 @@ import { ThemeService } from './services/theme.service';
       font-weight: 600;
       cursor: pointer;
     }
+    .toast {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-default);
+      border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      cursor: pointer;
+      animation: slideIn 0.3s ease;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .toast-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--accent-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .toast-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+    }
+    .toast-body strong {
+      font-size: 13px;
+    }
+    .toast-body span {
+      font-size: 12px;
+      opacity: 0.7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
   `],
 })
 export class App implements OnInit, OnDestroy {
@@ -54,7 +115,9 @@ export class App implements OnInit, OnDestroy {
   readonly #router = inject(Router);
   readonly #theme = inject(ThemeService);
   readonly updateAvailable = signal(false);
+  readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
+  #toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     if (this.#sw.isEnabled) {
@@ -95,6 +158,14 @@ export class App implements OnInit, OnDestroy {
               this.#router.navigate(['/chat', msg.from]);
               n.close();
             };
+          } else if (!document.hidden) {
+            if (this.#toastTimer) clearTimeout(this.#toastTimer);
+            this.toast.set({
+              from: msg.from,
+              from_name: msg.from_name || 'Someone',
+              body: msg.content || (msg.images?.length ? '[Image]' : ''),
+            });
+            this.#toastTimer = setTimeout(() => this.toast.set(null), 4000);
           }
         }
       })
@@ -113,6 +184,12 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.#sub.unsubscribe();
+  }
+
+  openChat(userId: number) {
+    this.toast.set(null);
+    if (this.#toastTimer) clearTimeout(this.#toastTimer);
+    this.#router.navigate(['/chat', userId]);
   }
 
   applyUpdate() {
