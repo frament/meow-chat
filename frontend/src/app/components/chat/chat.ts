@@ -174,7 +174,7 @@ import { ApiService, User, Message } from '../../services/api.service';
       }
 
       @if (showMobileChat && selectedUser) {
-        <div class="flex flex-col" style="height:calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px));">
+        <div class="flex flex-col" style="height:calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));">
           <div class="flex items-center gap-3 px-4 py-3 shrink-0"
             style="border-bottom:1px solid var(--border-default);background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);">
             <button (click)="router.navigate(['/chat'])" class="p-1 -ml-1" style="color:var(--text-secondary);">
