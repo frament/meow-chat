@@ -8,7 +8,7 @@ import { ApiService } from '../../services/api.service';
   imports: [RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     <div class="min-h-screen" style="background:var(--bg-body);">
-      <nav class="top-nav">
+      <nav class="top-nav" style="padding-top:env(safe-area-inset-top,0px);">
         <div class="max-w-4xl mx-auto px-4">
           <div class="flex items-center justify-between h-14">
             <div class="flex items-center gap-6">
