@@ -29,6 +29,12 @@ type PostImage struct {
 	ImageURL string `json:"image_url"`
 }
 
+type Reaction struct {
+	Emoji   string `json:"emoji"`
+	Count   int    `json:"count"`
+	Reacted bool   `json:"reacted"`
+}
+
 type Post struct {
 	ID        int64       `json:"id"`
 	UserID    int64       `json:"user_id"`
@@ -37,7 +43,9 @@ type Post struct {
 	Username  string      `json:"username,omitempty"`
 	AvatarURL string      `json:"avatar_url,omitempty"`
 	IsAdmin   bool        `json:"is_admin"`
+	IsPublic  bool        `json:"is_public"`
 	Images    []PostImage `json:"images,omitempty"`
+	Reactions []Reaction  `json:"reactions,omitempty"`
 }
 
 type CreatePostRequest struct {
@@ -112,4 +120,12 @@ type PushSubscriptionRequest struct {
 
 type DeleteSubscriptionRequest struct {
 	Endpoint string `json:"endpoint"`
+}
+
+type FriendInvite struct {
+	ID        int64     `json:"id"`
+	CreatedBy int64     `json:"created_by"`
+	Token     string    `json:"token"`
+	UsedBy    *int64    `json:"used_by,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }

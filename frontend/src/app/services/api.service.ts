@@ -18,6 +18,12 @@ export interface PostImage {
   image_url: string;
 }
 
+export interface Reaction {
+  emoji: string;
+  count: number;
+  reacted: boolean;
+}
+
 export interface Post {
   id: number;
   user_id: number;
@@ -26,7 +32,9 @@ export interface Post {
   username: string;
   avatar_url: string;
   is_admin: boolean;
+  is_public: boolean;
   images?: PostImage[];
+  reactions?: Reaction[];
 }
 
 export interface WsMessage {
@@ -63,6 +71,14 @@ export interface InviteToken {
   max_uses: number;
   use_count: number;
   expires_at: string | null;
+  created_at: string;
+}
+
+export interface FriendInvite {
+  id: number;
+  created_by: number;
+  token: string;
+  used_by: number | null;
   created_at: string;
 }
 
@@ -119,7 +135,9 @@ export class ApiService {
 
   logout() {
     this.disconnectWebSocket();
-    this.http.post(`${this.baseUrl}/logout`, {}).subscribe({ error: () => {} });
+    if (this.accessToken()) {
+      this.http.post(`${this.baseUrl}/logout`, {}).subscribe({ error: () => {} });
+    }
     localStorage.removeItem('currentUser');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -156,9 +174,10 @@ export class ApiService {
     return this.http.get<Post[]>(`${this.baseUrl}/feed`);
   }
 
-  createPost(content: string, files: File[] = []) {
+  createPost(content: string, files: File[] = [], isPublic = false) {
     const formData = new FormData();
     formData.append('content', content);
+    formData.append('is_public', isPublic ? 'true' : 'false');
     for (const file of files) {
       formData.append('images', file);
     }
@@ -216,9 +235,10 @@ export class ApiService {
   }
 
   getAdminFiles() {
-    return this.http.get<{ name: string; path: string; size: number; is_dir: boolean; mod_time: string }[]>(
-      `${this.baseUrl}/admin/files`
-    );
+    return this.http.get<{
+      files: { name: string; path: string; size: number; is_dir: boolean; mod_time: string }[];
+      disk: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number };
+    }>(`${this.baseUrl}/admin/files`);
   }
 
   createInvite(maxUses = 1) {
@@ -236,6 +256,35 @@ export class ApiService {
   checkInvite(token: string) {
     return this.http.get<{ valid: boolean; reason?: string; created_by: number; creator: string }>(
       `${this.baseUrl}/invite/${token}`
+    );
+  }
+
+  createFriendInvite() {
+    return this.http.post<{ token: string }>(`${this.baseUrl}/friend-invites`, {});
+  }
+
+  checkFriendInvite(token: string) {
+    return this.http.get<{ valid: boolean; reason?: string; created_by: number; creator: string }>(
+      `${this.baseUrl}/friend-invite/${token}`
+    );
+  }
+
+  acceptFriendInvite(token: string) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/friend-invite/${token}/accept`, {});
+  }
+
+  getFriends() {
+    return this.http.get<User[]>(`${this.baseUrl}/friends`);
+  }
+
+  removeFriend(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/friends/${id}`);
+  }
+
+  toggleReaction(postId: number, emoji: string) {
+    return this.http.post<{ action: string; emoji: string }>(
+      `${this.baseUrl}/posts/${postId}/react`,
+      { emoji }
     );
   }
 

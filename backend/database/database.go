@@ -107,6 +107,28 @@ func migrate() {
 			expires_at  DATETIME,
 			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS friends (
+			user_id     INTEGER NOT NULL REFERENCES users(id),
+			friend_id   INTEGER NOT NULL REFERENCES users(id),
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, friend_id),
+			CHECK (user_id < friend_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS friend_invites (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_by  INTEGER NOT NULL REFERENCES users(id),
+			token       TEXT UNIQUE NOT NULL,
+			used_by     INTEGER REFERENCES users(id),
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS post_reactions (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id     INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+			user_id     INTEGER NOT NULL REFERENCES users(id),
+			emoji       TEXT NOT NULL,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(post_id, user_id, emoji)
+		)`,
 	}
 
 	for _, q := range queries {
@@ -123,6 +145,10 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_admin'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE posts ADD COLUMN is_public INTEGER DEFAULT 0")
 	}
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {

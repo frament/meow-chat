@@ -21,7 +21,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         error.status === 401 &&
         !req.url.includes('/login') &&
         !req.url.includes('/register') &&
-        !req.url.includes('/refresh')
+        !req.url.includes('/refresh') &&
+        !req.url.includes('/logout')
       ) {
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) {

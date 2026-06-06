@@ -6,6 +6,7 @@ import { FeedComponent } from './components/feed/feed';
 import { ChatComponent } from './components/chat/chat';
 import { SettingsComponent } from './components/settings/settings';
 import { AdminComponent } from './components/admin/admin';
+import { AddFriendComponent } from './components/add-friend/add-friend';
 import { LayoutComponent } from './components/layout/layout';
 import { ApiService } from './services/api.service';
 
@@ -22,6 +23,7 @@ export const routes: Routes = [
   { path: '', component: RootRedirect, pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
+  { path: 'add-friend', component: AddFriendComponent },
   {
     path: '',
     component: LayoutComponent,

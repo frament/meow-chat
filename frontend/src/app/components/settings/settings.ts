@@ -3,7 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
-import { ApiService, InviteToken } from '../../services/api.service';
+import { ApiService, InviteToken, User } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import * as QRCode from 'qrcode';
 
@@ -154,6 +154,70 @@ import * as QRCode from 'qrcode';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Друзья</div>
+          @if (friendInviteError) {
+            <p class="text-sm mb-2" style="color:#e74c3c;">{{ friendInviteError }}</p>
+          }
+          @if (friendInviteSuccess) {
+            <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-primary);font-weight:500;word-break:break-all;font-size:12px;">{{ friendInviteUrl }}</span>
+                <div style="display:flex;gap:4px;flex-shrink:0;">
+                  <button (click)="copyFriendInvite()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">Копировать</button>
+                  <button (click)="showFriendQR()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">QR</button>
+                  <button (click)="clearFriendInvite()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                </div>
+              </div>
+            </div>
+          }
+          <button type="button" (click)="createFriendInvite()" [disabled]="creatingFriendInvite"
+            class="btn-secondary" style="width:100%;padding:10px 20px;margin-bottom:12px;">
+            {{ creatingFriendInvite ? 'Создание...' : 'Создать приглашение в друзья' }}
+          </button>
+          @if (friends.length > 0) {
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              @for (friend of friends; track friend.id) {
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;">
+                  <div style="position:relative;display:inline-flex;">
+                    @if (friend.avatar_url) {
+                      <img [src]="friend.avatar_url" class="w-7 h-7 rounded-full object-cover">
+                    } @else {
+                      <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
+                        style="background:var(--avatar-bg);color:var(--avatar-text);">
+                        {{ friend.username[0] }}
+                      </div>
+                    }
+                  </div>
+                  <span class="flex-1" style="color:var(--text-primary);font-weight:500;">{{ friend.username }}</span>
+                  @if (friend.is_online) {
+                    <span class="w-2 h-2 rounded-full" style="background:#34d399;"></span>
+                  }
+                  <button (click)="removeFriend(friend.id)" title="Удалить из друзей"
+                    style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="text-sm" style="color:var(--text-tertiary);text-align:center;padding:16px 0;">У вас пока нет друзей. Создайте приглашение и поделитесь ссылкой.</p>
+          }
+        </div>
+
+        @if (friendQrDataUrl) {
+          <div (click)="closeFriendQR()" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+            <div (click)="$event.stopPropagation()" style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:360px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,0.3);">
+              <img [src]="friendQrDataUrl" style="width:240px;height:240px;margin:0 auto 16px;border-radius:8px;">
+              <p style="font-size:14px;color:#333;font-weight:600;word-break:break-all;margin-bottom:12px;">{{ friendQrUrl }}</p>
+              <div style="display:flex;gap:8px;justify-content:center;">
+                <button (click)="copyFriendInviteFromQR()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;">Копировать ссылку</button>
+                <button (click)="closeFriendQR()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:14px;color:#666;">Закрыть</button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
@@ -190,6 +254,15 @@ export class SettingsComponent implements OnInit {
   qrToken = '';
   qrDataUrl = '';
   qrInviteUrl = '';
+
+  friends: User[] = [];
+  creatingFriendInvite = false;
+  friendInviteError = '';
+  friendInviteSuccess = false;
+  friendInviteUrl = '';
+  friendInviteToken = '';
+  friendQrUrl = '';
+  friendQrDataUrl = '';
 
   constructor(
     private api: ApiService,
@@ -240,6 +313,7 @@ export class SettingsComponent implements OnInit {
       this.email = user.email;
     }
     this.loadInvites();
+    this.loadFriends();
   }
 
   onFileSelected(event: Event) {
@@ -346,6 +420,60 @@ export class SettingsComponent implements OnInit {
 
   copyInviteFromQR() {
     navigator.clipboard.writeText(this.qrInviteUrl).catch(() => {});
+  }
+
+  loadFriends() {
+    this.api.getFriends().subscribe({
+      next: (users) => this.friends = users,
+    });
+  }
+
+  createFriendInvite() {
+    this.creatingFriendInvite = true;
+    this.friendInviteError = '';
+    this.api.createFriendInvite().subscribe({
+      next: (res) => {
+        this.creatingFriendInvite = false;
+        this.friendInviteToken = res.token;
+        this.friendInviteUrl = `${window.location.origin}/add-friend?token=${res.token}`;
+        this.friendInviteSuccess = true;
+      },
+      error: () => {
+        this.creatingFriendInvite = false;
+        this.friendInviteError = 'Ошибка создания приглашения';
+      },
+    });
+  }
+
+  clearFriendInvite() {
+    this.friendInviteSuccess = false;
+    this.friendInviteUrl = '';
+    this.friendInviteToken = '';
+  }
+
+  copyFriendInvite() {
+    navigator.clipboard.writeText(this.friendInviteUrl).catch(() => {});
+  }
+
+  async showFriendQR() {
+    this.friendQrUrl = this.friendInviteUrl;
+    this.friendQrDataUrl = await QRCode.toDataURL(this.friendQrUrl, { width: 512, margin: 2 });
+  }
+
+  closeFriendQR() {
+    this.friendQrDataUrl = '';
+    this.friendQrUrl = '';
+  }
+
+  copyFriendInviteFromQR() {
+    navigator.clipboard.writeText(this.friendQrUrl).catch(() => {});
+  }
+
+  removeFriend(id: number) {
+    this.api.removeFriend(id).subscribe({
+      next: () => this.loadFriends(),
+      error: () => this.friendInviteError = 'Ошибка удаления друга',
+    });
   }
 
   logout() {

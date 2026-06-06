@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { NotificationService } from '../../services/notification.service';
@@ -35,23 +35,29 @@ import { NotificationService } from '../../services/notification.service';
     </div>
   `,
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   username = '';
   password = '';
   error = '';
+  redirectUrl = '';
 
   constructor(
+    private route: ActivatedRoute,
     private api: ApiService,
     private router: Router,
     private notif: NotificationService,
   ) {}
+
+  ngOnInit() {
+    this.redirectUrl = this.route.snapshot.queryParams['redirect'] || '/feed';
+  }
 
   onSubmit() {
     this.notif.requestPermission();
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
         this.api.storeAuth(res);
-        this.router.navigate(['/feed']);
+        this.router.navigateByUrl(this.redirectUrl);
       },
       error: () => {
         this.error = 'Неверное имя пользователя или пароль';

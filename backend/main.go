@@ -48,6 +48,7 @@ func main() {
 	api.Post("/refresh", h.Refresh)
 	api.Get("/push/vapid-public-key", h.VAPIDPublicKey)
 	api.Get("/invite/:token", h.CheckInvite)
+	api.Get("/friend-invite/:token", h.CheckFriendInvite)
 
 	api.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
@@ -80,7 +81,13 @@ func main() {
 	api.Get("/invites", h.GetMyInvites)
 	api.Delete("/invites/:id", h.DeleteInvite)
 
+	api.Post("/friend-invites", h.CreateFriendInvite)
+	api.Get("/friends", h.GetFriends)
+	api.Delete("/friends/:id", h.RemoveFriend)
+	api.Post("/friend-invite/:token/accept", h.AcceptFriendInvite)
+
 	api.Post("/posts", h.CreatePost)
+	api.Post("/posts/:id/react", h.ToggleReaction)
 	api.Get("/feed", h.GetFeed)
 
 	api.Get("/messages", h.GetMessages)

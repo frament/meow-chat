@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"my-chat-backend/auth"
@@ -264,13 +265,23 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetUsers(c *fiber.Ctx) error {
-	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, created_at FROM users ORDER BY username")
+	userID := c.Locals("userId").(int64)
+	rows, err := database.DB.Query(`
+		SELECT id, username, email, avatar_url, created_at
+		FROM users
+		WHERE id IN (
+			SELECT friend_id FROM friends WHERE user_id = ?
+			UNION
+			SELECT user_id FROM friends WHERE friend_id = ?
+		)
+		ORDER BY username
+	`, userID, userID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
 	}
 	defer rows.Close()
 
-	var users []models.User
+	users := make([]models.User, 0)
 	for rows.Next() {
 		var u models.User
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
@@ -295,6 +306,11 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 		content = vals[0]
 	}
 
+	isPublic := false
+	if vals, ok := form.Value["is_public"]; ok && len(vals) > 0 {
+		isPublic = vals[0] == "true" || vals[0] == "1"
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -306,9 +322,13 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
+	isPublicInt := 0
+	if isPublic {
+		isPublicInt = 1
+	}
 	result, err := tx.Exec(
-		"INSERT INTO posts (user_id, content) VALUES (?, ?)",
-		userID, content,
+		"INSERT INTO posts (user_id, content, is_public) VALUES (?, ?, ?)",
+		userID, content, isPublicInt,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create post"})
@@ -356,25 +376,79 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 	return c.Status(201).JSON(fiber.Map{"id": postID, "message": "Post created"})
 }
 
+func (h *Handler) ToggleReaction(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	postID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid post ID"})
+	}
+
+	var body struct {
+		Emoji string `json:"emoji"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.Emoji == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Emoji is required"})
+	}
+
+	var existingID int64
+	err = database.DB.QueryRow(
+		"SELECT id FROM post_reactions WHERE post_id = ? AND user_id = ? AND emoji = ?",
+		postID, userID, body.Emoji,
+	).Scan(&existingID)
+
+	if err == nil {
+		// Reaction exists — remove it
+		_, err = database.DB.Exec("DELETE FROM post_reactions WHERE id = ?", existingID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to remove reaction"})
+		}
+		return c.JSON(fiber.Map{"action": "removed", "emoji": body.Emoji})
+	}
+
+	if err != sql.ErrNoRows {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	// Reaction doesn't exist — add it
+	_, err = database.DB.Exec(
+		"INSERT INTO post_reactions (post_id, user_id, emoji) VALUES (?, ?, ?)",
+		postID, userID, body.Emoji,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to add reaction"})
+	}
+	return c.Status(201).JSON(fiber.Map{"action": "added", "emoji": body.Emoji})
+}
+
 func (h *Handler) GetFeed(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
 	rows, err := database.DB.Query(`
-		SELECT p.id, p.user_id, p.content, p.created_at, u.username, u.avatar_url, u.is_admin
+		SELECT p.id, p.user_id, p.content, p.created_at, u.username, u.avatar_url, u.is_admin, p.is_public
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
+		WHERE p.user_id = ?
+		   OR p.is_public = 1
+		   OR p.user_id IN (
+			SELECT friend_id FROM friends WHERE user_id = ?
+			UNION
+			SELECT user_id FROM friends WHERE friend_id = ?
+		)
 		ORDER BY p.created_at DESC
 		LIMIT 50
-	`)
+	`, userID, userID, userID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch feed"})
 	}
 	defer rows.Close()
 
-	var posts []models.Post
+	posts := make([]models.Post, 0)
 	for rows.Next() {
 		var p models.Post
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL, &p.IsAdmin); err != nil {
+		var isPublic int
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL, &p.IsAdmin, &isPublic); err != nil {
 			continue
 		}
+		p.IsPublic = isPublic == 1
 
 		imgRows, err := database.DB.Query(
 			"SELECT id, post_id, image_url FROM post_images WHERE post_id = ? ORDER BY id",
@@ -388,6 +462,28 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 				}
 			}
 			imgRows.Close()
+		}
+
+		// Fetch reactions
+		reactRows, err := database.DB.Query(
+			"SELECT emoji, COUNT(*) FROM post_reactions WHERE post_id = ? GROUP BY emoji ORDER BY COUNT(*) DESC",
+			p.ID,
+		)
+		if err == nil {
+			for reactRows.Next() {
+				var r models.Reaction
+				if err := reactRows.Scan(&r.Emoji, &r.Count); err == nil {
+					// Check if current user reacted
+					var exists int
+					database.DB.QueryRow(
+						"SELECT COUNT(*) FROM post_reactions WHERE post_id = ? AND user_id = ? AND emoji = ?",
+						p.ID, userID, r.Emoji,
+					).Scan(&exists)
+					r.Reacted = exists == 1
+					p.Reactions = append(p.Reactions, r)
+				}
+			}
+			reactRows.Close()
 		}
 
 		posts = append(posts, p)
@@ -420,7 +516,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 
-	var messages []models.Message
+	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
 		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.CreatedAt, &m.FromUser); err != nil {
@@ -620,7 +716,7 @@ func (h *Handler) GetPinned(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 
-	var ids []int64
+	ids := make([]int64, 0)
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
@@ -722,7 +818,7 @@ func (h *Handler) GetMyInvites(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 
-	var invites []models.InviteToken
+	invites := make([]models.InviteToken, 0)
 	for rows.Next() {
 		var inv models.InviteToken
 		if err := rows.Scan(&inv.ID, &inv.CreatedBy, &inv.Token, &inv.MaxUses, &inv.UseCount, &inv.ExpiresAt, &inv.CreatedAt); err != nil {
@@ -790,6 +886,175 @@ func (h *Handler) CheckInvite(c *fiber.Ctx) error {
 	})
 }
 
+func (h *Handler) CreateFriendInvite(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	token := generateToken()
+
+	_, err := database.DB.Exec(
+		"INSERT INTO friend_invites (created_by, token) VALUES (?, ?)",
+		userID, token,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to create friend invite"})
+	}
+
+	return c.Status(201).JSON(fiber.Map{"token": token})
+}
+
+func (h *Handler) CheckFriendInvite(c *fiber.Ctx) error {
+	token := c.Params("token")
+
+	var id, createdBy int64
+	var usedBy *int64
+	err := database.DB.QueryRow(
+		"SELECT id, created_by, used_by FROM friend_invites WHERE token = ?",
+		token,
+	).Scan(&id, &createdBy, &usedBy)
+	if err == sql.ErrNoRows {
+		return c.Status(404).JSON(fiber.Map{"error": "Friend invite not found", "valid": false})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	valid := true
+	reason := ""
+	if usedBy != nil {
+		valid = false
+		reason = "already_used"
+	}
+
+	var creatorName string
+	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", createdBy).Scan(&creatorName)
+
+	return c.JSON(fiber.Map{
+		"valid":     valid,
+		"reason":    reason,
+		"created_by": createdBy,
+		"creator":   creatorName,
+	})
+}
+
+func (h *Handler) AcceptFriendInvite(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	token := c.Params("token")
+
+	var id, createdBy int64
+	var usedBy *int64
+	err := database.DB.QueryRow(
+		"SELECT id, created_by, used_by FROM friend_invites WHERE token = ?",
+		token,
+	).Scan(&id, &createdBy, &usedBy)
+	if err == sql.ErrNoRows {
+		return c.Status(404).JSON(fiber.Map{"error": "Invite not found"})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	if usedBy != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invite already used"})
+	}
+
+	if createdBy == userID {
+		return c.Status(400).JSON(fiber.Map{"error": "Cannot accept your own invite"})
+	}
+
+	// Store friendship with sorted pair (user_id < friend_id)
+	friend1 := createdBy
+	friend2 := userID
+	if friend1 > friend2 {
+		friend1, friend2 = friend2, friend1
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
+		"INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)",
+		friend1, friend2,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to add friend"})
+	}
+
+	_, err = tx.Exec(
+		"UPDATE friend_invites SET used_by = ? WHERE id = ?",
+		userID, id,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update invite"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to accept invite"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Friend added"})
+}
+
+func (h *Handler) GetFriends(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	rows, err := database.DB.Query(`
+		SELECT id, username, email, avatar_url, created_at
+		FROM users
+		WHERE id IN (
+			SELECT friend_id FROM friends WHERE user_id = ?
+			UNION
+			SELECT user_id FROM friends WHERE friend_id = ?
+		)
+		ORDER BY username
+	`, userID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch friends"})
+	}
+	defer rows.Close()
+
+	users := make([]models.User, 0)
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
+			continue
+		}
+		u.IsOnline = h.onlineUsers[u.ID]
+		users = append(users, u)
+	}
+	return c.JSON(users)
+}
+
+func (h *Handler) RemoveFriend(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	friendID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	friend1 := userID
+	friend2 := friendID
+	if friend1 > friend2 {
+		friend1, friend2 = friend2, friend1
+	}
+
+	result, err := database.DB.Exec(
+		"DELETE FROM friends WHERE user_id = ? AND friend_id = ?",
+		friend1, friend2,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to remove friend"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Friend not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Friend removed"})
+}
+
 func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 	type FileEntry struct {
 		Name    string `json:"name"`
@@ -800,7 +1065,7 @@ func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 	}
 
 	dirs := []string{"./uploads/avatars", "./uploads/posts", "./uploads/messages"}
-	var result []FileEntry
+	result := make([]FileEntry, 0)
 
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
@@ -822,7 +1087,39 @@ func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(result)
+	type DiskInfo struct {
+		Total    int64   `json:"total"`
+		Used     int64   `json:"used"`
+		Free     int64   `json:"free"`
+		TotalGB  float64 `json:"total_gb"`
+		UsedGB   float64 `json:"used_gb"`
+		FreeGB   float64 `json:"free_gb"`
+		UsedPct  float64 `json:"used_pct"`
+	}
+
+	disk := DiskInfo{}
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("./uploads", &stat); err == nil {
+		total := int64(stat.Bsize) * int64(stat.Blocks)
+		free := int64(stat.Bsize) * int64(stat.Bavail)
+		used := total - free
+		disk = DiskInfo{
+			Total:   total,
+			Used:    used,
+			Free:    free,
+			TotalGB: float64(total) / (1 << 30),
+			UsedGB:  float64(used) / (1 << 30),
+			FreeGB:  float64(free) / (1 << 30),
+		}
+		if total > 0 {
+			disk.UsedPct = float64(used) / float64(total) * 100
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"files": result,
+		"disk":  disk,
+	})
 }
 
 func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
@@ -842,7 +1139,7 @@ func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
 		IsOnline  bool      `json:"is_online"`
 	}
 
-	var users []AdminUser
+	users := make([]AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.CreatedAt); err != nil {

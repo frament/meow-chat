@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ApiService, Post } from '../../services/api.service';
+import { ApiService, Post, PostImage } from '../../services/api.service';
 
 @Component({
   selector: 'app-feed',
@@ -33,6 +33,10 @@ import { ApiService, Post } from '../../services/api.service';
             <span>📷</span> Добавить фото
             <input type="file" multiple accept="image/*" (change)="onFilesSelected($event)" class="hidden">
           </label>
+          <label class="flex items-center gap-2 text-sm" style="color:var(--text-secondary);cursor:pointer;margin-left:12px;">
+            <input type="checkbox" [(ngModel)]="isPublic" class="w-4 h-4">
+            <span>Показать всем</span>
+          </label>
           <button (click)="createPost()" class="btn-primary" style="margin-left:auto;">
             Опубликовать
           </button>
@@ -63,16 +67,47 @@ import { ApiService, Post } from '../../services/api.service';
           </div>
           <p class="post-content">{{ post.content }}</p>
           @if (post.images && post.images.length > 0) {
-            <div class="post-images">
-              @for (img of post.images; track img.id) {
-                <img [src]="img.image_url" class="cursor-pointer hover:opacity-90 transition-opacity"
-                  (click)="openImage(img.image_url)">
+            @let count = post.images.length;
+            @let showCount = count > 4 ? 4 : count;
+            <div [class]="'post-images post-images-' + showCount">
+              @for (img of post.images.slice(0, showCount); track img.id; let i = $index) {
+                <div class="post-image-wrapper" (click)="openViewer(post.images!, i)">
+                  <img [src]="img.image_url" loading="lazy">
+                  @if (count > 4 && i === showCount - 1) {
+                    <div class="post-image-overlay">+{{ count - 4 }}</div>
+                  }
+                </div>
               }
             </div>
           }
+          <div class="flex flex-wrap gap-1 mt-3 pt-2" style="border-top:1px solid var(--divider);">
+            @for (r of reactionEmojis; track r) {
+              <button (click)="toggleReaction(post, r)"
+                [style.background]="hasReacted(post, r) ? 'var(--accent-light)' : 'transparent'"
+                [style.border-color]="hasReacted(post, r) ? 'var(--accent)' : 'var(--border-default)'"
+                style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;border:1px solid;cursor:pointer;font-size:15px;line-height:1;transition:all 0.15s;">
+                {{ r }}
+                @if (getReactionCount(post, r) > 0) {
+                  <span style="font-size:12px;color:var(--text-secondary);font-weight:500;">{{ getReactionCount(post, r) }}</span>
+                }
+              </button>
+            }
+          </div>
         </div>
       }
     </div>
+
+    @if (viewerImages) {
+      <div class="viewer-overlay" (click)="closeViewer()">
+        <img [src]="viewerImages[viewerIndex].image_url" (click)="$event.stopPropagation()">
+        <button class="viewer-close" (click)="closeViewer()">✕</button>
+        @if (viewerImages.length > 1) {
+          <button class="viewer-nav viewer-nav-prev" (click)="$event.stopPropagation(); prevViewer()">‹</button>
+          <button class="viewer-nav viewer-nav-next" (click)="$event.stopPropagation(); nextViewer()">›</button>
+          <div class="viewer-counter">{{ viewerIndex + 1 }} / {{ viewerImages.length }}</div>
+        }
+      </div>
+    }
   `,
 })
 export class FeedComponent implements OnInit {
@@ -80,6 +115,35 @@ export class FeedComponent implements OnInit {
   newPostContent = '';
   selectedFiles: File[] = [];
   previews: string[] = [];
+  isPublic = false;
+  reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
+  viewerImages: PostImage[] | null = null;
+  viewerIndex = 0;
+
+  hasReacted(post: Post, emoji: string): boolean {
+    return post.reactions?.some(r => r.emoji === emoji && r.reacted) ?? false;
+  }
+
+  getReactionCount(post: Post, emoji: string): number {
+    return post.reactions?.find(r => r.emoji === emoji)?.count ?? 0;
+  }
+
+  toggleReaction(post: Post, emoji: string) {
+    this.api.toggleReaction(post.id, emoji).subscribe(() => {
+      // Optimistically update local state
+      const existing = post.reactions?.find(r => r.emoji === emoji);
+      if (!post.reactions) post.reactions = [];
+      if (existing) {
+        existing.reacted = !existing.reacted;
+        existing.count += existing.reacted ? 1 : -1;
+        if (existing.count <= 0) {
+          post.reactions = post.reactions.filter(r => r.emoji !== emoji);
+        }
+      } else {
+        post.reactions.push({ emoji, count: 1, reacted: true });
+      }
+    });
+  }
 
   constructor(private api: ApiService) {}
 
@@ -113,15 +177,35 @@ export class FeedComponent implements OnInit {
 
   createPost() {
     if (!this.newPostContent.trim() && this.selectedFiles.length === 0) return;
-    this.api.createPost(this.newPostContent, this.selectedFiles).subscribe(() => {
+    this.api.createPost(this.newPostContent, this.selectedFiles, this.isPublic).subscribe(() => {
       this.newPostContent = '';
       this.selectedFiles = [];
       this.previews = [];
+      this.isPublic = false;
       this.loadFeed();
     });
   }
 
-  openImage(url: string) {
-    window.open(url, '_blank');
+  openViewer(images: PostImage[], index: number) {
+    this.viewerImages = images;
+    this.viewerIndex = index;
+    document.body.style.overflow = 'hidden';
+  }
+
+  closeViewer() {
+    this.viewerImages = null;
+    document.body.style.overflow = '';
+  }
+
+  prevViewer() {
+    if (this.viewerImages) {
+      this.viewerIndex = this.viewerIndex > 0 ? this.viewerIndex - 1 : this.viewerImages.length - 1;
+    }
+  }
+
+  nextViewer() {
+    if (this.viewerImages) {
+      this.viewerIndex = this.viewerIndex < this.viewerImages.length - 1 ? this.viewerIndex + 1 : 0;
+    }
   }
 }

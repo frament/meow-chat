@@ -110,36 +110,55 @@ interface FileEntry {
           } @else if (files.length === 0) {
             <p style="color:var(--text-tertiary);font-size:14px;">Файлы не найдены</p>
           } @else {
-            <div style="overflow-x:auto;">
-              <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                <thead>
-                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
-                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Файл</th>
-                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Размер</th>
-                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Дата</th>
-                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Путь</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (file of files; track file.path) {
-                    <tr style="border-bottom:1px solid var(--divider);">
-                      <td style="padding:10px 12px;color:var(--text-primary);font-weight:500;">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                          </svg>
-                          {{ file.name }}
-                        </div>
-                      </td>
-                      <td style="padding:10px 12px;color:var(--text-secondary);">{{ formatSize(file.size) }}</td>
-                      <td style="padding:10px 12px;color:var(--text-secondary);">{{ file.mod_time | date:'dd.MM.yyyy HH:mm' }}</td>
-                      <td style="padding:10px 12px;color:var(--text-tertiary);font-size:13px;">{{ file.path }}</td>
+            @if (diskInfo) {
+              <div style="margin-bottom:20px;padding:16px;border-radius:12px;border:1px solid var(--border-default);">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                  <span style="font-size:14px;font-weight:600;color:var(--text-primary);">Использование диска</span>
+                  <span style="font-size:13px;color:var(--text-secondary);">{{ formatSize(diskInfo.used) }} / {{ formatSize(diskInfo.total) }}</span>
+                </div>
+                <div style="height:8px;border-radius:999px;background:var(--border-default);overflow:hidden;">
+                  <div [style.width.%]="diskInfo.used_pct" style="height:100%;border-radius:999px;background:var(--accent-gradient);transition:width 0.3s;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:6px;">
+                  <span style="font-size:12px;color:var(--text-tertiary);">Свободно: {{ formatSize(diskInfo.free) }} ({{ (100 - diskInfo.used_pct).toFixed(1) }}%)</span>
+                  <span style="font-size:12px;color:var(--text-tertiary);">{{ diskInfo.used_pct.toFixed(1) }}% занято</span>
+                </div>
+              </div>
+            }
+            @if (files.length === 0) {
+              <p style="color:var(--text-tertiary);font-size:14px;">Файлы не найдены</p>
+            } @else {
+              <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                  <thead>
+                    <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                      <th style="text-align:left;padding:8px 12px;font-weight:500;">Файл</th>
+                      <th style="text-align:left;padding:8px 12px;font-weight:500;">Размер</th>
+                      <th style="text-align:left;padding:8px 12px;font-weight:500;">Дата</th>
+                      <th style="text-align:left;padding:8px 12px;font-weight:500;">Путь</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    @for (file of files; track file.path) {
+                      <tr style="border-bottom:1px solid var(--divider);">
+                        <td style="padding:10px 12px;color:var(--text-primary);font-weight:500;">
+                          <div style="display:flex;align-items:center;gap:8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2">
+                              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                              <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            {{ file.name }}
+                          </div>
+                        </td>
+                        <td style="padding:10px 12px;color:var(--text-secondary);">{{ formatSize(file.size) }}</td>
+                        <td style="padding:10px 12px;color:var(--text-secondary);">{{ file.mod_time | date:'dd.MM.yyyy HH:mm' }}</td>
+                        <td style="padding:10px 12px;color:var(--text-tertiary);font-size:13px;">{{ file.path }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
           }
         }
       </div>
@@ -150,6 +169,7 @@ export class AdminComponent implements OnInit {
   activeTab: 'users' | 'files' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
+  diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
   loadingUsers = false;
   loadingFiles = false;
   actionLoading: number | null = null;
@@ -174,7 +194,7 @@ export class AdminComponent implements OnInit {
   loadFiles() {
     this.loadingFiles = true;
     this.api.getAdminFiles().subscribe({
-      next: (f) => { this.files = f; this.loadingFiles = false; },
+      next: (res) => { this.files = res.files; this.diskInfo = res.disk; this.loadingFiles = false; },
       error: () => this.loadingFiles = false,
     });
   }
