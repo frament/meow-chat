@@ -98,6 +98,15 @@ func migrate() {
 			auth        TEXT    NOT NULL,
 			UNIQUE(user_id, endpoint)
 		)`,
+		`CREATE TABLE IF NOT EXISTS invite_tokens (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_by  INTEGER NOT NULL REFERENCES users(id),
+			token       TEXT UNIQUE NOT NULL,
+			max_uses    INTEGER DEFAULT 1,
+			use_count   INTEGER DEFAULT 0,
+			expires_at  DATETIME,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, q := range queries {

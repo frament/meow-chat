@@ -7,6 +7,7 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: data.icon || '/favicon.png',
       data: data.data,
+      silent: true,
     })
   );
 });

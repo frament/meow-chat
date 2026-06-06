@@ -5,6 +5,7 @@ import { fromEvent } from 'rxjs';
 export class NotificationService {
   private permission = signal<NotificationPermission | null>(null);
   private tabHidden = signal(false);
+  private audio: HTMLAudioElement | null = null;
 
   constructor() {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -41,7 +42,7 @@ export class NotificationService {
     if (this.permission() !== 'granted' && Notification.permission !== 'granted') return null;
     this.playSound();
     try {
-      const n = new Notification(title, options);
+      const n = new Notification(title, { ...options, silent: true });
       return n;
     } catch {
       return null;
@@ -50,9 +51,12 @@ export class NotificationService {
 
   private playSound(): void {
     try {
-      const a = new Audio('/notification.mp3');
-      a.volume = 0.3;
-      a.play();
+      if (!this.audio) {
+        this.audio = new Audio('/notification.mp3');
+        this.audio.volume = 0.3;
+      }
+      this.audio.currentTime = 0;
+      this.audio.play().catch(() => {});
     } catch {}
   }
 }

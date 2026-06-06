@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -170,6 +172,29 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
+	if req.InviteToken == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Invite token required"})
+	}
+
+	var tokID, createdBy int64
+	var maxUses, useCount int
+	var expiresAt *time.Time
+	err := database.DB.QueryRow(
+		"SELECT id, created_by, max_uses, use_count, expires_at FROM invite_tokens WHERE token = ?",
+		req.InviteToken,
+	).Scan(&tokID, &createdBy, &maxUses, &useCount, &expiresAt)
+	if err == sql.ErrNoRows {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid invite token"})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+	if maxUses > 0 && useCount >= maxUses {
+		return c.Status(400).JSON(fiber.Map{"error": "Invite token has been exhausted"})
+	}
+	if expiresAt != nil && time.Now().After(*expiresAt) {
+		return c.Status(400).JSON(fiber.Map{"error": "Invite token has expired"})
+	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -183,6 +208,8 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(409).JSON(fiber.Map{"error": "Username or email already exists"})
 	}
+
+	database.DB.Exec("UPDATE invite_tokens SET use_count = use_count + 1 WHERE id = ?", tokID)
 
 	id, _ := result.LastInsertId()
 	return c.Status(201).JSON(fiber.Map{"id": id, "message": "User created"})
@@ -639,6 +666,128 @@ func (h *Handler) UnpinUser(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to unpin user"})
 	}
 	return c.JSON(fiber.Map{"message": "User unpinned"})
+}
+
+func generateToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func (h *Handler) CreateInvite(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	var req models.CreateInviteRequest
+	if err := c.BodyParser(&req); err != nil {
+		req.MaxUses = 1
+	}
+	if req.MaxUses < 0 {
+		req.MaxUses = 0
+	}
+	if req.MaxUses == 0 {
+		req.MaxUses = 1
+	}
+
+	token := generateToken()
+
+	var expiresAt *time.Time
+	if req.ExpiresIn != "" {
+		d, err := time.ParseDuration(req.ExpiresIn)
+		if err == nil {
+			t := time.Now().Add(d)
+			expiresAt = &t
+		}
+	}
+
+	_, err := database.DB.Exec(
+		"INSERT INTO invite_tokens (created_by, token, max_uses, expires_at) VALUES (?, ?, ?, ?)",
+		userID, token, req.MaxUses, expiresAt,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to create invite"})
+	}
+
+	return c.Status(201).JSON(fiber.Map{"token": token})
+}
+
+func (h *Handler) GetMyInvites(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	rows, err := database.DB.Query(
+		"SELECT id, created_by, token, max_uses, use_count, expires_at, created_at FROM invite_tokens WHERE created_by = ? ORDER BY created_at DESC",
+		userID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch invites"})
+	}
+	defer rows.Close()
+
+	var invites []models.InviteToken
+	for rows.Next() {
+		var inv models.InviteToken
+		if err := rows.Scan(&inv.ID, &inv.CreatedBy, &inv.Token, &inv.MaxUses, &inv.UseCount, &inv.ExpiresAt, &inv.CreatedAt); err != nil {
+			continue
+		}
+		invites = append(invites, inv)
+	}
+	return c.JSON(invites)
+}
+
+func (h *Handler) DeleteInvite(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid invite ID"})
+	}
+
+	result, err := database.DB.Exec("DELETE FROM invite_tokens WHERE id = ? AND created_by = ?", id, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete invite"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Invite not found"})
+	}
+	return c.JSON(fiber.Map{"message": "Invite deleted"})
+}
+
+func (h *Handler) CheckInvite(c *fiber.Ctx) error {
+	token := c.Params("token")
+
+	var id, createdBy int64
+	var maxUses, useCount int
+	var expiresAt *time.Time
+	err := database.DB.QueryRow(
+		"SELECT id, created_by, max_uses, use_count, expires_at FROM invite_tokens WHERE token = ?",
+		token,
+	).Scan(&id, &createdBy, &maxUses, &useCount, &expiresAt)
+	if err == sql.ErrNoRows {
+		return c.Status(404).JSON(fiber.Map{"error": "Invite not found", "valid": false})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	valid := true
+	reason := ""
+	if maxUses > 0 && useCount >= maxUses {
+		valid = false
+		reason = "exhausted"
+	}
+	if expiresAt != nil && time.Now().After(*expiresAt) {
+		valid = false
+		reason = "expired"
+	}
+
+	var creatorName string
+	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", createdBy).Scan(&creatorName)
+
+	return c.JSON(fiber.Map{
+		"valid":    valid,
+		"reason":   reason,
+		"created_by": createdBy,
+		"creator":  creatorName,
+	})
 }
 
 func (h *Handler) AdminListFiles(c *fiber.Ctx) error {

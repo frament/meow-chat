@@ -47,6 +47,7 @@ func main() {
 	api.Post("/login", h.Login)
 	api.Post("/refresh", h.Refresh)
 	api.Get("/push/vapid-public-key", h.VAPIDPublicKey)
+	api.Get("/invite/:token", h.CheckInvite)
 
 	api.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
@@ -74,6 +75,10 @@ func main() {
 
 	api.Post("/logout", h.Logout)
 	api.Get("/users", h.GetUsers)
+
+	api.Post("/invites", h.CreateInvite)
+	api.Get("/invites", h.GetMyInvites)
+	api.Delete("/invites/:id", h.DeleteInvite)
 
 	api.Post("/posts", h.CreatePost)
 	api.Get("/feed", h.GetFeed)

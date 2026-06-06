@@ -54,10 +54,26 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type InviteToken struct {
+	ID        int64      `json:"id"`
+	CreatedBy int64      `json:"created_by"`
+	Token     string     `json:"token"`
+	MaxUses   int        `json:"max_uses"`
+	UseCount  int        `json:"use_count"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+type CreateInviteRequest struct {
+	MaxUses   int    `json:"max_uses"`
+	ExpiresIn string `json:"expires_in,omitempty"`
+}
+
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	InviteToken string `json:"invite_token"`
 }
 
 type UpdateProfileRequest struct {

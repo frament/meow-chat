@@ -56,6 +56,16 @@ export interface LoginResponse {
   is_admin: boolean;
 }
 
+export interface InviteToken {
+  id: number;
+  created_by: number;
+  token: string;
+  max_uses: number;
+  use_count: number;
+  expires_at: string | null;
+  created_at: string;
+}
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -85,10 +95,10 @@ export class ApiService {
     }
   }
 
-  register(username: string, email: string, password: string) {
+  register(username: string, email: string, password: string, inviteToken: string) {
     return this.http.post<{ id: number; message: string }>(
       `${this.baseUrl}/register`,
-      { username, email, password }
+      { username, email, password, invite_token: inviteToken }
     );
   }
 
@@ -208,6 +218,24 @@ export class ApiService {
   getAdminFiles() {
     return this.http.get<{ name: string; path: string; size: number; is_dir: boolean; mod_time: string }[]>(
       `${this.baseUrl}/admin/files`
+    );
+  }
+
+  createInvite(maxUses = 1) {
+    return this.http.post<{ token: string }>(`${this.baseUrl}/invites`, { max_uses: maxUses });
+  }
+
+  getMyInvites() {
+    return this.http.get<InviteToken[]>(`${this.baseUrl}/invites`);
+  }
+
+  deleteInvite(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/invites/${id}`);
+  }
+
+  checkInvite(token: string) {
+    return this.http.get<{ valid: boolean; reason?: string; created_by: number; creator: string }>(
+      `${this.baseUrl}/invite/${token}`
     );
   }
 

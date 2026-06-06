@@ -1,14 +1,16 @@
 import { Component, OnInit, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
-import { ApiService } from '../../services/api.service';
+import { ApiService, InviteToken } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
+import * as QRCode from 'qrcode';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, DatePipe],
   template: `
     <div class="max-w-lg mx-auto px-4 py-6 pb-20 sm:pb-6">
       <div class="card" style="padding:24px;">
@@ -103,6 +105,55 @@ import { ThemeService, ThemeMode } from '../../services/theme.service';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Приглашения</div>
+          @if (inviteError) {
+            <p class="text-sm mb-2" style="color:#e74c3c;">{{ inviteError }}</p>
+          }
+          <button type="button" (click)="createInvite()" [disabled]="creatingInvite"
+            class="btn-secondary" style="width:100%;padding:10px 20px;margin-bottom:12px;">
+            {{ creatingInvite ? 'Создание...' : 'Создать приглашение' }}
+          </button>
+          @if (invites.length > 0) {
+            <div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+              @for (inv of invites; track inv.id) {
+                <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="color:var(--text-primary);font-weight:500;">{{ inv.token.slice(0, 16) }}…</span>
+                    <div style="display:flex;gap:4px;">
+                      <button (click)="copyInvite(inv.token)" title="Копировать ссылку"
+                        style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">Копировать</button>
+                      <button (click)="showQR(inv.token)" title="QR-код"
+                        style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">QR</button>
+                      <button (click)="revokeInvite(inv.id)" title="Отозвать"
+                        style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:12px;color:var(--text-tertiary);font-size:12px;">
+                    <span>Использовано: {{ inv.use_count }}/{{ inv.max_uses === 0 ? '∞' : inv.max_uses }}</span>
+                    <span>{{ inv.created_at | date:'dd.MM.yy' }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        @if (qrDataUrl) {
+          <div (click)="closeQR()" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+            <div (click)="$event.stopPropagation()" style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:360px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,0.3);">
+              <img [src]="qrDataUrl" style="width:240px;height:240px;margin:0 auto 16px;border-radius:8px;">
+              <p style="font-size:14px;color:#333;font-weight:600;word-break:break-all;margin-bottom:12px;">{{ qrInviteUrl }}</p>
+              <div style="display:flex;gap:8px;justify-content:center;">
+                <button (click)="copyInviteFromQR()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;">Копировать ссылку</button>
+                <button (click)="closeQR()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:14px;color:#666;">Закрыть</button>
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
@@ -132,6 +183,13 @@ export class SettingsComponent implements OnInit {
   updateChecking = false;
   updateStatus = '';
   updateStatusColor = '';
+
+  invites: InviteToken[] = [];
+  creatingInvite = false;
+  inviteError = '';
+  qrToken = '';
+  qrDataUrl = '';
+  qrInviteUrl = '';
 
   constructor(
     private api: ApiService,
@@ -181,6 +239,7 @@ export class SettingsComponent implements OnInit {
       this.username = user.username;
       this.email = user.email;
     }
+    this.loadInvites();
   }
 
   onFileSelected(event: Event) {
@@ -238,6 +297,55 @@ export class SettingsComponent implements OnInit {
   selectTheme(mode: ThemeMode) {
     this.selectedTheme = mode;
     this.theme.setTheme(mode);
+  }
+
+  loadInvites() {
+    this.api.getMyInvites().subscribe({
+      next: (inv) => this.invites = inv,
+    });
+  }
+
+  createInvite() {
+    this.creatingInvite = true;
+    this.inviteError = '';
+    this.api.createInvite(1).subscribe({
+      next: () => {
+        this.creatingInvite = false;
+        this.loadInvites();
+      },
+      error: () => {
+        this.creatingInvite = false;
+        this.inviteError = 'Ошибка создания приглашения';
+      },
+    });
+  }
+
+  revokeInvite(id: number) {
+    this.api.deleteInvite(id).subscribe({
+      next: () => this.loadInvites(),
+      error: () => this.inviteError = 'Ошибка отзыва приглашения',
+    });
+  }
+
+  copyInvite(token: string) {
+    const url = `${window.location.origin}/register?invite=${token}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+  }
+
+  async showQR(token: string) {
+    this.qrToken = token;
+    this.qrInviteUrl = `${window.location.origin}/register?invite=${token}`;
+    this.qrDataUrl = await QRCode.toDataURL(this.qrInviteUrl, { width: 512, margin: 2 });
+  }
+
+  closeQR() {
+    this.qrDataUrl = '';
+    this.qrToken = '';
+    this.qrInviteUrl = '';
+  }
+
+  copyInviteFromQR() {
+    navigator.clipboard.writeText(this.qrInviteUrl).catch(() => {});
   }
 
   logout() {

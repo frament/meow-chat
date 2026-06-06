@@ -142,3 +142,15 @@ cd frontend && npm run build   # production build with service-worker
 - **Admin panel page**: `/admin` with two tabs (User Management + File Management), nav link visible only to admins — `admin.ts`, `app.routes.ts`, `layout.ts`
 - **Frontend API**: Added `getAdminUsers()`, `adminMakeAdmin()`, `adminRemoveAdmin()`, `getAdminFiles()` — `api.service.ts`
 - **Project structure**: Added `components/admin/` to project tree — `AGENTS.md`
+
+## Session (2026-06-06) — Invite-only registration + notification fixes
+- **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`
+- **SW push fix**: Added `silent: true` to `showNotification()` in SW — `sw-push-handler.js`
+- **Sound caching**: Added `.mp3` to `ngsw-config.json` asset patterns — `ngsw-config.json`
+- **Invite tokens**: Added `invite_tokens` table (id, created_by, token, max_uses, use_count, expires_at) — `database/database.go`
+- **Invite API**: `POST/GET/DELETE /api/invites`, `GET /api/invite/:token` — `handlers/handlers.go`, `main.go`
+- **Registration**: Now requires `invite_token`, validated before user creation — `handlers/handlers.go`, `models/models.go`
+- **Frontend invite API**: `InviteToken` interface, `createInvite/getMyInvites/deleteInvite/checkInvite` — `api.service.ts`
+- **Register page**: Reads `?invite=TOKEN` from URL or shows manual input — `register.ts`
+- **Settings — Invites**: Section to create, copy link, fullscreen QR overlay, revoke invites — `settings.ts`
+- **QR code**: `qrcode` npm package, fullscreen overlay with copy button — `settings.ts`, `package.json`
