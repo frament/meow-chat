@@ -8,6 +8,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Password  string    `json:"-"`
 	AvatarURL string    `json:"avatar_url"`
+	IsAdmin   bool      `json:"is_admin"`
 	CreatedAt time.Time `json:"created_at"`
 	IsOnline  bool      `json:"is_online"`
 }
@@ -35,6 +36,7 @@ type Post struct {
 	CreatedAt time.Time   `json:"created_at"`
 	Username  string      `json:"username,omitempty"`
 	AvatarURL string      `json:"avatar_url,omitempty"`
+	IsAdmin   bool        `json:"is_admin"`
 	Images    []PostImage `json:"images,omitempty"`
 }
 
@@ -68,6 +70,7 @@ type LoginResponse struct {
 	Username  string `json:"username"`
 	Email     string `json:"email"`
 	AvatarURL string `json:"avatar_url"`
+	IsAdmin   bool   `json:"is_admin"`
 }
 
 type AuthResponse struct {

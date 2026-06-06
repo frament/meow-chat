@@ -24,16 +24,27 @@ import { ApiService } from '../../services/api.service';
                   @if (api.totalUnread()) {
                     <span class="badge-nav">{{ api.totalUnread() }}</span>
                   }</a>
+                @if (api.currentUser()?.is_admin) {
+                  <a routerLink="/admin" routerLinkActive="active-link"
+                    class="nav-link">Админ</a>
+                }
               </div>
             </div>
             <a routerLink="/settings" class="hidden sm:flex items-center gap-2 user-badge">
-              @if (api.currentUser()?.avatar_url) {
-                <img [src]="api.currentUser()?.avatar_url" class="w-7 h-7 rounded-full object-cover" style="border:1px solid var(--border-default);">
-              } @else {
-                <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:var(--avatar-bg);color:var(--avatar-text);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">
-                  {{ (api.currentUser()?.username ?? '?')[0] }}
-                </div>
-              }
+              <div style="position:relative;display:inline-flex;">
+                @if (api.currentUser()?.avatar_url) {
+                  <img [src]="api.currentUser()?.avatar_url" class="w-7 h-7 rounded-full object-cover" style="border:1px solid var(--border-default);">
+                } @else {
+                  <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:var(--avatar-bg);color:var(--avatar-text);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;">
+                    {{ (api.currentUser()?.username ?? '?')[0] }}
+                  </div>
+                }
+                @if (api.currentUser()?.is_admin) {
+                  <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                  </div>
+                }
+              </div>
               <span class="text-sm" style="color:var(--text-secondary);">{{ api.currentUser()?.username }}</span>
             </a>
           </div>
@@ -61,6 +72,14 @@ import { ApiService } from '../../services/api.service';
             </span>
             <span class="text-xs">Чат</span>
           </a>
+          @if (api.currentUser()?.is_admin) {
+            <a routerLink="/admin" routerLinkActive="active-link" class="nav-link bottom-nav-link">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+              </svg>
+              <span class="text-xs">Админ</span>
+            </a>
+          }
           <a routerLink="/settings" routerLinkActive="active-link" class="nav-link bottom-nav-link">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

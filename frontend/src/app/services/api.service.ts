@@ -7,6 +7,7 @@ export interface User {
   username: string;
   email: string;
   avatar_url: string;
+  is_admin: boolean;
   created_at: string;
   is_online: boolean;
 }
@@ -24,6 +25,7 @@ export interface Post {
   created_at: string;
   username: string;
   avatar_url: string;
+  is_admin: boolean;
   images?: PostImage[];
 }
 
@@ -51,6 +53,7 @@ export interface LoginResponse {
   username: string;
   email: string;
   avatar_url: string;
+  is_admin: boolean;
 }
 
 export interface AuthResponse {
@@ -187,6 +190,24 @@ export class ApiService {
     return this.http.put<LoginResponse>(
       `${this.baseUrl}/profile`,
       { username, email }
+    );
+  }
+
+  getAdminUsers() {
+    return this.http.get<User[]>(`${this.baseUrl}/admin/users`);
+  }
+
+  adminMakeAdmin(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/admin/users/${id}/make-admin`, {});
+  }
+
+  adminRemoveAdmin(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/admin/users/${id}/remove-admin`, {});
+  }
+
+  getAdminFiles() {
+    return this.http.get<{ name: string; path: string; size: number; is_dir: boolean; mod_time: string }[]>(
+      `${this.baseUrl}/admin/files`
     );
   }
 

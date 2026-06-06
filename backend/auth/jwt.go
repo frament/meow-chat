@@ -20,15 +20,17 @@ func init() {
 }
 
 type Claims struct {
-	UserID int64  `json:"user_id"`
-	Type   string `json:"type"`
+	UserID  int64  `json:"user_id"`
+	Type    string `json:"type"`
+	IsAdmin bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 
-func GenerateAccessToken(userID int64) (string, error) {
+func GenerateAccessToken(userID int64, isAdmin bool) (string, error) {
 	claims := &Claims{
-		UserID: userID,
-		Type:   "access",
+		UserID:  userID,
+		Type:    "access",
+		IsAdmin: isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

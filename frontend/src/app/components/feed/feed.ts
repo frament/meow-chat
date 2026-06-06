@@ -42,13 +42,20 @@ import { ApiService, Post } from '../../services/api.service';
       @for (post of posts; track post.id) {
         <div class="card">
           <div class="post-header">
-            @if (post.avatar_url) {
-              <img [src]="post.avatar_url" class="post-avatar">
-            } @else {
-              <div class="post-avatar">
-                {{ post.username[0] }}
-              </div>
-            }
+            <div style="position:relative;display:inline-flex;">
+              @if (post.avatar_url) {
+                <img [src]="post.avatar_url" class="post-avatar">
+              } @else {
+                <div class="post-avatar">
+                  {{ post.username[0] }}
+                </div>
+              }
+              @if (post.is_admin) {
+                <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                </div>
+              }
+            </div>
             <div class="post-meta" style="flex:1;">
               <p class="post-username">{{ post.username }}</p>
               <p class="post-time">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>

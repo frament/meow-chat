@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var DB *sql.DB
@@ -43,6 +44,7 @@ func migrate() {
 			email TEXT UNIQUE NOT NULL,
 			password TEXT NOT NULL,
 			avatar_url TEXT DEFAULT '',
+			is_admin INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
@@ -109,6 +111,10 @@ func migrate() {
 	if count == 0 {
 		DB.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
 	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_admin'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+	}
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
 		log.Fatal("Failed to create uploads directory:", err)
@@ -121,4 +127,30 @@ func migrate() {
 	}
 
 	log.Println("Database migrated successfully")
+}
+
+func SeedAdmin() {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM users WHERE is_admin = 1").Scan(&count)
+	if err != nil {
+		log.Println("Failed to check admin count:", err)
+		return
+	}
+	if count > 0 {
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Println("Failed to hash admin password:", err)
+		return
+	}
+	_, err = DB.Exec(
+		"INSERT OR IGNORE INTO users (username, email, password, is_admin) VALUES (?, ?, ?, 1)",
+		"admin", "admin@meowchat.local", string(hash),
+	)
+	if err != nil {
+		log.Println("Failed to seed admin user:", err)
+		return
+	}
+	log.Println("Default admin user created (admin/admin)")
 }

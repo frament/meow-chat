@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -11,10 +12,17 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
 	database.InitDB()
+	database.SeedAdmin()
+
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		runAdminCLI()
+		return
+	}
 
 	h := handlers.NewHandler()
 	if err := h.LoadVAPIDKeys(); err != nil {
@@ -76,6 +84,12 @@ func main() {
 	api.Post("/upload-avatar", h.UploadAvatar)
 	api.Put("/profile", h.UpdateProfile)
 
+	admin := api.Group("/admin", handlers.AdminRequired)
+	admin.Get("/users", h.AdminListUsers)
+	admin.Post("/users/:id/make-admin", h.MakeAdmin)
+	admin.Post("/users/:id/remove-admin", h.RemoveAdmin)
+	admin.Get("/files", h.AdminListFiles)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -83,4 +97,101 @@ func main() {
 
 	log.Printf("Server starting on port %s", port)
 	log.Fatal(app.Listen(":" + port))
+}
+
+func runAdminCLI() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage:")
+		fmt.Println("  go run . admin add <username>           — Make user an admin")
+		fmt.Println("  go run . admin remove <username>        — Remove admin role")
+		fmt.Println("  go run . admin list                     — List all admins")
+		fmt.Println("  go run . admin reset-password <username> <password> — Reset user password")
+		return
+	}
+
+	action := os.Args[2]
+
+	switch action {
+	case "add":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: go run . admin add <username>")
+			return
+		}
+		username := os.Args[3]
+		result, err := database.DB.Exec("UPDATE users SET is_admin = 1 WHERE username = ?", username)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			fmt.Printf("User '%s' not found\n", username)
+			return
+		}
+		fmt.Printf("User '%s' is now an admin\n", username)
+
+	case "remove":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: go run . admin remove <username>")
+			return
+		}
+		username := os.Args[3]
+		result, err := database.DB.Exec("UPDATE users SET is_admin = 0 WHERE username = ?", username)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			fmt.Printf("User '%s' not found\n", username)
+			return
+		}
+		fmt.Printf("Admin rights removed from '%s'\n", username)
+
+	case "list":
+		rows, err := database.DB.Query("SELECT id, username, email, created_at FROM users WHERE is_admin = 1 ORDER BY username")
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		defer rows.Close()
+
+		fmt.Println("Administrators:")
+		for rows.Next() {
+			var id int64
+			var username, email, createdAt string
+			if err := rows.Scan(&id, &username, &email, &createdAt); err != nil {
+				continue
+			}
+			fmt.Printf("  #%d  %s  (%s)  since %s\n", id, username, email, createdAt)
+		}
+
+	case "reset-password":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: go run . admin reset-password <username> <password>")
+			return
+		}
+		username := os.Args[3]
+		password := os.Args[4]
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		result, err := database.DB.Exec("UPDATE users SET password = ? WHERE username = ?", string(hash), username)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			fmt.Printf("User '%s' not found\n", username)
+			return
+		}
+		fmt.Printf("Password for '%s' has been reset\n", username)
+
+	default:
+		fmt.Printf("Unknown action: %s\n", action)
+		fmt.Println("Use: add <username>, remove <username>, list, or reset-password <username> <password>")
+	}
 }

@@ -26,6 +26,15 @@ func AuthRequired(c *fiber.Ctx) error {
 	}
 
 	c.Locals("userId", claims.UserID)
+	c.Locals("isAdmin", claims.IsAdmin)
+	return c.Next()
+}
+
+func AdminRequired(c *fiber.Ctx) error {
+	isAdmin, ok := c.Locals("isAdmin").(bool)
+	if !ok || !isAdmin {
+		return c.Status(403).JSON(fiber.Map{"error": "Admin access required"})
+	}
 	return c.Next()
 }
 
@@ -49,7 +58,10 @@ func (h *Handler) Refresh(c *fiber.Ctx) error {
 
 	database.DeleteRefreshToken(claims.ID)
 
-	accessToken, err := auth.GenerateAccessToken(userID)
+	var isAdmin bool
+	database.DB.QueryRow("SELECT is_admin FROM users WHERE id = ?", userID).Scan(&isAdmin)
+
+	accessToken, err := auth.GenerateAccessToken(userID, isAdmin)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
 	}

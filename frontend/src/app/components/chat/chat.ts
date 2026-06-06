@@ -21,13 +21,20 @@ import { ApiService, User, Message } from '../../services/api.service';
               class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
               [style.background]="selectedUser?.id === user.id ? 'var(--accent-light)' : 'transparent'"
               [class.hover-bg]="selectedUser?.id !== user.id">
-              @if (user.avatar_url) {
-                <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
-              } @else {
-                <div class="post-avatar" style="width:32px;height:32px;font-size:13px;">
-                  {{ user.username[0] }}
-                </div>
-              }
+              <div style="position:relative;display:inline-flex;">
+                @if (user.avatar_url) {
+                  <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
+                } @else {
+                  <div class="post-avatar" style="width:32px;height:32px;font-size:13px;">
+                    {{ user.username[0] }}
+                  </div>
+                }
+                @if (user.is_admin) {
+                  <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                  </div>
+                }
+              </div>
               <span class="flex-1 text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
               @if (api.unreadCounts()[user.id]) {
                 <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
@@ -47,13 +54,20 @@ import { ApiService, User, Message } from '../../services/api.service';
             class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
             [style.background]="selectedUser?.id === user.id ? 'var(--accent-light)' : 'transparent'"
             [class.hover-bg]="selectedUser?.id !== user.id">
-            @if (user.avatar_url) {
-              <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
-            } @else {
-              <div class="post-avatar" style="width:32px;height:32px;font-size:13px;">
-                {{ user.username[0] }}
-              </div>
-            }
+            <div style="position:relative;display:inline-flex;">
+              @if (user.avatar_url) {
+                <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover">
+              } @else {
+                <div class="post-avatar" style="width:32px;height:32px;font-size:13px;">
+                  {{ user.username[0] }}
+                </div>
+              }
+              @if (user.is_admin) {
+                <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                </div>
+              }
+            </div>
             <span class="flex-1 text-sm" style="color:var(--text-primary);">{{ user.username }}</span>
             @if (api.unreadCounts()[user.id]) {
               <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
@@ -145,13 +159,20 @@ import { ApiService, User, Message } from '../../services/api.service';
             @for (user of getPinnedUsers(); track user.id) {
               <div (click)="openChat(user)"
                 class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
-                @if (user.avatar_url) {
-                  <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
-                } @else {
-                  <div class="post-avatar" style="width:40px;height:40px;font-size:16px;">
-                    {{ user.username[0] }}
-                  </div>
-                }
+                <div style="position:relative;display:inline-flex;">
+                  @if (user.avatar_url) {
+                    <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
+                  } @else {
+                    <div class="post-avatar" style="width:40px;height:40px;font-size:16px;">
+                      {{ user.username[0] }}
+                    </div>
+                  }
+                  @if (user.is_admin) {
+                    <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                    </div>
+                  }
+                </div>
                 <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
                 @if (api.unreadCounts()[user.id]) {
                   <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
@@ -168,13 +189,20 @@ import { ApiService, User, Message } from '../../services/api.service';
           @for (user of getUnpinnedUsers(); track user.id) {
             <div (click)="openChat(user)"
               class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
-              @if (user.avatar_url) {
-                <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
-              } @else {
-                <div class="post-avatar" style="width:40px;height:40px;font-size:16px;">
-                  {{ user.username[0] }}
-                </div>
-              }
+              <div style="position:relative;display:inline-flex;">
+                @if (user.avatar_url) {
+                  <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover shrink-0">
+                } @else {
+                  <div class="post-avatar" style="width:40px;height:40px;font-size:16px;">
+                    {{ user.username[0] }}
+                  </div>
+                }
+                @if (user.is_admin) {
+                  <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                  </div>
+                }
+              </div>
               <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
               @if (api.unreadCounts()[user.id]) {
                 <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
@@ -198,14 +226,21 @@ import { ApiService, User, Message } from '../../services/api.service';
               </svg>
             </button>
             <div class="flex items-center gap-2">
-              @if (selectedUser.avatar_url) {
-                <img [src]="selectedUser.avatar_url" class="w-7 h-7 rounded-full object-cover">
-              } @else {
-                <div class="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
-                  style="background:var(--avatar-bg);color:var(--avatar-text);">
-                  {{ selectedUser.username[0] }}
-                </div>
-              }
+              <div style="position:relative;display:inline-flex;">
+                @if (selectedUser.avatar_url) {
+                  <img [src]="selectedUser.avatar_url" class="w-7 h-7 rounded-full object-cover">
+                } @else {
+                  <div class="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
+                    style="background:var(--avatar-bg);color:var(--avatar-text);">
+                    {{ selectedUser.username[0] }}
+                  </div>
+                }
+                @if (selectedUser.is_admin) {
+                  <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                  </div>
+                }
+              </div>
               <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ selectedUser.username }}</h3>
             </div>
           </div>

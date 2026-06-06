@@ -16,7 +16,7 @@ uploads/avatars/ # avatar images (auto-created on server start)
 uploads/posts/   # post images (auto-created on server start)
 frontend/
   src/app/
-    components/{login,register,feed,chat,layout}/  # standalone components
+     components/{login,register,feed,chat,layout,admin}/  # standalone components
     services/api.service.ts                        # all API calls + WebSocket connect
   proxy.conf.js   # dev API proxy → localhost:8080, with WS support
   nginx.conf      # prod: /api → backend:8080, SPA fallback
@@ -130,3 +130,15 @@ cd frontend && npm run build   # production build with service-worker
 - **30s boundary timeout**: Divider stays visible for 30s after opening chat (survives duplicate `selectUser` calls from `route.paramMap` + `resolvePendingChat`), then clears — `chat.ts`
 - **Separated clear**: `clearUnread` no longer clears boundary; new `clearUnreadBoundary` for explicit boundary cleanup — `api.service.ts`
 - **Divider CSS**: `.unread-divider` with accent horizontal lines + "Новые сообщения" label — `styles.css`
+
+## Session (2026-06-06) — Admin role + admin panel
+- **Admin role**: Added `is_admin INTEGER DEFAULT 0` column to `users` table — `database/database.go`
+- **Seed admin**: `SeedAdmin()` creates `admin`/`admin` on first launch — `database/database.go`
+- **JWT**: Added `IsAdmin` to Claims, `GenerateAccessToken` accepts `isAdmin` — `auth/jwt.go`
+- **Middleware**: `AdminRequired` checks `c.Locals("isAdmin")` — `handlers/auth.go`
+- **Admin endpoints**: `GET /api/admin/users`, `POST /api/admin/users/:id/make-admin`, `POST /api/admin/users/:id/remove-admin`, `GET /api/admin/files` — `handlers/handlers.go`, `main.go`
+- **CLI**: `go run . admin add/remove/list/reset-password` — `main.go`
+- **Admin badge**: Shield icon overlay on all user avatars when `is_admin === true` — `layout.ts`, `feed.ts`, `chat.ts`
+- **Admin panel page**: `/admin` with two tabs (User Management + File Management), nav link visible only to admins — `admin.ts`, `app.routes.ts`, `layout.ts`
+- **Frontend API**: Added `getAdminUsers()`, `adminMakeAdmin()`, `adminRemoveAdmin()`, `getAdminFiles()` — `api.service.ts`
+- **Project structure**: Added `components/admin/` to project tree — `AGENTS.md`

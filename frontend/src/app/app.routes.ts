@@ -5,6 +5,7 @@ import { RegisterComponent } from './components/register/register';
 import { FeedComponent } from './components/feed/feed';
 import { ChatComponent } from './components/chat/chat';
 import { SettingsComponent } from './components/settings/settings';
+import { AdminComponent } from './components/admin/admin';
 import { LayoutComponent } from './components/layout/layout';
 import { ApiService } from './services/api.service';
 
@@ -29,6 +30,7 @@ export const routes: Routes = [
       { path: 'chat', component: ChatComponent },
       { path: 'chat/:userId', component: ChatComponent },
       { path: 'settings', component: SettingsComponent },
+      { path: 'admin', component: AdminComponent },
     ],
   },
 ];

@@ -41,6 +41,24 @@ make dev-frontend
 
 Открывается на `:4200`. Запросы к `/api` проксируются на `localhost:8080` (включая WebSocket).
 
+## CLI (администрирование)
+
+Утилита для управления пользователями через терминал (не требует запущенного сервера):
+
+```sh
+cd backend
+
+# Создаётся автоматически при первом запуске: admin / admin
+
+# Управление админами
+go run . admin list                              # список администраторов
+go run . admin add <username>                    # сделать пользователя админом
+go run . admin remove <username>                 # снять права администратора
+
+# Сброс пароля
+go run . admin reset-password <username> <password>
+```
+
 ## Проверка production-сборки
 
 ```sh

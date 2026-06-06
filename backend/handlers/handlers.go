@@ -196,9 +196,9 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 
 	var user models.User
 	err := database.DB.QueryRow(
-		"SELECT id, username, email, password, avatar_url FROM users WHERE username = ?",
+		"SELECT id, username, email, password, avatar_url, is_admin FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.IsAdmin)
 
 	if err == sql.ErrNoRows {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
@@ -211,7 +211,7 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user.ID)
+	accessToken, err := auth.GenerateAccessToken(user.ID, user.IsAdmin)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
@@ -231,6 +231,7 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 			Username:  user.Username,
 			Email:     user.Email,
 			AvatarURL: user.AvatarURL,
+			IsAdmin:   user.IsAdmin,
 		},
 	})
 }
@@ -330,7 +331,7 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 
 func (h *Handler) GetFeed(c *fiber.Ctx) error {
 	rows, err := database.DB.Query(`
-		SELECT p.id, p.user_id, p.content, p.created_at, u.username, u.avatar_url
+		SELECT p.id, p.user_id, p.content, p.created_at, u.username, u.avatar_url, u.is_admin
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		ORDER BY p.created_at DESC
@@ -344,7 +345,7 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 	var posts []models.Post
 	for rows.Next() {
 		var p models.Post
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Content, &p.CreatedAt, &p.Username, &p.AvatarURL, &p.IsAdmin); err != nil {
 			continue
 		}
 
@@ -638,6 +639,106 @@ func (h *Handler) UnpinUser(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to unpin user"})
 	}
 	return c.JSON(fiber.Map{"message": "User unpinned"})
+}
+
+func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
+	type FileEntry struct {
+		Name    string `json:"name"`
+		Path    string `json:"path"`
+		Size    int64  `json:"size"`
+		IsDir   bool   `json:"is_dir"`
+		ModTime string `json:"mod_time"`
+	}
+
+	dirs := []string{"./uploads/avatars", "./uploads/posts", "./uploads/messages"}
+	var result []FileEntry
+
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			result = append(result, FileEntry{
+				Name:    entry.Name(),
+				Path:    "/" + dir[1:] + "/" + entry.Name(),
+				Size:    info.Size(),
+				IsDir:   entry.IsDir(),
+				ModTime: info.ModTime().Format(time.RFC3339),
+			})
+		}
+	}
+
+	return c.JSON(result)
+}
+
+func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
+	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, is_admin, created_at FROM users ORDER BY username")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
+	}
+	defer rows.Close()
+
+	type AdminUser struct {
+		ID        int64     `json:"id"`
+		Username  string    `json:"username"`
+		Email     string    `json:"email"`
+		AvatarURL string    `json:"avatar_url"`
+		IsAdmin   bool      `json:"is_admin"`
+		CreatedAt time.Time `json:"created_at"`
+		IsOnline  bool      `json:"is_online"`
+	}
+
+	var users []AdminUser
+	for rows.Next() {
+		var u AdminUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.CreatedAt); err != nil {
+			continue
+		}
+		u.IsOnline = h.onlineUsers[u.ID]
+		users = append(users, u)
+	}
+	return c.JSON(users)
+}
+
+func (h *Handler) MakeAdmin(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	result, err := database.DB.Exec("UPDATE users SET is_admin = 1 WHERE id = ?", targetID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update user"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "User is now an admin"})
+}
+
+func (h *Handler) RemoveAdmin(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	result, err := database.DB.Exec("UPDATE users SET is_admin = 0 WHERE id = ?", targetID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update user"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Admin rights removed"})
 }
 
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {
