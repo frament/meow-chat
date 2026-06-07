@@ -57,6 +57,11 @@ export class LoginComponent implements OnInit {
 
   ngOnInit() {
     this.redirectUrl = this.route.snapshot.queryParams['redirect'] || '/feed';
+    const saved = localStorage.getItem('lastUsername');
+    if (saved) {
+      this.username = saved;
+      this.checkBiometric();
+    }
   }
 
   checkBiometric() {
@@ -109,6 +114,7 @@ export class LoginComponent implements OnInit {
           const credJson = credential.toJSON();
           this.api.webauthnFinishLogin(challenge.session_id, credJson).subscribe({
             next: (res) => {
+              localStorage.setItem('lastUsername', this.username);
               this.api.storeAuth(res);
               this.router.navigateByUrl(this.redirectUrl);
             },
@@ -133,6 +139,7 @@ export class LoginComponent implements OnInit {
     this.notif.requestPermission();
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
+        localStorage.setItem('lastUsername', this.username);
         this.api.storeAuth(res);
         this.router.navigateByUrl(this.redirectUrl);
       },
