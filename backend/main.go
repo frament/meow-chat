@@ -50,6 +50,10 @@ func main() {
 	api.Get("/invite/:token", h.CheckInvite)
 	api.Get("/friend-invite/:token", h.CheckFriendInvite)
 
+	api.Post("/webauthn/begin-login", h.WebAuthnBeginLogin)
+	api.Post("/webauthn/finish-login", h.WebAuthnFinishLogin)
+	api.Post("/webauthn/has-credentials", h.WebAuthnHasCredentials)
+
 	api.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
 		if token == "" {
@@ -69,6 +73,11 @@ func main() {
 
 	api.Post("/push/subscribe", h.SubscribePush)
 	api.Delete("/push/subscribe", h.UnsubscribePush)
+
+	api.Post("/webauthn/begin-registration", h.WebAuthnBeginRegistration)
+	api.Post("/webauthn/finish-registration", h.WebAuthnFinishRegistration)
+	api.Get("/webauthn/credentials", h.WebAuthnListCredentials)
+	api.Delete("/webauthn/credentials/:id", h.WebAuthnRemoveCredential)
 
 	api.Get("/pinned", h.GetPinned)
 	api.Post("/pin/:id", h.PinUser)

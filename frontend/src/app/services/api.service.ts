@@ -105,9 +105,14 @@ export class ApiService {
   constructor(private http: HttpClient) {
     const saved = localStorage.getItem('currentUser');
     const token = localStorage.getItem('accessToken');
-    if (saved && token) {
-      this.currentUser.set(JSON.parse(saved));
-      this.accessToken.set(token);
+    if (saved && token && saved !== 'undefined') {
+      try {
+        const user = JSON.parse(saved);
+        if (user && typeof user === 'object' && user.id) {
+          this.currentUser.set(user);
+          this.accessToken.set(token);
+        }
+      } catch {}
     }
   }
 
@@ -408,6 +413,54 @@ export class ApiService {
       delete next[userId];
       return next;
     });
+  }
+
+  // WebAuthn (FaceID/TouchID)
+  webauthnHasCredentials(username: string) {
+    return this.http.post<{ has_credentials: boolean }>(
+      `${this.baseUrl}/webauthn/has-credentials`,
+      { username }
+    );
+  }
+
+  webauthnBeginRegistration() {
+    return this.http.post<{ session_id: string; options: any }>(
+      `${this.baseUrl}/webauthn/begin-registration`,
+      {}
+    );
+  }
+
+  webauthnFinishRegistration(sessionId: string, credential: any) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/webauthn/finish-registration`,
+      { session_id: sessionId, credential }
+    );
+  }
+
+  webauthnBeginLogin(username: string) {
+    return this.http.post<{ session_id: string; options: any }>(
+      `${this.baseUrl}/webauthn/begin-login`,
+      { username }
+    );
+  }
+
+  webauthnFinishLogin(sessionId: string, credential: any) {
+    return this.http.post<AuthResponse>(
+      `${this.baseUrl}/webauthn/finish-login`,
+      { session_id: sessionId, credential }
+    );
+  }
+
+  webauthnListCredentials() {
+    return this.http.get<{ id: number; created_at: string }[]>(
+      `${this.baseUrl}/webauthn/credentials`
+    );
+  }
+
+  webauthnRemoveCredential(id: number) {
+    return this.http.delete<{ message: string }>(
+      `${this.baseUrl}/webauthn/credentials/${id}`
+    );
   }
 
   disconnectWebSocket(): void {

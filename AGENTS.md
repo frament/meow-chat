@@ -1,7 +1,7 @@
 # MeowChat repo guide
 
 ## Stack
-- **Backend**: Go 1.22 + Fiber v2 + SQLite (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
+- **Backend**: Go 1.23 + Fiber v2 + SQLite (go-webauthn for biometric auth) (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
 - **Frontend**: Angular 20 (standalone components, new `@if`/`@for` control flow) + Tailwind v4 (`@import "tailwindcss"` in CSS) + PWA (`@angular/service-worker`)
 - **Infra**: Docker Compose (primary run-and-go), nginx reverse-proxy in frontend container
 
@@ -157,6 +157,18 @@ cd frontend && npm run build   # production build with service-worker
 - **Local fonts**: Downloaded Plus Jakarta Sans woff2, stored in `public/fonts/`, `@font-face` with variable weight 400-700 replaces Google Fonts import — `styles.css`, `public/fonts/`
 - **Smart image grid**: 1/2/3/4+ layout, 5+ shows first 4 with +N overlay, fullscreen viewer with prev/next nav + counter — `styles.css`, `feed.ts`
 - **Auth interceptor fix**: Excluded `/logout` from 401 refresh loop; `logout()` skips HTTP call if no token — `auth.interceptor.ts`, `api.service.ts`
+
+## Session (2026-06-07) — WebAuthn biometric auth (Face ID / Touch ID)
+- **WebAuthn**: Added `go-webauthn/webauthn` library for WebAuthn — `handlers/webauthn.go`
+- **Database**: `webauthn_credentials` table (credential_id, public_key, attestation_type, aaguid, sign_count) — `database/database.go`
+- **API endpoints**: `POST /api/webauthn/begin-registration`, `POST /api/webauthn/finish-registration`, `POST /api/webauthn/begin-login`, `POST /api/webauthn/finish-login`, `GET /api/webauthn/credentials`, `DELETE /api/webauthn/credentials/:id`, `POST /api/webauthn/has-credentials`
+- **Login page**: Biometric login button appears when user has registered credentials — `login.ts`
+- **Settings**: Biometric management section — register/remove Face ID / Touch ID — `settings.ts`
+- **Dockerfile**: Updated to `golang:1.23-alpine` (webauthn deps require Go 1.23+)
+- **Env vars**: `WEBAUTHN_RP_ID` (default `localhost`), `WEBAUTHN_RP_ORIGIN` (default `http://localhost:4200`)
+- **WebAuthn binary fields fix**: Added `prepareWebAuthnOptions()` helper that converts base64url strings → `Uint8Array` for `challenge`, `user.id`, and credential ids before passing to `navigator.credentials.create()`/`.get()` — `login.ts`, `settings.ts`
+- **Auth page cleanup**: Removed registration link from login page — `login.ts`
+- **localStorage parse fix**: Guard against `"undefined"` string in `currentUser` — `api.service.ts`
 
 ## Session (2026-06-06) — Invite-only registration + notification fixes
 - **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`

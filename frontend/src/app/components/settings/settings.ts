@@ -218,6 +218,41 @@ import * as QRCode from 'qrcode';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Биометрия (Face ID / Touch ID)</div>
+          @if (webauthnSupported) {
+            @if (bioCreds.length === 0) {
+              <button type="button" (click)="registerBiometric()" [disabled]="bioRegistering"
+                class="btn-secondary" style="width:100%;padding:10px 20px;">
+                {{ bioRegistering ? 'Настройка...' : 'Привязать Face ID / Touch ID' }}
+              </button>
+            } @else {
+              <p class="text-sm mb-2" style="color:var(--text-tertiary);">Привязано устройств: {{ bioCreds.length }}</p>
+              @for (cred of bioCreds; track cred.id) {
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:6px;">
+                  <span style="color:var(--text-primary);">Биометрия #{{ cred.id }}<br><span style="font-size:11px;color:var(--text-tertiary);">добавлена {{ cred.created_at }}</span></span>
+                  <button (click)="removeBiometric(cred.id)"
+                    style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                </div>
+              }
+              <button type="button" (click)="registerBiometric()" [disabled]="bioRegistering"
+                class="btn-secondary" style="width:100%;padding:8px 16px;margin-top:4px;font-size:13px;">
+                {{ bioRegistering ? 'Настройка...' : '+ Добавить ещё' }}
+              </button>
+            }
+            @if (bioError) {
+              <p class="text-sm mt-2" style="color:#e74c3c;">{{ bioError }}</p>
+            }
+            @if (bioSuccess) {
+              <p class="text-sm mt-2" style="color:#27ae60;">{{ bioSuccess }}</p>
+            }
+          } @else {
+            <p class="text-sm" style="color:var(--text-tertiary);">WebAuthn не поддерживается вашим браузером</p>
+          }
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
@@ -264,6 +299,12 @@ export class SettingsComponent implements OnInit {
   friendQrUrl = '';
   friendQrDataUrl = '';
 
+  bioCreds: { id: number; created_at: string }[] = [];
+  bioLoading = false;
+  bioError = '';
+  bioSuccess = '';
+  bioRegistering = false;
+
   constructor(
     private api: ApiService,
     private router: Router,
@@ -298,6 +339,10 @@ export class SettingsComponent implements OnInit {
     }
   }
 
+  get webauthnSupported() {
+    return typeof PublicKeyCredential !== 'undefined';
+  }
+
   get currentUsername() {
     return this.api.currentUser()?.username ?? '';
   }
@@ -314,6 +359,7 @@ export class SettingsComponent implements OnInit {
     }
     this.loadInvites();
     this.loadFriends();
+    this.loadBioCreds();
   }
 
   onFileSelected(event: Event) {
@@ -473,6 +519,89 @@ export class SettingsComponent implements OnInit {
     this.api.removeFriend(id).subscribe({
       next: () => this.loadFriends(),
       error: () => this.friendInviteError = 'Ошибка удаления друга',
+    });
+  }
+
+  loadBioCreds() {
+    this.api.webauthnListCredentials().subscribe({
+      next: (creds) => { this.bioCreds = creds; },
+      error: () => {},
+    });
+  }
+
+  private prepareWebAuthnOptions(opts: any): any {
+    const b = (s: string): Uint8Array => {
+      const base64 = s.replace(/-/g, '+').replace(/_/g, '/');
+      const p = base64.length % 4;
+      const raw = atob(p ? base64 + '='.repeat(4 - p) : base64);
+      const buf = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+      return buf;
+    };
+    const pk = opts.publicKey ?? opts;
+    if (pk.challenge) pk.challenge = b(pk.challenge);
+    if (pk.user?.id) pk.user.id = b(pk.user.id);
+    for (const key of ['excludeCredentials', 'allowCredentials']) {
+      if (pk[key]) pk[key].forEach((c: any) => { if (c.id) c.id = b(c.id); });
+    }
+    return opts;
+  }
+
+  async registerBiometric() {
+    if (typeof PublicKeyCredential === 'undefined') {
+      this.bioError = 'WebAuthn не поддерживается';
+      return;
+    }
+    this.bioRegistering = true;
+    this.bioError = '';
+    this.bioSuccess = '';
+
+    this.api.webauthnBeginRegistration().subscribe({
+      next: async (challenge) => {
+        try {
+          const credential = await navigator.credentials.create({
+            publicKey: this.prepareWebAuthnOptions(challenge.options).publicKey,
+          }) as PublicKeyCredential;
+
+          const credJson = credential.toJSON();
+          this.api.webauthnFinishRegistration(challenge.session_id, credJson).subscribe({
+            next: () => {
+              this.bioRegistering = false;
+              this.bioSuccess = 'Биометрия привязана';
+              this.loadBioCreds();
+              setTimeout(() => (this.bioSuccess = ''), 3000);
+            },
+            error: (err) => {
+              this.bioRegistering = false;
+              this.bioError = err.error?.error || 'Ошибка привязки';
+            },
+          });
+        } catch (e: any) {
+          this.bioRegistering = false;
+          if (e?.name === 'NotAllowedError') {
+            this.bioError = 'Операция отменена';
+          } else if (e?.name === 'NotSupportedError') {
+            this.bioError = 'Face ID / Touch ID не настроен на устройстве';
+          } else {
+            this.bioError = e?.message || 'Ошибка';
+          }
+        }
+      },
+      error: (err) => {
+        this.bioRegistering = false;
+        this.bioError = err.error?.error || 'Ошибка запроса';
+      },
+    });
+  }
+
+  removeBiometric(id: number) {
+    this.api.webauthnRemoveCredential(id).subscribe({
+      next: () => {
+        this.bioSuccess = 'Биометрия удалена';
+        this.loadBioCreds();
+        setTimeout(() => (this.bioSuccess = ''), 3000);
+      },
+      error: () => { this.bioError = 'Ошибка удаления'; },
     });
   }
 
