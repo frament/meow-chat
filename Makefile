@@ -1,4 +1,4 @@
-.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update
+.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update admin admin-remove admin-list reset-password
 
 update:
 	git pull && docker compose build && docker compose up -d
@@ -26,3 +26,19 @@ dev-backend-win:
 
 dev-frontend:
 	cd frontend && npm run start
+
+admin:
+	docker compose exec backend ./server admin add $(filter-out $@,$(MAKECMDGOALS))
+
+admin-remove:
+	docker compose exec backend ./server admin remove $(filter-out $@,$(MAKECMDGOALS))
+
+admin-list:
+	docker compose exec backend ./server admin list
+
+reset-password:
+	docker compose exec backend ./server admin reset-password $(filter-out $@,$(MAKECMDGOALS))
+
+# Prevent make from erroring on unknown targets passed as args
+%:
+	@:
