@@ -10,6 +10,15 @@ interface FileEntry {
   mod_time: string;
 }
 
+interface AdminGroupChat {
+  id: number;
+  name: string;
+  created_by: number;
+  created_by_username: string;
+  member_count: number;
+  created_at: string;
+}
+
 @Component({
   selector: 'app-admin',
   standalone: true,
@@ -29,6 +38,11 @@ interface FileEntry {
             [style.background]="activeTab === 'files' ? 'var(--accent-light)' : 'transparent'"
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Управление файлами
+          </button>
+          <button (click)="activeTab = 'chats'; loadGroupChats()"
+            [style.background]="activeTab === 'chats' ? 'var(--accent-light)' : 'transparent'"
+            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
+            Чаты
           </button>
         </div>
 
@@ -104,6 +118,47 @@ interface FileEntry {
           }
         }
 
+        @if (activeTab === 'chats') {
+          @if (loadingChats) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+          } @else if (chats.length === 0) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Групповые чаты не найдены</p>
+          } @else {
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Название</th>
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Создатель</th>
+                    <th style="text-align:center;padding:8px 12px;font-weight:500;">Участников</th>
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Создан</th>
+                    <th style="text-align:right;padding:8px 12px;font-weight:500;">Действие</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (chat of chats; track chat.id) {
+                    <tr style="border-bottom:1px solid var(--divider);">
+                      <td style="padding:10px 12px;color:var(--text-primary);font-weight:500;">{{ chat.name }}</td>
+                      <td style="padding:10px 12px;color:var(--text-secondary);">{{ chat.created_by_username }}</td>
+                      <td style="padding:10px 12px;text-align:center;color:var(--text-primary);">{{ chat.member_count }}</td>
+                      <td style="padding:10px 12px;color:var(--text-tertiary);font-size:13px;">{{ chat.created_at | date:'dd.MM.yyyy HH:mm' }}</td>
+                      <td style="padding:10px 12px;text-align:right;">
+                        <button (click)="deleteChat(chat)" [disabled]="deleteChatLoading === chat.id"
+                          style="padding:4px 12px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:13px;color:#e74c3c;transition:all 0.2s;">
+                          {{ deleteChatLoading === chat.id ? '...' : 'Удалить' }}
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          @if (chatActionMsg) {
+            <p class="mt-3 text-sm" [style.color]="chatActionOk ? '#27ae60' : '#e74c3c'">{{ chatActionMsg }}</p>
+          }
+        }
+
         @if (activeTab === 'files') {
           @if (loadingFiles) {
             <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
@@ -166,7 +221,7 @@ interface FileEntry {
   `,
 })
 export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' = 'users';
+  activeTab: 'users' | 'files' | 'chats' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -175,6 +230,12 @@ export class AdminComponent implements OnInit {
   actionLoading: number | null = null;
   actionMsg = '';
   actionOk = false;
+
+  chats: AdminGroupChat[] = [];
+  loadingChats = false;
+  deleteChatLoading: number | null = null;
+  chatActionMsg = '';
+  chatActionOk = false;
 
   constructor(private api: ApiService) {}
 
@@ -247,5 +308,38 @@ export class AdminComponent implements OnInit {
 
   private clearMsg() {
     setTimeout(() => (this.actionMsg = ''), 3000);
+  }
+
+  loadGroupChats() {
+    this.loadingChats = true;
+    this.api.getAdminGroupChats().subscribe({
+      next: (chats) => { this.chats = chats; this.loadingChats = false; },
+      error: () => this.loadingChats = false,
+    });
+  }
+
+  deleteChat(chat: AdminGroupChat) {
+    if (!confirm(`Удалить чат "${chat.name}"? Это действие необратимо.`)) return;
+    this.deleteChatLoading = chat.id;
+    this.chatActionMsg = '';
+    this.api.adminDeleteGroupChat(chat.id).subscribe({
+      next: () => {
+        this.chats = this.chats.filter(c => c.id !== chat.id);
+        this.deleteChatLoading = null;
+        this.chatActionMsg = `Чат "${chat.name}" удалён`;
+        this.chatActionOk = true;
+        this.clearChatMsg();
+      },
+      error: () => {
+        this.deleteChatLoading = null;
+        this.chatActionMsg = 'Ошибка удаления чата';
+        this.chatActionOk = false;
+        this.clearChatMsg();
+      },
+    });
+  }
+
+  private clearChatMsg() {
+    setTimeout(() => (this.chatActionMsg = ''), 3000);
   }
 }

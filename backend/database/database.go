@@ -1,7 +1,12 @@
 package database
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,6 +16,81 @@ import (
 )
 
 var DB *sql.DB
+
+// ServerEncryptionKey is the AES-256-GCM key used for L1 (push copies).
+// Generated once on first start, stored in data/server_key.bin.
+var ServerEncryptionKey []byte
+
+func loadOrGenerateServerKey() {
+	keyPath := filepath.Join(filepath.Dir(os.Getenv("DB_PATH")), "server_key.bin")
+	if os.Getenv("DB_PATH") == "" {
+		keyPath = "./data/server_key.bin"
+	}
+	if data, err := os.ReadFile(keyPath); err == nil && len(data) == 32 {
+		ServerEncryptionKey = data
+		log.Println("Server encryption key loaded")
+		return
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		log.Fatal("Failed to generate server encryption key:", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+		log.Fatal("Failed to create data directory for server key:", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		log.Fatal("Failed to write server encryption key:", err)
+	}
+	ServerEncryptionKey = key
+	log.Println("Server encryption key generated")
+}
+
+// ServerEncrypt encrypts plaintext with the server's AES-256-GCM key.
+// Returns base64(iv + ciphertext).
+func ServerEncrypt(plaintext []byte) (string, error) {
+	block, err := aes.NewCipher(ServerEncryptionKey)
+	if err != nil {
+		return "", err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	iv := make([]byte, aesGCM.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return "", err
+	}
+	ciphertext := aesGCM.Seal(nil, iv, plaintext, nil)
+	combined := append(iv, ciphertext...)
+	return base64.StdEncoding.EncodeToString(combined), nil
+}
+
+// ServerDecrypt decrypts data previously encrypted with ServerEncrypt.
+func ServerDecrypt(encoded string) ([]byte, error) {
+	combined, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(ServerEncryptionKey)
+	if err != nil {
+		return nil, err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	ivSize := aesGCM.NonceSize()
+	if len(combined) < ivSize {
+		return nil, io.ErrUnexpectedEOF
+	}
+	iv := combined[:ivSize]
+	ciphertext := combined[ivSize:]
+	plaintext, err := aesGCM.Open(nil, iv, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
+}
 
 func InitDB() {
 	dbPath := os.Getenv("DB_PATH")
@@ -22,6 +102,8 @@ func InitDB() {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Fatal("Failed to create data directory:", err)
 	}
+
+	loadOrGenerateServerKey()
 
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
@@ -173,6 +255,29 @@ func migrate() {
 			message_id INTEGER NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
 			image_url  TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS user_keys (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+			public_key TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS push_copies (
+			id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+			message_id               INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+			for_user_id              INTEGER NOT NULL REFERENCES users(id),
+			server_encrypted_content TEXT NOT NULL,
+			created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at               DATETIME NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS group_key_shares (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id),
+			encrypted_key TEXT NOT NULL,
+			iv            TEXT NOT NULL,
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(group_chat_id, user_id)
+		)`,
 	}
 
 	for _, q := range queries {
@@ -197,6 +302,22 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='msg_type'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'text'")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_content'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_iv'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_content'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_iv'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
 	}
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {

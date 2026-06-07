@@ -2,8 +2,9 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/co
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../../services/api.service';
+import { CryptoService } from '../../services/crypto.service';
 
 @Component({
   selector: 'app-chat',
@@ -148,6 +149,7 @@ import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../.
                     </div>
                   } @else {
                     @if (msg.content) { <p>{{ msg.content }}</p> }
+                    @if (!msg.content && msg.encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
                     @if (msg.images && msg.images.length > 0) {
                     <div class="flex flex-wrap gap-1 mt-1">
                       @for (img of msg.images; track img.id || $index) {
@@ -358,6 +360,7 @@ import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../.
                     </div>
                   } @else {
                     @if (msg.content) { <p>{{ msg.content }}</p> }
+                    @if (!msg.content && msg.encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
                     @if (msg.images && msg.images.length > 0) {
                     <div class="flex flex-wrap gap-1 mt-1">
                       @for (img of msg.images; track img.id || $index) {
@@ -495,7 +498,13 @@ import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../.
           }
         </div>
 
-        <div class="flex justify-end">
+        <div class="flex justify-between items-center">
+          @if (selectedGroup && selectedGroup.created_by === currentUserId) {
+          <button (click)="deleteCurrentGroup()"
+            style="padding:8px 16px;border-radius:var(--radius-sm);border:1px solid #e74c3c;background:transparent;color:#e74c3c;cursor:pointer;font-size:13px;">
+            Удалить группу
+          </button>
+          }
           <button (click)="showGroupInfo = false"
             style="padding:8px 16px;border-radius:var(--radius-sm);border:1px solid var(--divider);background:transparent;color:var(--text-primary);cursor:pointer;">Закрыть</button>
         </div>
@@ -550,10 +559,17 @@ export class ChatComponent implements OnInit, OnDestroy {
     protected api: ApiService,
     private route: ActivatedRoute,
     protected router: Router,
+    private crypto: CryptoService,
   ) {}
+
+  private e2eeReady = false;
 
   ngOnInit() {
     this.currentUserId = this.api.currentUser()?.id ?? 0;
+
+    this.crypto.init().then(() => {
+      this.e2eeReady = true;
+    });
 
     this.route.paramMap.subscribe((params) => {
       const userId = params.get('userId');
@@ -575,15 +591,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.listenWsOnlineEvents();
 
     this.subscriptions.push(
-      this.api.wsMessages$.subscribe((data: any) => {
+      this.api.wsMessages$.subscribe(async (data: any) => {
         if (data.type === 'message' && this.selectedUser && data.from === this.selectedUser.id) {
+          let content = data.content;
+          if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
+            const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
+            if (decrypted !== null) content = decrypted;
+          }
           const msg: Message = {
             id: Date.now(),
             from_user_id: data.from,
             to_user_id: this.currentUserId,
-            content: data.content,
+            content: content,
             msg_type: data.msg_type || 'text',
-            created_at: new Date().toISOString(),
+            created_at: data.created_at || new Date().toISOString(),
             from_user: data.from_name || this.selectedUser.username,
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
           };
@@ -592,14 +613,19 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.scrollToBottom();
         }
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
+          let content = data.content;
+          if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
+            const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
+            if (decrypted !== null) content = decrypted;
+          }
           const msg: Message = {
             id: Date.now(),
             from_user_id: data.from,
             to_user_id: 0,
             group_chat_id: data.group_id,
-            content: data.content,
+            content: content,
             msg_type: data.msg_type || 'text',
-            created_at: new Date().toISOString(),
+            created_at: data.created_at || new Date().toISOString(),
             from_user: data.from_name || '',
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
           };
@@ -664,6 +690,16 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
 
+  private async decryptMsg(msg: Message, peerId: number): Promise<Message> {
+    if (msg.encrypted_content && msg.encrypted_iv) {
+      const decrypted = await this.crypto.decrypt(this.currentUserId, peerId, msg.encrypted_content, msg.encrypted_iv);
+      if (decrypted !== null) {
+        msg.content = decrypted;
+      }
+    }
+    return msg;
+  }
+
   private messageCacheKey(otherUserId: number): string {
     const ids = [this.currentUserId, otherUserId].sort((a, b) => a - b);
     return `cached_messages_${ids[0]}_${ids[1]}`;
@@ -679,7 +715,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     const cached = localStorage.getItem(this.messageCacheKey(user.id));
     this.messages = cached ? JSON.parse(cached) : [];
 
-    this.api.getMessages(this.currentUserId, user.id).subscribe((msgs: Message[]) => {
+    this.api.getMessages(this.currentUserId, user.id).subscribe(async (msgs: Message[]) => {
+      for (let i = 0; i < msgs.length; i++) {
+        msgs[i] = await this.decryptMsg(msgs[i], user.id);
+      }
       this.messages = msgs;
       localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(msgs));
       if (boundary) {
@@ -723,16 +762,41 @@ export class ChatComponent implements OnInit, OnDestroy {
     return this.users.filter((u) => !this.pinnedIds.has(u.id));
   }
 
-  sendMessage() {
+  async sendMessage() {
     if (!this.selectedUser && !this.selectedGroup) return;
     if (!this.messageContent.trim() && this.selectedFiles.length === 0) return;
     const type = this.messageType;
 
-    const content = this.messageContent;
+    const rawContent = this.messageContent;
     const files = [...this.selectedFiles];
 
+    let encryptedContent: string | undefined;
+    let encryptedIV: string | undefined;
+    let pushPreview: string | undefined;
+    let content = rawContent;
+
+    if (this.selectedUser && this.e2eeReady) {
+      const result = await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent);
+      if (result) {
+        encryptedContent = result.encrypted;
+        encryptedIV = result.iv;
+        pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
+        content = rawContent;
+      }
+    }
+
     if (this.selectedGroup) {
-      this.api.sendGroupMessage(this.selectedGroup.id, content, files, type).subscribe({
+      // Encrypt group message with group key
+      if (this.e2eeReady && rawContent) {
+        const result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent);
+        if (result) {
+          encryptedContent = result.encrypted;
+          encryptedIV = result.iv;
+          pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
+          content = rawContent;
+        }
+      }
+      this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
         next: () => {
           const msg: Message = {
             id: Date.now(),
@@ -751,7 +815,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         },
       });
     } else if (this.selectedUser) {
-      this.api.sendMessage(this.selectedUser.id, content, files, type).subscribe({
+      this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
         next: () => {
           const msg: Message = {
             id: Date.now(),
@@ -809,25 +873,78 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   // Group chat methods
-  selectGroup(group: GroupChat) {
+  async selectGroup(group: GroupChat) {
     this.selectedGroup = group;
     this.selectedUser = null;
     this.showMobileChat = true;
     this.router.navigate(['/chat', 'group', group.id]);
 
-    this.api.getGroupMessages(group.id).subscribe((msgs: Message[]) => {
+    // Ensure we have the group key and distribute to members without shares
+    if (this.e2eeReady) {
+      const groupKey = await this.crypto.getGroupKey(group.id);
+      if (groupKey) {
+        this.distributeGroupKeyToMembers(group.id);
+      }
+    }
+
+    this.api.getGroupMessages(group.id).subscribe(async (msgs: Message[]) => {
+      for (let i = 0; i < msgs.length; i++) {
+        msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
+      }
       this.messages = msgs;
       this.scrollToBottom();
     });
   }
 
-  createGroup() {
+  private async distributeGroupKeyToMembers(groupId: number) {
+    try {
+      const res = await firstValueFrom(this.api.getGroupChat(groupId));
+      const myId = this.currentUserId;
+      const raw = await this.crypto.getRawGroupKey(groupId);
+      if (!raw) return;
+
+      for (const member of res.members) {
+        if (member.user_id === myId) continue;
+        // Check if share already exists (we can't know without asking server)
+        // Just try to upload — server upserts
+        const share = await this.crypto.encryptGroupKeyForPeer(raw, member.user_id);
+        if (share) {
+          this.api.uploadGroupKeyShare(groupId, member.user_id, share.encrypted_key, share.iv)
+            .subscribe({ error: () => {} });
+        }
+      }
+    } catch {}
+  }
+
+  private async decryptGroupMsg(msg: Message, groupId: number): Promise<Message> {
+    if (msg.encrypted_content && msg.encrypted_iv && this.e2eeReady) {
+      const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv);
+      if (decrypted !== null) {
+        msg.content = decrypted;
+      }
+    }
+    return msg;
+  }
+
+  async createGroup() {
     if (!this.newGroupName.trim()) return;
     this.api.createGroupChat(this.newGroupName.trim()).subscribe({
-      next: () => {
+      next: async (res) => {
         this.showCreateGroup = false;
         this.newGroupName = '';
         this.loadGroupChats();
+
+        // Generate E2EE group key and upload share for self
+        if (this.e2eeReady) {
+          const rawKeyBytes = await this.crypto.generateGroupKey(res.id);
+          if (rawKeyBytes) {
+            const selfShare = await this.crypto.encryptGroupKeyForPeer(rawKeyBytes, this.currentUserId);
+            if (selfShare) {
+              this.api.uploadGroupKeyShare(res.id, this.currentUserId, selfShare.encrypted_key, selfShare.iv)
+                .subscribe({ error: (e) => console.warn('Failed to upload group key share:', e) });
+            }
+          }
+        }
       },
     });
   }
@@ -867,6 +984,22 @@ export class ChatComponent implements OnInit, OnDestroy {
     navigator.clipboard.writeText(this.inviteUrl).then(() => {
       this.copied = true;
       setTimeout(() => this.copied = false, 2000);
+    });
+  }
+
+  deleteCurrentGroup() {
+    const group = this.selectedGroup;
+    if (!group) return;
+    if (!confirm(`Удалить чат "${group.name}"? Сообщения будут безвозвратно удалены.`)) return;
+    this.api.deleteGroupChat(group.id).subscribe({
+      next: () => {
+        this.showGroupInfo = false;
+        this.selectedGroup = null;
+        this.messages = [];
+        this.groupChats = this.groupChats.filter(g => g.id !== group.id);
+        this.router.navigate(['/chat']);
+      },
+      error: () => alert('Ошибка удаления группы'),
     });
   }
 

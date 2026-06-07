@@ -192,6 +192,20 @@ cd frontend && npm run build   # production build with service-worker
 - **Join group page**: `/join-group?token=` with invite validation + accept button — `join-group.ts`, `app.routes.ts`
 - **All modals use inline styles** (no external CSS dependencies)
 
+## TBD (Future work)
+
+- **Multi-device encryption**: Currently E2EE keys are stored in IndexedDB per-device. No key sync between devices. Solution: export/import key via QR code or password-encrypted backup, or use WebAuthn credential ID as a key wrapping mechanism.
+- **Multi-server collaboration**: The WebSocket hub is in-memory per-process. Horizontal scaling requires a pub/sub layer (Redis/NATS) for WebSocket events, push state, and online status across instances.
+- **UI fixes**: Various UI polish items — PWA install prompt, chat list virtualization for large groups, optimistic message sending with proper rollback, image upload progress indicators.
+
+## Session (2026-06-07) — Group deletion + admin chat management
+- **Backend**: `DELETE /api/group-chats/:id` (creator only) — `handlers/groups.go`, `main.go`
+- **Backend**: `GET /api/admin/group-chats` (all groups) + `DELETE /api/admin/group-chats/:id` — `handlers/handlers.go`, `main.go`
+- **Frontend**: Delete group button in group info modal (visible only to creator) — `chat.ts`
+- **Frontend**: Admin panel "Чаты" tab with table and delete action — `admin.ts`
+- **Frontend**: `deleteGroupChat`, `getAdminGroupChats`, `adminDeleteGroupChat` API methods — `api.service.ts`
+- **AGENTS.md**: Added `TBD (Future work)` section
+
 ## Session (2026-06-06) — Invite-only registration + notification fixes
 - **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`
 - **SW push fix**: Added `silent: true` to `showNotification()` in SW — `sw-push-handler.js`

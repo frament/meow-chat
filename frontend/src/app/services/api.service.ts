@@ -47,6 +47,8 @@ export interface WsMessage {
   msg_type: MsgType;
   images?: string[];
   created_at: string;
+  encrypted_content?: string;
+  encrypted_iv?: string;
 }
 
 export interface GroupWsMessage {
@@ -58,6 +60,8 @@ export interface GroupWsMessage {
   msg_type: MsgType;
   images?: string[];
   created_at: string;
+  encrypted_content?: string;
+  encrypted_iv?: string;
 }
 
 export type AnyWsMessage = WsMessage | GroupWsMessage;
@@ -73,6 +77,8 @@ export interface Message {
   created_at: string;
   from_user: string;
   images?: { id: number; image_url: string }[];
+  encrypted_content?: string;
+  encrypted_iv?: string;
 }
 
 export interface GroupChat {
@@ -231,11 +237,14 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text') {
+  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
     formData.append('type', msgType);
+    if (encryptedContent) formData.append('encrypted_content', encryptedContent);
+    if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (pushPreview) formData.append('push_preview', pushPreview);
     for (const file of files) {
       formData.append('images', file);
     }
@@ -296,11 +305,14 @@ export class ApiService {
     );
   }
 
-  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text') {
+  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
     const formData = new FormData();
     formData.append('group_chat_id', String(groupId));
     formData.append('content', content);
     formData.append('type', msgType);
+    if (encryptedContent) formData.append('encrypted_content', encryptedContent);
+    if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (pushPreview) formData.append('push_preview', pushPreview);
     for (const file of files) {
       formData.append('images', file);
     }
@@ -343,6 +355,20 @@ export class ApiService {
       files: { name: string; path: string; size: number; is_dir: boolean; mod_time: string }[];
       disk: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number };
     }>(`${this.baseUrl}/admin/files`);
+  }
+
+  getAdminGroupChats() {
+    return this.http.get<{ id: number; name: string; created_by: number; created_by_username: string; member_count: number; created_at: string }[]>(
+      `${this.baseUrl}/admin/group-chats`
+    );
+  }
+
+  adminDeleteGroupChat(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/group-chats/${id}`);
+  }
+
+  deleteGroupChat(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/group-chats/${id}`);
   }
 
   createInvite(maxUses = 1) {
@@ -516,6 +542,29 @@ export class ApiService {
       delete next[userId];
       return next;
     });
+  }
+
+  // E2EE keys
+  putKey(publicKey: string) {
+    return this.http.put<{ message: string }>(`${this.baseUrl}/keys`, { public_key: publicKey });
+  }
+
+  getKey(userId: number) {
+    return this.http.get<{ public_key: string }>(`${this.baseUrl}/keys/${userId}`);
+  }
+
+  // Group E2EE key shares
+  uploadGroupKeyShare(groupId: number, userId: number, encryptedKey: string, iv: string) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/group-chats/${groupId}/keys`,
+      { user_id: userId, encrypted_key: encryptedKey, iv },
+    );
+  }
+
+  getMyGroupKeyShare(groupId: number) {
+    return this.http.get<{ encrypted_key: string; iv: string }>(
+      `${this.baseUrl}/group-chats/${groupId}/my-key`,
+    );
   }
 
   // WebAuthn (FaceID/TouchID)

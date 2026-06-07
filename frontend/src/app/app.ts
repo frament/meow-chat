@@ -5,6 +5,7 @@ import { interval, fromEvent, filter, tap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
+import { CryptoService } from './services/crypto.service';
 
 @Component({
   selector: 'app-root',
@@ -114,6 +115,7 @@ export class App implements OnInit, OnDestroy {
   readonly #notif = inject(NotificationService);
   readonly #router = inject(Router);
   readonly #theme = inject(ThemeService);
+  readonly #crypto = inject(CryptoService);
   readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
@@ -142,7 +144,10 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    if (this.#api.currentUser()) this.#api.connectWebSocket();
+    if (this.#api.currentUser()) {
+      this.#api.connectWebSocket();
+      this.#crypto.init().then(() => this.#crypto.syncPublicKey());
+    }
     this.#notif.requestPermission();
 
     this.#sub.add(

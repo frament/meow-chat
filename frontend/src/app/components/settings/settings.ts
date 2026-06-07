@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
 import { ApiService, InviteToken, User } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
+import { CryptoService } from '../../services/crypto.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -253,6 +254,19 @@ import * as QRCode from 'qrcode';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Шифрование (E2EE)</div>
+          <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--e2ee-ready, #27ae60);"></span>
+              <span style="color:var(--text-primary);font-weight:500;">{{ e2eeStatus }}</span>
+            </div>
+            <p style="color:var(--text-tertiary);font-size:12px;">Сообщения шифруются на устройстве. Сервер не может прочитать содержимое.</p>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
@@ -305,10 +319,13 @@ export class SettingsComponent implements OnInit {
   bioSuccess = '';
   bioRegistering = false;
 
+  e2eeStatus = 'Проверка...';
+
   constructor(
     private api: ApiService,
     private router: Router,
     private theme: ThemeService,
+    private crypto: CryptoService,
   ) {
     this.selectedTheme = this.theme.currentMode;
   }
@@ -360,6 +377,13 @@ export class SettingsComponent implements OnInit {
     this.loadInvites();
     this.loadFriends();
     this.loadBioCreds();
+    this.initE2EE();
+  }
+
+  async initE2EE() {
+    await this.crypto.init();
+    const pubKey = await this.crypto.getPublicKey();
+    this.e2eeStatus = pubKey ? 'Активно' : 'Не активировано';
   }
 
   onFileSelected(event: Event) {

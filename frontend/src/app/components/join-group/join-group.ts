@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { CryptoService } from '../../services/crypto.service';
 
 @Component({
   selector: 'app-join-group',
@@ -59,6 +60,7 @@ export class JoinGroupComponent implements OnInit {
     private route: ActivatedRoute,
     protected router: Router,
     private api: ApiService,
+    private crypto: CryptoService,
   ) {}
 
   ngOnInit() {
@@ -94,9 +96,12 @@ export class JoinGroupComponent implements OnInit {
     this.joining = true;
     this.joinError = '';
     this.api.joinGroupViaInvite(token).subscribe({
-      next: () => {
+      next: async () => {
         this.joining = false;
         this.joinSuccess = true;
+        // Pre-fetch the group E2EE key so it's ready when opening chat
+        await this.crypto.init();
+        this.crypto.getGroupKey(this.groupChatId);
       },
       error: (err) => {
         this.joining = false;

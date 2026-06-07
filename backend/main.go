@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"my-chat-backend/auth"
 	"my-chat-backend/database"
@@ -15,9 +16,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func cleanupExpiredPushCopies() {
+	database.DB.Exec("DELETE FROM push_copies WHERE expires_at < datetime('now')")
+}
+
 func main() {
 	database.InitDB()
 	database.SeedAdmin()
+	cleanupExpiredPushCopies()
+
+	// Periodic cleanup of expired push copies (every hour)
+	go func() {
+		for {
+			time.Sleep(1 * time.Hour)
+			cleanupExpiredPushCopies()
+		}
+	}()
 
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		runAdminCLI()
@@ -69,7 +83,11 @@ func main() {
 		h.HandleWebSocket(c)
 	}))
 
+	api.Get("/keys/:userId", h.GetKey)
+
 	api.Use(handlers.AuthRequired)
+
+	api.Put("/keys", h.PutKey)
 
 	api.Post("/push/subscribe", h.SubscribePush)
 	api.Delete("/push/subscribe", h.UnsubscribePush)
@@ -107,7 +125,10 @@ func main() {
 	api.Get("/group-chats/:id", h.GetGroupChat)
 	api.Post("/group-chats/:id/members", h.AddGroupMember)
 	api.Delete("/group-chats/:id/members/:userId", h.RemoveGroupMember)
+	api.Delete("/group-chats/:id", h.DeleteGroupChat)
 	api.Post("/group-chats/:id/invites", h.CreateGroupInvite)
+	api.Post("/group-chats/:id/keys", h.UploadGroupKeyShare)
+	api.Get("/group-chats/:id/my-key", h.GetMyGroupKeyShare)
 	api.Get("/group-chat-invites/:token", h.GetGroupInvite)
 	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)
 	api.Get("/group-chat-messages/:groupId", h.GetGroupMessages)
@@ -121,6 +142,8 @@ func main() {
 	admin.Post("/users/:id/make-admin", h.MakeAdmin)
 	admin.Post("/users/:id/remove-admin", h.RemoveAdmin)
 	admin.Get("/files", h.AdminListFiles)
+	admin.Get("/group-chats", h.AdminListGroupChats)
+	admin.Delete("/group-chats/:id", h.AdminDeleteGroupChat)
 
 	port := os.Getenv("PORT")
 	if port == "" {

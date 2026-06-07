@@ -40,14 +40,18 @@ type wsClient struct {
 }
 
 type wsMessage struct {
-	from      int64
-	to        int64
-	groupID   int64
-	content   string
-	msgType   string
-	images    []string
-	fromName  string
-	createdAt string
+	messageID         int64
+	from              int64
+	to                int64
+	groupID           int64
+	content           string
+	msgType           string
+	images            []string
+	fromName          string
+	createdAt         string
+	encryptedContent  string
+	encryptedIV       string
+	pushPreview       string
 }
 
 func NewHandler() *Handler {
@@ -122,16 +126,20 @@ func (h *Handler) runHub() {
 			delivered := false
 			for conn, uid := range h.clients {
 				if uid == msg.to {
-				payload := fiber.Map{
-					"type":       "message",
-					"from":       msg.from,
-					"from_name":  msg.fromName,
-					"content":    msg.content,
-					"msg_type":   msg.msgType,
-					"created_at": msg.createdAt,
-				}
+					payload := fiber.Map{
+						"type":       "message",
+						"from":       msg.from,
+						"from_name":  msg.fromName,
+						"content":    msg.content,
+						"msg_type":   msg.msgType,
+						"created_at": msg.createdAt,
+					}
 					if len(msg.images) > 0 {
 						payload["images"] = msg.images
+					}
+					if msg.encryptedContent != "" {
+						payload["encrypted_content"] = msg.encryptedContent
+						payload["encrypted_iv"] = msg.encryptedIV
 					}
 					err := conn.WriteJSON(payload)
 					if err != nil {
@@ -140,16 +148,33 @@ func (h *Handler) runHub() {
 						delete(h.clients, conn)
 					} else {
 						delivered = true
+						// Delete any push copies for this message on delivery
+						if msg.messageID > 0 {
+							database.DB.Exec("DELETE FROM push_copies WHERE message_id = ?", msg.messageID)
+						}
 					}
 				}
 			}
-			if !delivered {
-				preview := msg.content
+			if !delivered && msg.messageID > 0 {
+				preview := msg.pushPreview
+				if preview == "" {
+					preview = msg.content
+				}
 				if len(preview) > 120 {
 					preview = preview[:120] + "..."
 				}
 				if preview == "" && len(msg.images) > 0 {
 					preview = "[Image]"
+				}
+				if preview != "" {
+					encrypted, err := database.ServerEncrypt([]byte(preview))
+					if err == nil {
+						expiresAt := time.Now().Add(7 * 24 * time.Hour)
+						database.DB.Exec(
+							"INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (?, ?, ?, ?)",
+							msg.messageID, msg.to, encrypted, expiresAt,
+						)
+					}
 				}
 				h.sendPushNotification(msg.to,
 					"New message from "+msg.fromName,
@@ -186,6 +211,10 @@ func (h *Handler) runHub() {
 			}
 			if len(msg.images) > 0 {
 				payload["images"] = msg.images
+			}
+			if msg.encryptedContent != "" {
+				payload["encrypted_content"] = msg.encryptedContent
+				payload["encrypted_iv"] = msg.encryptedIV
 			}
 
 			for _, memberID := range memberIDs {
@@ -572,7 +601,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at, u.username
+		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, '')
 		FROM messages m
 		JOIN users u ON m.from_user_id = u.id
 		WHERE (m.from_user_id = ? AND m.to_user_id = ?)
@@ -588,7 +617,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -654,6 +683,22 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		msgType = vals[0]
 	}
 
+	encryptedContent := ""
+	if vals, ok := form.Value["encrypted_content"]; ok && len(vals) > 0 {
+		encryptedContent = vals[0]
+	}
+	encryptedIV := ""
+	if vals, ok := form.Value["encrypted_iv"]; ok && len(vals) > 0 {
+		encryptedIV = vals[0]
+	}
+	pushPreview := ""
+	if vals, ok := form.Value["push_preview"]; ok && len(vals) > 0 {
+		pushPreview = vals[0]
+	}
+	if pushPreview == "" {
+		pushPreview = content
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -666,8 +711,8 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, ?, ?)",
-		fromUserID, toUserID, content, msgType,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
@@ -704,13 +749,17 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
 
 	h.broadcast <- wsMessage{
-		from:      fromUserID,
-		to:        toUserID,
-		content:   content,
-		msgType:   msgType,
-		images:    images,
-		fromName:  senderName,
-		createdAt: time.Now().Format(time.RFC3339),
+		messageID:        messageID,
+		from:             fromUserID,
+		to:               toUserID,
+		content:          content,
+		msgType:          msgType,
+		images:           images,
+		fromName:         senderName,
+		createdAt:        time.Now().Format(time.RFC3339),
+		encryptedContent: encryptedContent,
+		encryptedIV:      encryptedIV,
+		pushPreview:      pushPreview,
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})
@@ -1130,6 +1179,57 @@ func (h *Handler) RemoveFriend(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Friend removed"})
 }
 
+func (h *Handler) AdminListGroupChats(c *fiber.Ctx) error {
+	rows, err := database.DB.Query(`
+		SELECT g.id, g.name, g.created_by, g.created_at, u.username,
+			(SELECT COUNT(*) FROM group_chat_members WHERE group_chat_id = g.id) as member_count
+		FROM group_chats g
+		JOIN users u ON g.created_by = u.id
+		ORDER BY g.created_at DESC
+	`)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch groups"})
+	}
+	defer rows.Close()
+
+	type AdminGroupChat struct {
+		ID          int64     `json:"id"`
+		Name        string    `json:"name"`
+		CreatedBy   int64     `json:"created_by"`
+		CreatedByUs string    `json:"created_by_username"`
+		MemberCount int       `json:"member_count"`
+		CreatedAt   time.Time `json:"created_at"`
+	}
+
+	groups := make([]AdminGroupChat, 0)
+	for rows.Next() {
+		var g AdminGroupChat
+		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedBy, &g.CreatedAt, &g.CreatedByUs, &g.MemberCount); err != nil {
+			continue
+		}
+		groups = append(groups, g)
+	}
+	return c.JSON(groups)
+}
+
+func (h *Handler) AdminDeleteGroupChat(c *fiber.Ctx) error {
+	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+
+	result, err := database.DB.Exec("DELETE FROM group_chats WHERE id = ?", groupID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete group"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Group not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Group deleted"})
+}
+
 func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 	type FileEntry struct {
 		Name    string `json:"name"`
@@ -1301,18 +1401,43 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 			msgType = t
 		}
 
-		_, err := database.DB.Exec(
-			"INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, ?, ?)",
-			uid, int64(to), content, msgType,
+		encryptedContent := ""
+		if ec, ok := msg["encrypted_content"].(string); ok {
+			encryptedContent = ec
+		}
+		encryptedIV := ""
+		if ei, ok := msg["encrypted_iv"].(string); ok {
+			encryptedIV = ei
+		}
+		pushPreview := content
+		if pp, ok := msg["push_preview"].(string); ok {
+			pushPreview = pp
+		}
+
+		result, err := database.DB.Exec(
+			"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
+			uid, int64(to), content, msgType, encryptedContent, encryptedIV,
 		)
 		if err != nil {
 			log.Println("Failed to save message:", err)
 			continue
 		}
+		msgID, _ := result.LastInsertId()
 
 		var senderName string
 		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", uid).Scan(&senderName)
 
-		h.broadcast <- wsMessage{from: uid, to: int64(to), content: content, msgType: msgType, fromName: senderName}
+		h.broadcast <- wsMessage{
+			messageID:        msgID,
+			from:             uid,
+			to:               int64(to),
+			content:          content,
+			msgType:          msgType,
+			fromName:         senderName,
+			encryptedContent: encryptedContent,
+			encryptedIV:      encryptedIV,
+			pushPreview:      pushPreview,
+			createdAt:        time.Now().Format(time.RFC3339),
+		}
 	}
 }

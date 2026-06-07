@@ -14,15 +14,17 @@ type User struct {
 }
 
 type Message struct {
-	ID          int64       `json:"id"`
-	FromUserID  int64       `json:"from_user_id"`
-	ToUserID    int64       `json:"to_user_id"`
-	GroupChatID *int64      `json:"group_chat_id,omitempty"`
-	Content     string      `json:"content"`
-	Type        string      `json:"msg_type"`
-	CreatedAt   time.Time   `json:"created_at"`
-	FromUser    string      `json:"from_user,omitempty"`
-	Images      []PostImage `json:"images,omitempty"`
+	ID               int64       `json:"id"`
+	FromUserID       int64       `json:"from_user_id"`
+	ToUserID         int64       `json:"to_user_id"`
+	GroupChatID      *int64      `json:"group_chat_id,omitempty"`
+	Content          string      `json:"content"`
+	Type             string      `json:"msg_type"`
+	CreatedAt        time.Time   `json:"created_at"`
+	FromUser         string      `json:"from_user,omitempty"`
+	Images           []PostImage `json:"images,omitempty"`
+	EncryptedContent string      `json:"encrypted_content,omitempty"`
+	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
 }
 
 type GroupChat struct {
