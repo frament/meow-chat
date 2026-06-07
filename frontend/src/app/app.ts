@@ -156,20 +156,30 @@ export class App implements OnInit, OnDestroy {
     );
 
     this.#sub.add(
-      this.#api.wsMessages$.subscribe((msg) => {
+      this.#api.wsMessages$.subscribe((msg: any) => {
         const isHidden = document.hidden;
-        const isCorrectChat = this.#router.url.startsWith(`/chat/${msg.from}`);
+        const isGroup = msg.type === 'group_message';
+        const chatPath = isGroup ? `/chat/group/${msg.group_id}` : `/chat/${msg.from}`;
+        const isCorrectChat = this.#router.url.startsWith(chatPath);
         if (isHidden || !isCorrectChat) {
-          this.#api.incrementUnread(msg.from, msg.created_at);
-          const n = this.#notif.show(
-            `New message from ${msg.from_name || 'Someone'}`,
-            {
-              body: msg.content || (msg.images?.length ? '[Image]' : ''),
-              icon: '/favicon.png',
-              tag: `chat-${msg.from}`,
-              data: { url: `/chat/${msg.from}`, senderId: msg.from },
-            }
-          );
+          if (!isGroup) {
+            this.#api.incrementUnread(msg.from, msg.created_at);
+          }
+          const notifTitle = isGroup
+            ? `New message in group`
+            : `New message from ${msg.from_name || 'Someone'}`;
+          const notifBody = msg.content
+            || (msg.msg_type === 'image' || msg.images?.length ? '[Image]' : '')
+            || (msg.msg_type === 'sticker' ? '[Sticker]' : '')
+            || (msg.msg_type === 'gif' ? '[GIF]' : '')
+            || (msg.msg_type === 'poll' ? '[Poll]' : '')
+            || '';
+          const n = this.#notif.show(notifTitle, {
+            body: notifBody,
+            icon: '/favicon.png',
+            tag: isGroup ? `group-${msg.group_id}` : `chat-${msg.from}`,
+            data: { url: chatPath, senderId: msg.from, groupId: msg.group_id },
+          });
           this.#badgeCount++;
           this.#setBadge(this.#badgeCount);
 
@@ -177,16 +187,26 @@ export class App implements OnInit, OnDestroy {
             n.onclick = () => {
               this.#clearBadge();
               window.focus();
-              this.#router.navigate(['/chat', msg.from]);
-              this.#api.clearUnread(msg.from);
+              if (isGroup) {
+                this.#router.navigate(['/chat/group', msg.group_id]);
+              } else {
+                this.#router.navigate(['/chat', msg.from]);
+                this.#api.clearUnread(msg.from);
+              }
               n.close();
             };
           } else if (!document.hidden) {
             if (this.#toastTimer) clearTimeout(this.#toastTimer);
+            const toastBody = msg.content
+              || (msg.msg_type === 'image' || msg.images?.length ? '[Image]' : '')
+              || (msg.msg_type === 'sticker' ? '[Sticker]' : '')
+              || (msg.msg_type === 'gif' ? '[GIF]' : '')
+              || (msg.msg_type === 'poll' ? '[Poll]' : '')
+              || '';
             this.toast.set({
               from: msg.from,
-              from_name: msg.from_name || 'Someone',
-              body: msg.content || (msg.images?.length ? '[Image]' : ''),
+              from_name: isGroup ? `Group: ${msg.from_name}` : (msg.from_name || 'Someone'),
+              body: toastBody,
             });
             this.#toastTimer = setTimeout(() => this.toast.set(null), 4000);
           }

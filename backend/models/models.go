@@ -14,13 +14,39 @@ type User struct {
 }
 
 type Message struct {
-	ID         int64       `json:"id"`
-	FromUserID int64       `json:"from_user_id"`
-	ToUserID   int64       `json:"to_user_id"`
-	Content    string      `json:"content"`
-	CreatedAt  time.Time   `json:"created_at"`
-	FromUser   string      `json:"from_user,omitempty"`
-	Images     []PostImage `json:"images,omitempty"`
+	ID          int64       `json:"id"`
+	FromUserID  int64       `json:"from_user_id"`
+	ToUserID    int64       `json:"to_user_id"`
+	GroupChatID *int64      `json:"group_chat_id,omitempty"`
+	Content     string      `json:"content"`
+	Type        string      `json:"msg_type"`
+	CreatedAt   time.Time   `json:"created_at"`
+	FromUser    string      `json:"from_user,omitempty"`
+	Images      []PostImage `json:"images,omitempty"`
+}
+
+type GroupChat struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	CreatedBy   int64     `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	MemberCount int       `json:"member_count"`
+}
+
+type GroupMember struct {
+	UserID    int64  `json:"user_id"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+type GroupChatInvite struct {
+	ID          int64      `json:"id"`
+	GroupChatID int64      `json:"group_chat_id"`
+	Token       string     `json:"token"`
+	MaxUses     int        `json:"max_uses"`
+	UseCount    int        `json:"use_count"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type PostImage struct {

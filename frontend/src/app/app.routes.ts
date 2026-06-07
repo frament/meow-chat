@@ -7,6 +7,7 @@ import { ChatComponent } from './components/chat/chat';
 import { SettingsComponent } from './components/settings/settings';
 import { AdminComponent } from './components/admin/admin';
 import { AddFriendComponent } from './components/add-friend/add-friend';
+import { JoinGroupComponent } from './components/join-group/join-group';
 import { LayoutComponent } from './components/layout/layout';
 import { ApiService } from './services/api.service';
 
@@ -24,6 +25,7 @@ export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
   { path: 'add-friend', component: AddFriendComponent },
+  { path: 'join-group', component: JoinGroupComponent },
   {
     path: '',
     component: LayoutComponent,
@@ -31,6 +33,7 @@ export const routes: Routes = [
       { path: 'feed', component: FeedComponent },
       { path: 'chat', component: ChatComponent },
       { path: 'chat/:userId', component: ChatComponent },
+      { path: 'chat/group/:groupId', component: ChatComponent },
       { path: 'settings', component: SettingsComponent },
       { path: 'admin', component: AdminComponent },
     ],

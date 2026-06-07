@@ -102,6 +102,17 @@ func main() {
 	api.Get("/messages", h.GetMessages)
 	api.Post("/messages", h.SendMessage)
 
+	api.Post("/group-chats", h.CreateGroupChat)
+	api.Get("/group-chats", h.GetGroupChats)
+	api.Get("/group-chats/:id", h.GetGroupChat)
+	api.Post("/group-chats/:id/members", h.AddGroupMember)
+	api.Delete("/group-chats/:id/members/:userId", h.RemoveGroupMember)
+	api.Post("/group-chats/:id/invites", h.CreateGroupInvite)
+	api.Get("/group-chat-invites/:token", h.GetGroupInvite)
+	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)
+	api.Get("/group-chat-messages/:groupId", h.GetGroupMessages)
+	api.Post("/group-chat-messages", h.SendGroupMessage)
+
 	api.Post("/upload-avatar", h.UploadAvatar)
 	api.Put("/profile", h.UpdateProfile)
 

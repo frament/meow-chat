@@ -139,6 +139,40 @@ func migrate() {
 			sign_count      INTEGER NOT NULL DEFAULT 0,
 			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS group_chats (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL,
+			created_by  INTEGER NOT NULL REFERENCES users(id),
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS group_chat_members (
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id),
+			joined_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (group_chat_id, user_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS group_chat_invites (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			token         TEXT UNIQUE NOT NULL,
+			max_uses      INTEGER DEFAULT 0,
+			use_count     INTEGER DEFAULT 0,
+			expires_at    DATETIME,
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS group_messages (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			from_user_id  INTEGER NOT NULL REFERENCES users(id),
+			content       TEXT NOT NULL,
+			msg_type      TEXT DEFAULT 'text',
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS group_message_images (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			message_id INTEGER NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+			image_url  TEXT NOT NULL
+		)`,
 	}
 
 	for _, q := range queries {
@@ -159,6 +193,10 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE posts ADD COLUMN is_public INTEGER DEFAULT 0")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='msg_type'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'text'")
 	}
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {

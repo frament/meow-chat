@@ -37,23 +37,56 @@ export interface Post {
   reactions?: Reaction[];
 }
 
+export type MsgType = 'text' | 'image' | 'sticker' | 'gif' | 'poll';
+
 export interface WsMessage {
   type: 'message';
   from: number;
   from_name: string;
   content: string;
+  msg_type: MsgType;
   images?: string[];
   created_at: string;
 }
+
+export interface GroupWsMessage {
+  type: 'group_message';
+  group_id: number;
+  from: number;
+  from_name: string;
+  content: string;
+  msg_type: MsgType;
+  images?: string[];
+  created_at: string;
+}
+
+export type AnyWsMessage = WsMessage | GroupWsMessage;
+export type WsMessageType = WsMessage['type'] | GroupWsMessage['type'];
 
 export interface Message {
   id: number;
   from_user_id: number;
   to_user_id: number;
   content: string;
+  msg_type: MsgType;
+  group_chat_id?: number;
   created_at: string;
   from_user: string;
   images?: { id: number; image_url: string }[];
+}
+
+export interface GroupChat {
+  id: number;
+  name: string;
+  created_by: number;
+  created_at: string;
+  member_count: number;
+}
+
+export interface GroupMember {
+  user_id: number;
+  username: string;
+  avatar_url: string;
 }
 
 export interface LoginResponse {
@@ -96,7 +129,7 @@ export class ApiService {
   readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
   readonly unreadBoundaries = signal<Record<number, string>>({});
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
-  readonly wsMessages$ = new Subject<WsMessage>();
+  readonly wsMessages$ = new Subject<AnyWsMessage>();
   private ws: WebSocket | null = null;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private wsReconnecting = false;
@@ -198,15 +231,81 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string, files: File[] = []) {
+  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text') {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
+    formData.append('type', msgType);
     for (const file of files) {
       formData.append('images', file);
     }
     return this.http.post<{ id: number; message: string }>(
       `${this.baseUrl}/messages`,
+      formData
+    );
+  }
+
+  // Group chats
+  createGroupChat(name: string) {
+    return this.http.post<{ id: number; name: string }>(
+      `${this.baseUrl}/group-chats`, { name }
+    );
+  }
+
+  getGroupChats() {
+    return this.http.get<GroupChat[]>(`${this.baseUrl}/group-chats`);
+  }
+
+  getGroupChat(id: number) {
+    return this.http.get<{ group: GroupChat; members: GroupMember[] }>(
+      `${this.baseUrl}/group-chats/${id}`
+    );
+  }
+
+  addGroupMember(groupId: number, username: string) {
+    return this.http.post(`${this.baseUrl}/group-chats/${groupId}/members`, { username });
+  }
+
+  removeGroupMember(groupId: number, userId: number) {
+    return this.http.delete(`${this.baseUrl}/group-chats/${groupId}/members/${userId}`);
+  }
+
+  createGroupInvite(groupId: number, maxUses?: number, expiresIn?: string) {
+    let params = `?max_uses=${maxUses ?? 0}`;
+    if (expiresIn) params += `&expires_in=${expiresIn}`;
+    return this.http.post<{ token: string }>(
+      `${this.baseUrl}/group-chats/${groupId}/invites${params}`, {}
+    );
+  }
+
+  getGroupInvite(token: string) {
+    return this.http.get<{ group_chat_id: number; group_name: string; token: string }>(
+      `${this.baseUrl}/group-chat-invites/${token}`
+    );
+  }
+
+  joinGroupViaInvite(token: string) {
+    return this.http.post<{ message: string; group_chat_id: number; group_name: string }>(
+      `${this.baseUrl}/group-chat-invites/${token}/join`, {}
+    );
+  }
+
+  getGroupMessages(groupId: number) {
+    return this.http.get<Message[]>(
+      `${this.baseUrl}/group-chat-messages/${groupId}`
+    );
+  }
+
+  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text') {
+    const formData = new FormData();
+    formData.append('group_chat_id', String(groupId));
+    formData.append('content', content);
+    formData.append('type', msgType);
+    for (const file of files) {
+      formData.append('images', file);
+    }
+    return this.http.post<{ id: number; message: string }>(
+      `${this.baseUrl}/group-chat-messages`,
       formData
     );
   }
@@ -332,6 +431,10 @@ export class ApiService {
 
       if (data.type === 'message') {
         this.wsMessages$.next(data as WsMessage);
+      }
+
+      if (data.type === 'group_message') {
+        this.wsMessages$.next(data as GroupWsMessage);
       }
 
       if (data.type === 'user_online' || data.type === 'user_offline') {

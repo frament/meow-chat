@@ -23,14 +23,15 @@ import (
 )
 
 type Handler struct {
-	clients      map[*websocket.Conn]int64
-	register     chan *wsClient
-	unregister   chan *wsClient
-	broadcast    chan wsMessage
-	broadcastAll chan fiber.Map
-	graceExpired chan int64
-	onlineUsers  map[int64]bool
-	graceTimers  map[int64]*time.Timer
+	clients        map[*websocket.Conn]int64
+	register       chan *wsClient
+	unregister     chan *wsClient
+	broadcast      chan wsMessage
+	broadcastGroup chan wsMessage
+	broadcastAll   chan fiber.Map
+	graceExpired   chan int64
+	onlineUsers    map[int64]bool
+	graceTimers    map[int64]*time.Timer
 }
 
 type wsClient struct {
@@ -41,7 +42,9 @@ type wsClient struct {
 type wsMessage struct {
 	from      int64
 	to        int64
+	groupID   int64
 	content   string
+	msgType   string
 	images    []string
 	fromName  string
 	createdAt string
@@ -49,14 +52,15 @@ type wsMessage struct {
 
 func NewHandler() *Handler {
 	h := &Handler{
-		clients:      make(map[*websocket.Conn]int64),
-		register:     make(chan *wsClient),
-		unregister:   make(chan *wsClient),
-		broadcast:    make(chan wsMessage),
-		broadcastAll: make(chan fiber.Map),
-		graceExpired: make(chan int64),
-		onlineUsers:  make(map[int64]bool),
-		graceTimers:  make(map[int64]*time.Timer),
+		clients:        make(map[*websocket.Conn]int64),
+		register:       make(chan *wsClient),
+		unregister:     make(chan *wsClient),
+		broadcast:      make(chan wsMessage),
+		broadcastGroup: make(chan wsMessage),
+		broadcastAll:   make(chan fiber.Map),
+		graceExpired:   make(chan int64),
+		onlineUsers:    make(map[int64]bool),
+		graceTimers:    make(map[int64]*time.Timer),
 	}
 	go h.runHub()
 	return h
@@ -123,6 +127,7 @@ func (h *Handler) runHub() {
 					"from":       msg.from,
 					"from_name":  msg.fromName,
 					"content":    msg.content,
+					"msg_type":   msg.msgType,
 					"created_at": msg.createdAt,
 				}
 					if len(msg.images) > 0 {
@@ -154,6 +159,70 @@ func (h *Handler) runHub() {
 						"senderId": msg.from,
 					},
 				)
+			}
+
+		case msg := <-h.broadcastGroup:
+			rows, err := database.DB.Query("SELECT user_id FROM group_chat_members WHERE group_chat_id = ?", msg.groupID)
+			if err != nil {
+				log.Println("Failed to query group members:", err)
+				break
+			}
+			var memberIDs []int64
+			for rows.Next() {
+				var uid int64
+				rows.Scan(&uid)
+				memberIDs = append(memberIDs, uid)
+			}
+			rows.Close()
+
+			payload := fiber.Map{
+				"type":       "group_message",
+				"group_id":   msg.groupID,
+				"from":       msg.from,
+				"from_name":  msg.fromName,
+				"content":    msg.content,
+				"msg_type":   msg.msgType,
+				"created_at": msg.createdAt,
+			}
+			if len(msg.images) > 0 {
+				payload["images"] = msg.images
+			}
+
+			for _, memberID := range memberIDs {
+				if memberID == msg.from {
+					continue
+				}
+				delivered := false
+				for conn, uid := range h.clients {
+					if uid == memberID {
+						if err := conn.WriteJSON(payload); err != nil {
+							log.Println("WebSocket group write error:", err)
+							conn.Close()
+							delete(h.clients, conn)
+						} else {
+							delivered = true
+						}
+					}
+				}
+				if !delivered {
+					preview := msg.content
+					if len(preview) > 120 {
+						preview = preview[:120] + "..."
+					}
+					if preview == "" && len(msg.images) > 0 {
+						preview = "[Image]"
+					}
+					var groupName string
+					database.DB.QueryRow("SELECT name FROM group_chats WHERE id = ?", msg.groupID).Scan(&groupName)
+					h.sendPushNotification(memberID,
+						"New message in "+groupName,
+						msg.fromName+": "+preview,
+						map[string]interface{}{
+							"url":      fmt.Sprintf("/chat/group/%d", msg.groupID),
+							"groupId":  msg.groupID,
+						},
+					)
+				}
 			}
 
 		case msg := <-h.broadcastAll:
@@ -503,7 +572,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, m.to_user_id, m.content, m.created_at, u.username
+		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at, u.username
 		FROM messages m
 		JOIN users u ON m.from_user_id = u.id
 		WHERE (m.from_user_id = ? AND m.to_user_id = ?)
@@ -519,7 +588,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.CreatedAt, &m.FromUser); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -580,6 +649,11 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		content = vals[0]
 	}
 
+	msgType := "text"
+	if vals, ok := form.Value["type"]; ok && len(vals) > 0 && vals[0] != "" {
+		msgType = vals[0]
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -592,8 +666,8 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content) VALUES (?, ?, ?)",
-		fromUserID, toUserID, content,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
@@ -633,6 +707,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		from:      fromUserID,
 		to:        toUserID,
 		content:   content,
+		msgType:   msgType,
 		images:    images,
 		fromName:  senderName,
 		createdAt: time.Now().Format(time.RFC3339),
@@ -1221,9 +1296,14 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 			continue
 		}
 
+		msgType := "text"
+		if t, ok := msg["msg_type"].(string); ok && t != "" {
+			msgType = t
+		}
+
 		_, err := database.DB.Exec(
-			"INSERT INTO messages (from_user_id, to_user_id, content) VALUES (?, ?, ?)",
-			uid, int64(to), content,
+			"INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, ?, ?)",
+			uid, int64(to), content, msgType,
 		)
 		if err != nil {
 			log.Println("Failed to save message:", err)
@@ -1233,6 +1313,6 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		var senderName string
 		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", uid).Scan(&senderName)
 
-		h.broadcast <- wsMessage{from: uid, to: int64(to), content: content, fromName: senderName}
+		h.broadcast <- wsMessage{from: uid, to: int64(to), content: content, msgType: msgType, fromName: senderName}
 	}
 }
