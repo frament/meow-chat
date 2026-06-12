@@ -196,6 +196,13 @@ export class App implements OnInit, OnDestroy {
       this.#installPrompt = null;
     });
 
+    // Listen for push subscription change from service worker
+    navigator.serviceWorker?.addEventListener('message', (event) => {
+      if (event.data?.type === 'push-subscription-changed') {
+        this.tryReSubscribePush();
+      }
+    });
+
     if (this.#sw.isEnabled) {
       this.#sw.versionUpdates
         .pipe(filter(evt => evt.type === 'VERSION_READY'))
@@ -205,6 +212,7 @@ export class App implements OnInit, OnDestroy {
         fromEvent(window, 'focus').subscribe(() => {
           this.#sw.checkForUpdate();
           this.#clearBadge();
+          this.tryReSubscribePush();
         })
       );
 
@@ -316,13 +324,30 @@ export class App implements OnInit, OnDestroy {
         }
       });
 
+    this.tryReSubscribePush();
+  }
+
+  private async tryReSubscribePush(): Promise<void> {
     if (!this.#swPush.isEnabled) return;
 
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) {
+        // Already subscribed — re-register on server (INSERT OR IGNORE)
+        this.#api.pushSubscribe(existingSub.toJSON()).subscribe();
+        return;
+      }
+    } catch {
+      // Service worker not ready yet
+    }
+
+    // No valid subscription — request a new one (may prompt on first time)
     this.#api.getVapidPublicKey().subscribe({
       next: (keys) => {
-        this.#swPush.requestSubscription({ serverPublicKey: keys.publicKey }).then(sub => {
-          this.#api.pushSubscribe(sub.toJSON()).subscribe();
-        }).catch(() => {});
+        this.#swPush.requestSubscription({ serverPublicKey: keys.publicKey })
+          .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe())
+          .catch(() => {});
       },
     });
   }
