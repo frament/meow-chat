@@ -365,24 +365,37 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 func (h *Handler) GetUsers(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	rows, err := database.DB.Query(`
-		SELECT id, username, email, avatar_url, created_at
+		SELECT id, username, email, avatar_url, created_at, NULL as server_id
 		FROM users
 		WHERE id IN (
 			SELECT friend_id FROM friends WHERE user_id = ?
 			UNION
 			SELECT user_id FROM friends WHERE friend_id = ?
 		)
+		UNION ALL
+		SELECT fu.remote_id, fu.username, fu.email, fu.avatar_url, fu.created_at, fu.server_id
+		FROM federation_users fu
+		WHERE fu.remote_id IN (
+			SELECT friend_id FROM friends WHERE user_id = ? AND server_id IS NOT NULL
+			UNION
+			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
+		)
 		ORDER BY username
-	`, userID, userID)
+	`, userID, userID, userID, userID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
 	}
 	defer rows.Close()
 
-	users := make([]models.User, 0)
+	type userWithServer struct {
+		models.User
+		ServerID *int64 `json:"server_id,omitempty"`
+	}
+
+	users := make([]userWithServer, 0)
 	for rows.Next() {
-		var u models.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
+		var u userWithServer
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.ServerID); err != nil {
 			continue
 		}
 		u.IsOnline = h.onlineUsers[u.ID]
@@ -531,9 +544,19 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 			UNION
 			SELECT user_id FROM friends WHERE friend_id = ?
 		)
-		ORDER BY p.created_at DESC
+		UNION ALL
+		SELECT p.id, p.user_id, p.content, p.created_at, fu.username, fu.avatar_url, fu.is_admin, p.is_public
+		FROM posts p
+		JOIN federation_users fu ON p.user_id = fu.remote_id
+		WHERE p.server_id IS NOT NULL
+		  AND p.user_id IN (
+			SELECT friend_id FROM friends WHERE user_id = ? AND server_id IS NOT NULL
+			UNION
+			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
+		)
+		ORDER BY created_at DESC
 		LIMIT 50
-	`, userID, userID, userID)
+	`, userID, userID, userID, userID, userID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch feed"})
 	}
