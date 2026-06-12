@@ -3,9 +3,12 @@ package federation
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"my-chat-backend/database"
@@ -174,14 +177,44 @@ func (fh *FederationHandler) HandleForwardPost(c *fiber.Ctx) error {
 	}
 
 	postID, _ := result.LastInsertId()
-	for _, imgURL := range req.Images {
+	for i, imgURL := range req.Images {
+		localURL := imgURL
+		if strings.HasPrefix(imgURL, "http") {
+			localURL = fh.cacheRemoteImage(postID, i, imgURL)
+		}
 		database.DB.Exec(
 			"INSERT INTO post_images (post_id, image_url) VALUES (?, ?)",
-			postID, imgURL,
+			postID, localURL,
 		)
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": postID})
+}
+
+func (fh *FederationHandler) cacheRemoteImage(postID int64, index int, remoteURL string) string {
+	data, err := fh.transport.DownloadFile(remoteURL)
+	if err != nil {
+		log.Printf("Federation: failed to download post image %s: %v", remoteURL, err)
+		return remoteURL
+	}
+
+	ext := filepath.Ext(remoteURL)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	localName := fmt.Sprintf("fed_post_%d_%d%s", postID, index, ext)
+	localPath := filepath.Join(".", "uploads", "posts", localName)
+
+	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+		log.Printf("Federation: failed to create posts dir: %v", err)
+		return remoteURL
+	}
+	if err := os.WriteFile(localPath, data, 0644); err != nil {
+		log.Printf("Federation: failed to write post image %s: %v", localPath, err)
+		return remoteURL
+	}
+
+	return "/uploads/posts/" + localName
 }
 
 func (fh *FederationHandler) HandleForwardKey(c *fiber.Ctx) error {

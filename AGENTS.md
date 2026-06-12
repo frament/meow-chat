@@ -22,7 +22,7 @@ uploads/posts/   # post images (auto-created on server start)
 uploads/federation_cache/ # cached files from federated peers (created on server start)
 frontend/
   src/app/
-     components/{login,register,feed,chat,layout,admin,join-group,admin-federation}/  # standalone components
+      components/{login,register,feed,chat,layout,admin,join-group,admin-federation,device-auth}/  # standalone components
     services/api.service.ts                        # all API calls + WebSocket connect
   proxy.conf.js   # dev API proxy → localhost:8080, with WS support
   nginx.conf      # prod: /api → backend:8080, SPA fallback
@@ -281,3 +281,20 @@ cd frontend && npm run build   # production build with service-worker
 - **Hybrid model**: REST + offline queue + gossip for unreliable connections. Compositional (server_id, user_id) IDs. Data duplicated on both servers. Gossip TTL=5 hops.
 - **Makefile**: Already had targets for admin CLI via docker compose exec
 - **Known quirks**: `syscall.Statfs_t` / `syscall.Statfs` undefined on Windows — fixed via platform build tags in `handlers/disk_unix.go` / `handlers/disk_windows.go` (2026-06-12)
+
+## Session (2026-06-12) — Multi-device E2EE + Post Image Proxy + UI Polish
+- **Multi-device E2EE key sync** (9 tasks completed):
+  - DB migrations: `user_devices`, `device_auth_requests`, `user_keys_backup` — `database/database.go`
+  - Backend: 13 device endpoints (register, list, remove, auth request/approve/poll/deny, key backup/recover, recovery phrase) — `handlers/devices.go`
+  - WS broadcast: `broadcastToUser` channel + `SendToUser`/`BroadcastDeviceAuthRequest`/`BroadcastDeviceApproved` — `handlers/handlers.go`
+  - Routes: `/devices` group after `AuthRequired` — `main.go`
+  - Frontend: `DeviceAuthComponent` with polling + approval + recovery UI — `components/device-auth/device-auth.ts`
+  - App component: identity key check on init, WS `device_auth_request` handling — `app.ts`
+  - CryptoService: device keypair (ECDH P-256), `encryptIdentityKeyForDevice()`, `decryptIdentityKeyFromDevice()`, `importIdentityKey()` — `crypto.service.ts`
+  - API service: 14 device/recovery methods — `api.service.ts`
+  - Migration: `key_creator_id` on `group_key_shares` — `database/database.go`
+- **Federation post image proxy**: `HandleForwardPost` now downloads remote images via `Transport.DownloadFile()` and stores locally in `./uploads/posts/fed_post_{id}_{idx}.{ext}` — `federation/handler.go`, `federation/transport.go`
+- **UI polish — PWA install prompt**: `beforeinstallprompt` listener, bottom install banner, `appinstalled` handling — `app.ts`
+- **UI polish — Image upload progress**: `sendMessageWithProgress`, `sendGroupMessageWithProgress`, `createPostWithProgress` with `reportProgress: true`; progress bars in chat input and feed post creator — `api.service.ts`, `chat.ts`, `feed.ts`
+- **UI polish — Optimistic message sending**: Messages added immediately with `pending: true` flag, ⏳ indicator, rollback on error — `chat.ts`; added `pending?: boolean` to `Message` interface — `api.service.ts`
+- All builds verified (`go build ./...` + `ng build`)

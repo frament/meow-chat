@@ -351,6 +351,171 @@ export class CryptoService {
     return re ? new Uint8Array(re) : null;
   }
 
+  // ─── Multi-Device Key Sync ─────────────────────────────────────
+
+  private deviceKeyPair: CryptoKeyPair | null = null;
+  deviceId: string = '';
+  deviceName: string = '';
+
+  async ensureDeviceKeyPair(): Promise<void> {
+    const stored = await this.get<string>('deviceKeyJWK');
+    const storedPub = await this.get<string>('devicePublicKeySPKI');
+    if (stored && storedPub) {
+      const jwk = JSON.parse(stored);
+      this.deviceKeyPair = {
+        privateKey: await crypto.subtle.importKey(
+          'jwk', jwk,
+          { name: 'ECDH', namedCurve: 'P-256' },
+          false,
+          ['deriveKey', 'deriveBits'],
+        ),
+        publicKey: await crypto.subtle.importKey(
+          'spki', this.base64ToArrayBuffer(storedPub),
+          { name: 'ECDH', namedCurve: 'P-256' },
+          true,
+          [],
+        ),
+      };
+      this.deviceId = (await this.get<string>('deviceId')) || '';
+      return;
+    }
+
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      ['deriveKey', 'deriveBits'],
+    ) as CryptoKeyPair;
+
+    const jwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+    const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
+    const pubB64 = btoa(String.fromCharCode(...new Uint8Array(spki)));
+
+    await this.set('deviceKeyJWK', JSON.stringify(jwk));
+    await this.set('devicePublicKeySPKI', pubB64);
+
+    const deviceId = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    await this.set('deviceId', deviceId);
+    this.deviceId = deviceId;
+
+    this.deviceKeyPair = keyPair;
+  }
+
+  async getDevicePublicKeySPKI(): Promise<string> {
+    const stored = await this.get<string>('devicePublicKeySPKI');
+    if (stored) return stored;
+    await this.ensureDeviceKeyPair();
+    return (await this.get<string>('devicePublicKeySPKI')) || '';
+  }
+
+  async encryptIdentityKeyForDevice(deviceSPKI: string): Promise<{ encrypted: string; iv: string } | null> {
+    if (!this.deviceKeyPair) await this.ensureDeviceKeyPair();
+    if (!this.deviceKeyPair) return null;
+
+    const spkiBytes = Uint8Array.from(atob(deviceSPKI), c => c.charCodeAt(0));
+    const peerPubKey = await crypto.subtle.importKey(
+      'spki', spkiBytes.buffer,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      [],
+    );
+
+    const sharedKey = await crypto.subtle.deriveKey(
+      { name: 'ECDH', public: peerPubKey },
+      this.deviceKeyPair.privateKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt'],
+    );
+
+    const identityJWK = await this.get<string>('identityKeyJWK');
+    if (!identityJWK) return null;
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(identityJWK);
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      sharedKey,
+      encoded,
+    );
+
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+
+    return {
+      encrypted: btoa(String.fromCharCode(...combined)),
+      iv: btoa(String.fromCharCode(...iv)),
+    };
+  }
+
+  async decryptIdentityKeyFromDevice(encryptedB64: string, ivB64: string, myDeviceSPKI: string): Promise<string | null> {
+    if (!this.deviceKeyPair) await this.ensureDeviceKeyPair();
+    if (!this.deviceKeyPair) return null;
+
+    // Use the request's device_public_key (the trusted device's key) as peer
+    const spkiBytes = Uint8Array.from(atob(myDeviceSPKI), c => c.charCodeAt(0));
+    const peerPubKey = await crypto.subtle.importKey(
+      'spki', spkiBytes.buffer,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      [],
+    );
+
+    const sharedKey = await crypto.subtle.deriveKey(
+      { name: 'ECDH', public: peerPubKey },
+      this.deviceKeyPair.privateKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt'],
+    );
+
+    const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+    const combined = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
+    const ciphertext = combined.subarray(12);
+
+    try {
+      const plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        sharedKey,
+        ciphertext,
+      );
+      return new TextDecoder().decode(plaintext);
+    } catch {
+      return null;
+    }
+  }
+
+  async importIdentityKey(jwkJson: string): Promise<void> {
+    const jwk = JSON.parse(jwkJson);
+    const privateKey = await crypto.subtle.importKey(
+      'jwk', jwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      ['deriveKey', 'deriveBits'],
+    );
+    const publicKey = await crypto.subtle.importKey(
+      'jwk',
+      { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true } as JsonWebKey,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      [],
+    );
+    const spki = await crypto.subtle.exportKey('spki', publicKey);
+    const pubB64 = btoa(String.fromCharCode(...new Uint8Array(spki)));
+
+    await this.set('identityKeyJWK', jwkJson);
+    await this.set('publicKeySPKI', pubB64);
+  }
+
+  async hasIdentityKey(): Promise<boolean> {
+    return !!(await this.get<string>('identityKeyJWK'));
+  }
+
+  private base64ToArrayBuffer(b64: string): ArrayBuffer {
+    return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+  }
+
   /** Decrypt a group message using the group's AES-256-GCM key */
   async decryptGroupMessage(groupId: number, encryptedBase64: string, ivBase64: string): Promise<string | null> {
     const key = await this.getGroupKey(groupId);

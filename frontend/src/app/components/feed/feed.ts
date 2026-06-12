@@ -1,6 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpEventType } from '@angular/common/http';
+import { filter } from 'rxjs/operators';
 import { ApiService, Post, PostImage } from '../../services/api.service';
 
 @Component({
@@ -29,6 +31,11 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
         }
 
         <div class="flex flex-wrap gap-2 mt-3">
+          @if (uploading()) {
+          <div style="width:100%;height:3px;background:var(--divider);border-radius:2px;margin-bottom:4px;">
+            <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:2px;transition:width 0.2s;"></div>
+          </div>
+          }
           <label class="btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
             <span>📷</span> Добавить фото
             <input type="file" multiple accept="image/*" (change)="onFilesSelected($event)" class="hidden">
@@ -116,6 +123,8 @@ export class FeedComponent implements OnInit {
   selectedFiles: File[] = [];
   previews: string[] = [];
   isPublic = false;
+  uploading = signal(false);
+  uploadProgress = signal(0);
   reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
   viewerImages: PostImage[] | null = null;
   viewerIndex = 0;
@@ -177,13 +186,36 @@ export class FeedComponent implements OnInit {
 
   createPost() {
     if (!this.newPostContent.trim() && this.selectedFiles.length === 0) return;
-    this.api.createPost(this.newPostContent, this.selectedFiles, this.isPublic).subscribe(() => {
-      this.newPostContent = '';
-      this.selectedFiles = [];
-      this.previews = [];
-      this.isPublic = false;
-      this.loadFeed();
-    });
+    const hasFiles = this.selectedFiles.length > 0;
+    if (hasFiles) {
+      this.uploading.set(true);
+      this.uploadProgress.set(0);
+      this.api.createPostWithProgress(this.newPostContent, this.selectedFiles, this.isPublic)
+        .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
+        .subscribe({
+          next: (event: any) => {
+            if (event.type === HttpEventType.UploadProgress) {
+              this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
+            } else if (event.type === HttpEventType.Response) {
+              this.uploading.set(false);
+              this.newPostContent = '';
+              this.selectedFiles = [];
+              this.previews = [];
+              this.isPublic = false;
+              this.loadFeed();
+            }
+          },
+          error: () => { this.uploading.set(false); },
+        });
+    } else {
+      this.api.createPost(this.newPostContent, this.selectedFiles, this.isPublic).subscribe(() => {
+        this.newPostContent = '';
+        this.selectedFiles = [];
+        this.previews = [];
+        this.isPublic = false;
+        this.loadFeed();
+      });
+    }
   }
 
   openViewer(images: PostImage[], index: number) {

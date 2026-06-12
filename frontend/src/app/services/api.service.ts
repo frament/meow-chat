@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
 import { Subject } from 'rxjs';
 
 export interface User {
@@ -79,6 +79,7 @@ export interface Message {
   images?: { id: number; image_url: string }[];
   encrypted_content?: string;
   encrypted_iv?: string;
+  pending?: boolean;
 }
 
 export interface GroupChat {
@@ -320,6 +321,54 @@ export class ApiService {
       `${this.baseUrl}/group-chat-messages`,
       formData
     );
+  }
+
+  // Upload methods with progress reporting
+  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+    const formData = new FormData();
+    formData.append('to_user_id', String(toUserId));
+    formData.append('content', content);
+    formData.append('type', msgType);
+    if (encryptedContent) formData.append('encrypted_content', encryptedContent);
+    if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (pushPreview) formData.append('push_preview', pushPreview);
+    for (const file of files) {
+      formData.append('images', file);
+    }
+    return this.http.post<HttpEvent<any>>(`${this.baseUrl}/messages`, formData, {
+      reportProgress: true,
+      observe: 'events',
+    });
+  }
+
+  sendGroupMessageWithProgress(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+    const formData = new FormData();
+    formData.append('group_chat_id', String(groupId));
+    formData.append('content', content);
+    formData.append('type', msgType);
+    if (encryptedContent) formData.append('encrypted_content', encryptedContent);
+    if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (pushPreview) formData.append('push_preview', pushPreview);
+    for (const file of files) {
+      formData.append('images', file);
+    }
+    return this.http.post<HttpEvent<any>>(`${this.baseUrl}/group-chat-messages`, formData, {
+      reportProgress: true,
+      observe: 'events',
+    });
+  }
+
+  createPostWithProgress(content: string, files: File[] = [], isPublic = false) {
+    const formData = new FormData();
+    formData.append('content', content);
+    formData.append('is_public', isPublic ? 'true' : 'false');
+    for (const file of files) {
+      formData.append('images', file);
+    }
+    return this.http.post<HttpEvent<any>>(`${this.baseUrl}/posts`, formData, {
+      reportProgress: true,
+      observe: 'events',
+    });
   }
 
   uploadAvatar(file: File) {
@@ -719,6 +768,93 @@ export class ApiService {
   restoreFederation(peerUrl: string) {
     return this.http.post<{ message: string }>(
       `${this.baseUrl}/admin/federation/restore`, { peer_url: peerUrl }
+    );
+  }
+
+  // ── Device Management ──
+
+  registerDevice(name: string, publicKey: string, deviceId: string) {
+    return this.http.post(`${this.baseUrl}/devices/register`, {
+      device_name: name,
+      device_public_key: publicKey,
+      device_id: deviceId,
+    });
+  }
+
+  getDevices() {
+    return this.http.get<any[]>(`${this.baseUrl}/devices`);
+  }
+
+  removeDevice(deviceId: string) {
+    return this.http.delete(`${this.baseUrl}/devices/${deviceId}`);
+  }
+
+  // ── Device Auth Request ──
+
+  createAuthRequest(name: string, publicKey: string, deviceId: string) {
+    return this.http.post<{ id: number }>(`${this.baseUrl}/devices/auth-request`, {
+      device_name: name,
+      device_public_key: publicKey,
+      device_id: deviceId,
+    });
+  }
+
+  getAuthRequests() {
+    return this.http.get<any[]>(`${this.baseUrl}/devices/auth-requests`);
+  }
+
+  getAuthRequest(id: number) {
+    return this.http.get<{ status: string; encrypted_key: string; iv: string }>(
+      `${this.baseUrl}/devices/auth/${id}`
+    );
+  }
+
+  approveAuthRequest(id: number, encryptedKey: string, iv: string) {
+    return this.http.post(`${this.baseUrl}/devices/auth/${id}/approve`, {
+      encrypted_key: encryptedKey,
+      iv,
+    });
+  }
+
+  denyAuthRequest(id: number) {
+    return this.http.delete(`${this.baseUrl}/devices/auth/${id}`);
+  }
+
+  // ── Key Backup & Recovery ──
+
+  uploadKeyBackup(encryptedKey: string, iv: string, salt: string, hashIterations = 100000) {
+    return this.http.post(`${this.baseUrl}/devices/backup-keys`, {
+      encrypted_key: encryptedKey,
+      iv,
+      salt,
+      hash_iterations: hashIterations,
+    });
+  }
+
+  recoverKeys(method: 'password' | 'phrase', input: string) {
+    return this.http.post<{ identity_key_jwk: string }>(`${this.baseUrl}/devices/recover`, {
+      method,
+      input,
+    });
+  }
+
+  generateRecoveryPhrase() {
+    return this.http.post<{ phrase: string; phrase_hash: string }>(
+      `${this.baseUrl}/devices/recovery-phrase`, {}
+    );
+  }
+
+  setRecoveryPhraseBackup(encryptedKey: string, iv: string, salt: string) {
+    return this.http.post(`${this.baseUrl}/devices/recovery-phrase/set`, {
+      encrypted_key: encryptedKey,
+      iv,
+      salt,
+    });
+  }
+
+  getRecoveryPhraseStatus() {
+    return this.http.get<{ has_recovery_phrase: boolean }>(
+      `${this.baseUrl}/devices/recovery-phrase`
     );
   }
 

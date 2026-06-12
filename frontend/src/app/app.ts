@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { interval, fromEvent, filter, tap, map, switchMap, Subscription } from 'rxjs';
@@ -6,11 +6,12 @@ import { ApiService } from './services/api.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
+import { DeviceAuthComponent } from './components/device-auth/device-auth';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, DeviceAuthComponent],
   template: `
     @if (updateAvailable()) {
       <div class="update-banner">
@@ -27,6 +28,13 @@ import { CryptoService } from './services/crypto.service';
         </div>
       </div>
     }
+    @if (canInstall()) {
+      <div class="install-banner">
+        <span>Установите MeowChat на устройство</span>
+        <button (click)="installApp()">Установить</button>
+        <button class="dismiss" (click)="dismissInstall()">✕</button>
+      </div>
+    }
     @if (maintenanceMode()) {
       <div style="position:fixed;inset:0;z-index:99999;background:var(--bg-body);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
         <div style="width:48px;height:48px;border:4px solid var(--border-default);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;"></div>
@@ -34,6 +42,7 @@ import { CryptoService } from './services/crypto.service';
         <p style="font-size:14px;color:var(--text-secondary);">Это может занять несколько минут</p>
       </div>
     }
+    <app-device-auth #deviceAuth />
     <router-outlet />
   `,
   styles: [`
@@ -110,6 +119,45 @@ import { CryptoService } from './services/crypto.service';
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .install-banner {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border-top: 1px solid var(--border-default);
+      font-size: 14px;
+      animation: slideUp 0.3s ease;
+    }
+    .install-banner button {
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .install-banner .dismiss {
+      background: transparent;
+      color: var(--text-tertiary);
+      padding: 4px 8px;
+      font-size: 16px;
+    }
+    .install-banner span {
+      flex: 1;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
     @keyframes slideIn {
       from { transform: translateY(-20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
@@ -126,13 +174,28 @@ export class App implements OnInit, OnDestroy {
   readonly #crypto = inject(CryptoService);
   readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
+  readonly canInstall = signal(false);
   readonly #sub = new Subscription();
   readonly maintenanceMode = signal(false);
   #maintenanceSub: Subscription | null = null;
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   #badgeCount = 0;
+  #deviceAuthInitDone = false;
+  #installPrompt: any = null;
+  @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
+    // PWA install prompt
+    window.addEventListener('beforeinstallprompt', (e: Event) => {
+      e.preventDefault();
+      this.#installPrompt = e;
+      this.canInstall.set(true);
+    });
+    window.addEventListener('appinstalled', () => {
+      this.canInstall.set(false);
+      this.#installPrompt = null;
+    });
+
     if (this.#sw.isEnabled) {
       this.#sw.versionUpdates
         .pipe(filter(evt => evt.type === 'VERSION_READY'))
@@ -156,7 +219,10 @@ export class App implements OnInit, OnDestroy {
   ngOnInit() {
     if (this.#api.currentUser()) {
       this.#api.connectWebSocket();
-      this.#crypto.init().then(() => this.#crypto.syncPublicKey());
+      this.#crypto.init().then(() => {
+        this.#crypto.syncPublicKey();
+        this.checkDeviceAuth();
+      });
     }
     this.#notif.requestPermission();
 
@@ -172,6 +238,13 @@ export class App implements OnInit, OnDestroy {
 
     this.#sub.add(
       this.#api.wsMessages$.subscribe((msg: any) => {
+        if (msg.type === 'device_auth_request') {
+          if (this.deviceAuth) {
+            this.deviceAuth.showIncomingRequest(msg);
+          }
+          return;
+        }
+
         const isHidden = document.hidden;
         const isGroup = msg.type === 'group_message';
         const chatPath = isGroup ? `/chat/group/${msg.group_id}` : `/chat/${msg.from}`;
@@ -259,6 +332,23 @@ export class App implements OnInit, OnDestroy {
     this.#maintenanceSub?.unsubscribe();
   }
 
+  installApp() {
+    if (this.#installPrompt) {
+      this.#installPrompt.prompt();
+      this.#installPrompt.userChoice.then((result: any) => {
+        if (result.outcome === 'accepted') {
+          this.canInstall.set(false);
+        }
+        this.#installPrompt = null;
+      });
+    }
+  }
+
+  dismissInstall() {
+    this.canInstall.set(false);
+    this.#installPrompt = null;
+  }
+
   openChat(userId: number) {
     this.#clearBadge();
     this.toast.set(null);
@@ -281,6 +371,25 @@ export class App implements OnInit, OnDestroy {
         await (navigator as any).clearAppBadge();
       }
     } catch {}
+  }
+
+  private async checkDeviceAuth() {
+    if (this.#deviceAuthInitDone) return;
+    this.#deviceAuthInitDone = true;
+    const hasIdentity = await this.#crypto.hasIdentityKey();
+    if (!hasIdentity && this.deviceAuth) {
+      // Ensure device keypair exists first
+      await this.#crypto.ensureDeviceKeyPair();
+      // Register device on server
+      const pubKey = await this.#crypto.getDevicePublicKeySPKI();
+      this.#api.registerDevice(
+        navigator.platform || 'Unknown device',
+        pubKey,
+        this.#crypto.deviceId,
+      ).subscribe();
+      // Start auth request flow
+      this.deviceAuth.startNewDeviceFlow();
+    }
   }
 
   applyUpdate() {

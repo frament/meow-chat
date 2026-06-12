@@ -66,6 +66,18 @@ func (t *Transport) SendDirect(fullURL string, method string, token string, body
 	return t.sendRaw(fullURL, method, token, body, headers)
 }
 
+func (t *Transport) DownloadFile(url string) ([]byte, error) {
+	resp, err := t.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("download failed: %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
 func (t *Transport) sendRaw(url string, method string, token string, body interface{}, headers map[string]string) (*FederationResponse, error) {
 	var bodyReader io.Reader
 	if body != nil {

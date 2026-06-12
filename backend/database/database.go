@@ -423,6 +423,11 @@ func migrate() {
 		DB.Exec("ALTER TABLE posts ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
 
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_key_shares') WHERE name='key_creator_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
+	}
+
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
 		log.Fatal("Failed to create uploads directory:", err)
 	}

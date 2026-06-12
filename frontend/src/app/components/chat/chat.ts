@@ -1,8 +1,10 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
+import { HttpEventType } from '@angular/common/http';
+import { filter } from 'rxjs/operators';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 
@@ -161,7 +163,10 @@ import { CryptoService } from '../../services/crypto.service';
                     </div>
                     }
                   }
-                  <p class="text-xs mt-1 opacity-70">{{ msg.created_at | date:'HH:mm' }}</p>
+                  <p class="text-xs mt-1 opacity-70">
+                    {{ msg.created_at | date:'HH:mm' }}
+                    @if (msg.pending) { <span style="margin-left:4px;">⏳</span> }
+                  </p>
                 </div>
               </div>
             }
@@ -193,7 +198,12 @@ import { CryptoService } from '../../services/crypto.service';
                 </button>
               }
             </div>
-            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (uploading()) {
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
+                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
+              </div>
+              }
               <button (click)="triggerFileInput()" title="Прикрепить изображение"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -374,7 +384,10 @@ import { CryptoService } from '../../services/crypto.service';
                     </div>
                     }
                   }
-                  <p class="text-xs mt-1 opacity-70">{{ msg.created_at | date:'HH:mm' }}</p>
+                  <p class="text-xs mt-1 opacity-70">
+                    {{ msg.created_at | date:'HH:mm' }}
+                    @if (msg.pending) { <span style="margin-left:4px;">⏳</span> }
+                  </p>
                 </div>
               </div>
             }
@@ -406,7 +419,12 @@ import { CryptoService } from '../../services/crypto.service';
                 </button>
               }
             </div>
-            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;">
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (uploading()) {
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
+                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
+              </div>
+              }
               <button (click)="triggerFileInput()" title="Прикрепить изображение"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -548,6 +566,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   showQR = false;
   private subscriptions: Subscription[] = [];
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
+  uploading = signal(false);
+  uploadProgress = signal(0);
 
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
@@ -790,7 +810,6 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     if (this.selectedGroup) {
-      // Encrypt group message with group key
       if (this.e2eeReady && rawContent) {
         const result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent);
         if (result) {
@@ -800,43 +819,117 @@ export class ChatComponent implements OnInit, OnDestroy {
           content = rawContent;
         }
       }
-      this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
-        next: () => {
-          const msg: Message = {
-            id: Date.now(),
-            from_user_id: this.currentUserId,
-            to_user_id: 0,
-            group_chat_id: this.selectedGroup!.id,
-            content: content,
-            msg_type: type,
-            created_at: new Date().toISOString(),
-            from_user: this.api.currentUser()?.username ?? '',
-          };
-          this.messages.push(msg);
-          this.messageContent = '';
-          this.clearFiles();
-          this.scrollToBottom();
-        },
-      });
+
+      // Optimistic: add message immediately
+      const tempId = Date.now();
+      const optimisticMsg: Message = {
+        id: tempId,
+        from_user_id: this.currentUserId,
+        to_user_id: 0,
+        group_chat_id: this.selectedGroup.id,
+        content: content,
+        msg_type: type,
+        created_at: new Date().toISOString(),
+        from_user: this.api.currentUser()?.username ?? '',
+        pending: true,
+      };
+      this.messages.push(optimisticMsg);
+      this.messageContent = '';
+      this.clearFiles();
+      this.scrollToBottom();
+
+      const hasFiles = files.length > 0;
+      if (hasFiles) {
+        this.uploading.set(true);
+        this.uploadProgress.set(0);
+        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview)
+          .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
+          .subscribe({
+            next: (event: any) => {
+              if (event.type === HttpEventType.UploadProgress) {
+                this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
+              } else if (event.type === HttpEventType.Response) {
+                this.uploading.set(false);
+                this.finalizeOptimistic(tempId, event.body?.id);
+              }
+            },
+            error: () => {
+              this.uploading.set(false);
+              this.rollbackOptimistic(tempId);
+            },
+          });
+      } else {
+        this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
+          next: (res) => this.finalizeOptimistic(tempId, res.id),
+          error: () => this.rollbackOptimistic(tempId),
+        });
+      }
     } else if (this.selectedUser) {
-      this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
-        next: () => {
-          const msg: Message = {
-            id: Date.now(),
-            from_user_id: this.currentUserId,
-            to_user_id: this.selectedUser!.id,
-            content: content,
-            msg_type: type,
-            created_at: new Date().toISOString(),
-            from_user: this.api.currentUser()?.username ?? '',
-          };
-          this.messages.push(msg);
-          localStorage.setItem(this.messageCacheKey(this.selectedUser!.id), JSON.stringify(this.messages));
-          this.messageContent = '';
-          this.clearFiles();
-          this.scrollToBottom();
-        },
-      });
+      // Optimistic: add message immediately
+      const tempId = Date.now();
+      const optimisticMsg: Message = {
+        id: tempId,
+        from_user_id: this.currentUserId,
+        to_user_id: this.selectedUser.id,
+        content: content,
+        msg_type: type,
+        created_at: new Date().toISOString(),
+        from_user: this.api.currentUser()?.username ?? '',
+        pending: true,
+      };
+      this.messages.push(optimisticMsg);
+      localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+      this.messageContent = '';
+      this.clearFiles();
+      this.scrollToBottom();
+
+      const hasFiles = files.length > 0;
+      if (hasFiles) {
+        this.uploading.set(true);
+        this.uploadProgress.set(0);
+        this.api.sendMessageWithProgress(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview)
+          .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
+          .subscribe({
+            next: (event: any) => {
+              if (event.type === HttpEventType.UploadProgress) {
+                this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
+              } else if (event.type === HttpEventType.Response) {
+                this.uploading.set(false);
+                this.finalizeOptimistic(tempId, event.body?.id);
+              }
+            },
+            error: () => {
+              this.uploading.set(false);
+              this.rollbackOptimistic(tempId);
+            },
+          });
+      } else {
+        this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
+          next: (res) => this.finalizeOptimistic(tempId, res.id),
+          error: () => this.rollbackOptimistic(tempId),
+        });
+      }
+    }
+  }
+
+  private finalizeOptimistic(tempId: number, serverId?: number) {
+    const idx = this.messages.findIndex(m => m.id === tempId);
+    if (idx !== -1) {
+      this.messages[idx].pending = false;
+      if (serverId) this.messages[idx].id = serverId;
+      if (this.selectedUser) {
+        localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+      }
+    }
+  }
+
+  private rollbackOptimistic(tempId: number) {
+    const idx = this.messages.findIndex(m => m.id === tempId);
+    if (idx !== -1) {
+      this.messages.splice(idx, 1);
+      if (this.selectedUser) {
+        localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+      }
     }
   }
 
