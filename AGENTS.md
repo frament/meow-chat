@@ -298,3 +298,9 @@ cd frontend && npm run build   # production build with service-worker
 - **UI polish — Image upload progress**: `sendMessageWithProgress`, `sendGroupMessageWithProgress`, `createPostWithProgress` with `reportProgress: true`; progress bars in chat input and feed post creator — `api.service.ts`, `chat.ts`, `feed.ts`
 - **UI polish — Optimistic message sending**: Messages added immediately with `pending: true` flag, ⏳ indicator, rollback on error — `chat.ts`; added `pending?: boolean` to `Message` interface — `api.service.ts`
 - All builds verified (`go build ./...` + `ng build`)
+
+## Session (2026-06-12) — iOS PWA push fix after force-quit
+- **Root cause**: iOS убивает WebKit процесс PWA при force-quit → APNs не может доставить push
+- **SW fix**: Добавлен `pushsubscriptionchange` listener в `sw-push-handler.js` — при сбросе подписки iOS автоматически переподписывается и уведомляет клиента
+- **App fix**: `tryReSubscribePush()` вызывается при каждом `window.focus` + в `ngOnInit` — проверяет существующую подписку через `pushManager.getSubscription()`, перерегистрирует на сервере; если подписка отсутствует — создаёт новую через `requestSubscription()`
+- **Результат**: окно потери push после force-quit сведено к reopen приложения
