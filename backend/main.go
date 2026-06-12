@@ -150,6 +150,21 @@ func main() {
 
 	api.Use(handlers.AuthRequired)
 
+	dev := api.Group("/devices")
+	dev.Post("/register", h.RegisterDevice)
+	dev.Get("/", h.ListDevices)
+	dev.Delete("/:deviceId", h.RemoveDevice)
+	dev.Post("/auth-request", h.CreateAuthRequest)
+	dev.Get("/auth-requests", h.ListAuthRequests)
+	dev.Get("/auth/:id", h.GetAuthRequest)
+	dev.Post("/auth/:id/approve", h.ApproveAuthRequest)
+	dev.Delete("/auth/:id", h.DenyAuthRequest)
+	dev.Post("/backup-keys", h.UploadKeyBackup)
+	dev.Post("/recover", h.RecoverKeys)
+	dev.Post("/recovery-phrase", h.GenerateRecoveryPhrase)
+	dev.Post("/recovery-phrase/set", h.SetRecoveryPhraseBackup)
+	dev.Get("/recovery-phrase", h.GetRecoveryPhraseStatus)
+
 	api.Put("/keys", h.PutKey)
 
 	api.Post("/push/subscribe", h.SubscribePush)

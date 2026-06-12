@@ -21,21 +21,29 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+
+
 type Handler struct {
-	clients        map[*websocket.Conn]int64
-	register       chan *wsClient
-	unregister     chan *wsClient
-	broadcast      chan wsMessage
-	broadcastGroup chan wsMessage
-	broadcastAll   chan fiber.Map
-	graceExpired   chan int64
-	onlineUsers    map[int64]bool
-	graceTimers    map[int64]*time.Timer
+	clients         map[*websocket.Conn]int64
+	register        chan *wsClient
+	unregister      chan *wsClient
+	broadcast       chan wsMessage
+	broadcastGroup  chan wsMessage
+	broadcastAll    chan fiber.Map
+	broadcastToUser chan userMessage
+	graceExpired    chan int64
+	onlineUsers     map[int64]bool
+	graceTimers     map[int64]*time.Timer
 }
 
 type wsClient struct {
 	conn *websocket.Conn
 	uid  int64
+}
+
+type userMessage struct {
+	userID int64
+	data   fiber.Map
 }
 
 type wsMessage struct {
@@ -55,15 +63,16 @@ type wsMessage struct {
 
 func NewHandler() *Handler {
 	h := &Handler{
-		clients:        make(map[*websocket.Conn]int64),
-		register:       make(chan *wsClient),
-		unregister:     make(chan *wsClient),
-		broadcast:      make(chan wsMessage),
-		broadcastGroup: make(chan wsMessage),
-		broadcastAll:   make(chan fiber.Map),
-		graceExpired:   make(chan int64),
-		onlineUsers:    make(map[int64]bool),
-		graceTimers:    make(map[int64]*time.Timer),
+		clients:         make(map[*websocket.Conn]int64),
+		register:        make(chan *wsClient),
+		unregister:      make(chan *wsClient),
+		broadcast:       make(chan wsMessage),
+		broadcastGroup:  make(chan wsMessage),
+		broadcastAll:    make(chan fiber.Map),
+		broadcastToUser: make(chan userMessage, 10),
+		graceExpired:    make(chan int64),
+		onlineUsers:     make(map[int64]bool),
+		graceTimers:     make(map[int64]*time.Timer),
 	}
 	go h.runHub()
 	return h
@@ -261,8 +270,41 @@ func (h *Handler) runHub() {
 					delete(h.clients, conn)
 				}
 			}
+
+		case m := <-h.broadcastToUser:
+			for conn, uid := range h.clients {
+				if uid == m.userID {
+					if err := conn.WriteJSON(m.data); err != nil {
+						conn.Close()
+						delete(h.clients, conn)
+					}
+				}
+			}
 		}
 	}
+}
+
+func (h *Handler) SendToUser(userID int64, data fiber.Map) {
+	select {
+	case h.broadcastToUser <- userMessage{userID: userID, data: data}:
+	default:
+		log.Println("broadcastToUser channel full, dropping message")
+	}
+}
+
+func (h *Handler) BroadcastDeviceAuthRequest(userID int64, reqID int64, deviceName string) {
+	h.SendToUser(userID, fiber.Map{
+		"type":        "device_auth_request",
+		"id":          reqID,
+		"device_name": deviceName,
+	})
+}
+
+func (h *Handler) BroadcastDeviceApproved(userID int64, deviceID string) {
+	h.SendToUser(userID, fiber.Map{
+		"type":      "device_approved",
+		"device_id": deviceID,
+	})
 }
 
 func (h *Handler) Register(c *fiber.Ctx) error {

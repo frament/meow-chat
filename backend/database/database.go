@@ -336,6 +336,38 @@ func migrate() {
 			expires_at   DATETIME,
 			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS user_devices (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_name       TEXT NOT NULL,
+			device_public_key TEXT NOT NULL,
+			device_id         TEXT NOT NULL UNIQUE,
+			last_seen         DATETIME,
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS device_auth_requests (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_name       TEXT NOT NULL,
+			device_public_key TEXT NOT NULL,
+			device_id         TEXT NOT NULL,
+			status            TEXT DEFAULT 'pending',
+			encrypted_key     TEXT,
+			iv                TEXT,
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at        DATETIME DEFAULT (datetime('now', '+15 minutes'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_keys_backup (
+			user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			encrypted_key      TEXT NOT NULL,
+			iv                 TEXT NOT NULL,
+			salt               TEXT NOT NULL,
+			hash_iterations    INTEGER DEFAULT 100000,
+			recovery_phrase_encrypted TEXT,
+			recovery_phrase_salt     TEXT,
+			recovery_phrase_iv       TEXT,
+			updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, q := range queries {
