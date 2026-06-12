@@ -218,6 +218,31 @@ cd frontend && npm run build   # production build with service-worker
 - **Frontend**: `deleteGroupChat`, `getAdminGroupChats`, `adminDeleteGroupChat` API methods — `api.service.ts`
 - **AGENTS.md**: Added `TBD (Future work)` section
 
+## Session (2026-06-12) — Backup & Restore + Windows build fix + SQLite UNION ORDER BY fix
+
+### Backup & Restore system
+- **Spec & plan**: Written to `docs/superpowers/specs/2026-06-12-backup-restore-design.md` and `docs/superpowers/plans/2026-06-12-backup-restore-plan.md`
+- **Config**: `data/backup-config.json` with `backup_dir` (default `./backups/`), editable via API `GET/PUT /api/admin/backup/settings` — `backend/backup/config.go`
+- **Core backup**: `CreateBackup()` uses SQLite `VACUUM INTO` for atomic snapshot, zips DB + `server_key.bin` + `vapid_keys.json` + uploads — `backend/backup/backup.go`
+- **Core restore**: `RestoreFromZip()` extracts all files to correct paths — `backend/backup/backup.go`
+- **Process helpers**: PID file (`data/server.pid`), `FindProcess()`, `StopProcess()` (SIGTERM/taskkill), `IsDocker()`, `ShutdownContainer()`, `SendRestartSignal()` — cross-platform via build tags — `backend/backup/process.go`, `process_windows.go`
+- **CLI**: `go run . admin backup [path]` and `go run . admin restore <file.zip>` — stops server, restores, restarts (or SIGTERM PID 1 in Docker) — `backend/main.go`
+- **Startup handler**: Checks `data/chat-restored.db` → renames to `chat.db`, removes `.maintenance`/`.restore-pending` markers — `backend/main.go`
+- **PID file**: Server writes PID on startup for CLI to find/kill — `backend/main.go`
+- **Admin API**: 8 endpoints — list, create, download, upload, delete backups + restore endpoint — `backend/handlers/backup.go`
+- **Health endpoint**: `GET /api/health` → `{"status":"ok"}` or `{"status":"maintenance"}` — `backend/main.go`
+- **Maintenance mode**: File marker `data/.maintenance` → all endpoints return 503 (except `/api/health`) — `backend/handlers/backup.go`
+- **Docker**: Added `./backups:/app/backups` volume — `docker-compose.yml`
+- **Frontend API**: 9 methods (`checkHealth`, `getBackupSettings`, `updateBackupSettings`, `getBackups`, `createBackup`, `downloadBackupUrl`, `uploadBackup`, `deleteBackup`, `restoreBackup`) — `api.service.ts`
+- **Frontend admin**: "Бэкапы" tab in admin panel — table with filename/size/date, actions: Скачать/Восстановить/Удалить, buttons: Создать/Загрузить — `admin.ts`
+- **Frontend maintenance**: Poll `/api/health` every 3s, full-screen overlay "Сервер восстанавливается..." on maintenance, `location.reload()` on recovery — `app.ts`
+
+### Bugfixes
+- **Windows build fix**: Extracted `syscall.Statfs` behind `//go:build !windows` — `handlers/disk_unix.go`, `handlers/disk_windows.go`
+- **Windows `syscall.Kill` fix**: Moved `syscall.Kill(1, syscall.SIGTERM)` to `backup.SendRestartSignal()` / `backup.ShutdownContainer()` with platform build tags — `backend/backup/process.go`, `process_windows.go`
+- **SQLite UNION ORDER BY fix**: In compound SELECT (UNION/UNION ALL), SQLite requires ordinal positions not column names. Fixed `ORDER BY created_at DESC` → `ORDER BY 4 DESC` in `GetFeed`, `ORDER BY username` → `ORDER BY 2` in `GetUsers` — `handlers/handlers.go`
+- **Feed error logging**: Added `log.Printf` to `GetFeed` query error for debugging — `handlers/handlers.go`
+
 ## Session (2026-06-06) — Invite-only registration + notification fixes
 - **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`
 - **SW push fix**: Added `silent: true` to `showNotification()` in SW — `sw-push-handler.js`
@@ -250,4 +275,4 @@ cd frontend && npm run build   # production build with service-worker
 - **Frontend**: AdminFederationComponent standalone component, 11 API methods, /admin/federation route, "Федерация" nav link — `admin-federation.ts`, `api.service.ts`, `app.routes.ts`, `admin.ts`
 - **Hybrid model**: REST + offline queue + gossip for unreliable connections. Compositional (server_id, user_id) IDs. Data duplicated on both servers. Gossip TTL=5 hops.
 - **Makefile**: Already had targets for admin CLI via docker compose exec
-- **Known quirks**: `syscall.Statfs_t` / `syscall.Statfs` undefined on Windows (handlers.go ~1299) — pre-existing, unrelated
+- **Known quirks**: `syscall.Statfs_t` / `syscall.Statfs` undefined on Windows — fixed via platform build tags in `handlers/disk_unix.go` / `handlers/disk_windows.go` (2026-06-12)
