@@ -278,6 +278,64 @@ func migrate() {
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(group_chat_id, user_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS federation_servers (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			name            TEXT NOT NULL,
+			base_url        TEXT NOT NULL UNIQUE,
+			server_token    TEXT NOT NULL,
+			status          TEXT DEFAULT 'active',
+			disk_cache_limit INTEGER DEFAULT 512,
+			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_users (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			server_id    INTEGER NOT NULL REFERENCES federation_servers(id),
+			remote_id    INTEGER NOT NULL,
+			username     TEXT NOT NULL,
+			avatar_url   TEXT DEFAULT '',
+			email        TEXT DEFAULT '',
+			is_admin     INTEGER DEFAULT 0,
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(server_id, remote_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_queue (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			server_id    INTEGER NOT NULL REFERENCES federation_servers(id),
+			endpoint     TEXT NOT NULL,
+			body         TEXT NOT NULL,
+			headers      TEXT DEFAULT '',
+			priority     INTEGER DEFAULT 0,
+			attempts     INTEGER DEFAULT 0,
+			max_attempts INTEGER DEFAULT 3,
+			last_error   TEXT DEFAULT '',
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_cache_entries (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			server_id   INTEGER NOT NULL REFERENCES federation_servers(id),
+			cache_key   TEXT NOT NULL,
+			data_type   TEXT NOT NULL,
+			size_bytes  INTEGER NOT NULL,
+			accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(server_id, cache_key)
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_network (
+			server_id          INTEGER PRIMARY KEY,
+			name               TEXT NOT NULL,
+			base_url           TEXT NOT NULL,
+			known_by_server_id INTEGER NOT NULL,
+			first_seen         DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_invites (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_by   INTEGER NOT NULL REFERENCES users(id),
+			token        TEXT UNIQUE NOT NULL,
+			max_uses     INTEGER DEFAULT 1,
+			use_count    INTEGER DEFAULT 0,
+			expires_at   DATETIME,
+			created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, q := range queries {
@@ -318,6 +376,19 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_iv'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
+	}
+
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('friends') WHERE name='server_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE friends ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='server_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='server_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE posts ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
 
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
