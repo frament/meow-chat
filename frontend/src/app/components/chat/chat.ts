@@ -18,7 +18,9 @@ import { CryptoService } from '../../services/crypto.service';
         <div class="flex items-center justify-between" style="margin-bottom:8px;">
           <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
            <button (click)="showCreateGroup = true"
-            style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
+            style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
         @for (group of groupChats; track group.id) {
           <div (click)="selectGroup(group)"
@@ -220,7 +222,9 @@ import { CryptoService } from '../../services/crypto.service';
           <div class="flex items-center justify-between" style="margin-bottom:8px;">
             <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
             <button (click)="showCreateGroup = true"
-              style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
+              style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
           </div>
           @for (group of groupChats; track group.id) {
             <div (click)="selectGroup(group)"
