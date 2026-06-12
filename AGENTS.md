@@ -330,3 +330,8 @@ cd frontend && npm run build   # production build with service-worker
 - `dismissInstall()` persists flag via `localStorage.setItem('installDismissed', 'true')` — `app.ts`
 - `appinstalled` and `installApp`.accepted both clear the flag — `app.ts`
 - Banner no longer reappears after user dismisses it until app is installed
+
+## Session (2026-06-12) — Avatar upload progress bar
+- Added `HttpEventType.UploadProgress` handling to `uploadAvatar()` — `api.service.ts`
+- Added `uploadProgress` field + progress bar UI (percentage + gradient bar) in settings — `settings.ts`
+- ng build passes

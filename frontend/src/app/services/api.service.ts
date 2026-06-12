@@ -376,7 +376,8 @@ export class ApiService {
     formData.append('avatar', file);
     return this.http.post<{ avatar_url: string }>(
       `${this.baseUrl}/upload-avatar`,
-      formData
+      formData,
+      { reportProgress: true, observe: 'events' }
     );
   }
 

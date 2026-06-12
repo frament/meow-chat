@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpEventType } from '@angular/common/http';
 import { SwUpdate } from '@angular/service-worker';
 import { ApiService, InviteToken, User } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
@@ -38,7 +39,12 @@ import * as QRCode from 'qrcode';
             </label>
           </div>
           @if (uploading) {
-            <p class="text-sm mt-2" style="color:var(--accent);">Загрузка...</p>
+            <div class="w-full mt-2">
+              <div class="h-1.5 rounded-full" style="background:var(--border-light);">
+                <div class="h-full rounded-full transition-all duration-200" [style.width.%]="uploadProgress" style="background:var(--accent-gradient);"></div>
+              </div>
+              <p class="text-xs mt-1 text-center" style="color:var(--text-muted);">{{ uploadProgress }}%</p>
+            </div>
           }
           @if (avatarSuccess) {
             <p class="text-sm mt-2" style="color:#27ae60;">Аватар обновлён</p>
@@ -291,6 +297,7 @@ export class SettingsComponent implements OnInit {
   selectedFile: File | null = null;
   previewUrl: string | null = null;
   uploading = false;
+  uploadProgress = 0;
   avatarSuccess = false;
   selectedTheme: ThemeMode = 'light';
   updateChecking = false;
@@ -398,18 +405,23 @@ export class SettingsComponent implements OnInit {
   uploadAvatar() {
     if (!this.selectedFile) return;
     this.uploading = true;
+    this.uploadProgress = 0;
     this.avatarSuccess = false;
     this.api.uploadAvatar(this.selectedFile).subscribe({
-      next: (res) => {
-        this.uploading = false;
-        this.avatarSuccess = true;
-        const user = this.api.currentUser();
-        if (user) {
-          const updated = { ...user, avatar_url: res.avatar_url };
-          this.api.currentUser.set(updated);
-          localStorage.setItem('currentUser', JSON.stringify(updated));
+      next: (event) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          this.uploadProgress = event.total ? Math.round(event.loaded / event.total * 100) : 0;
+        } else if (event.type === HttpEventType.Response) {
+          this.uploading = false;
+          this.avatarSuccess = true;
+          const user = this.api.currentUser();
+          if (user && event.body) {
+            const updated = { ...user, avatar_url: event.body.avatar_url };
+            this.api.currentUser.set(updated);
+            localStorage.setItem('currentUser', JSON.stringify(updated));
+          }
+          setTimeout(() => (this.avatarSuccess = false), 3000);
         }
-        setTimeout(() => (this.avatarSuccess = false), 3000);
       },
       error: () => {
         this.uploading = false;
