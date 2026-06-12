@@ -68,7 +68,7 @@ import { CryptoService } from '../../services/crypto.service';
           <div class="divider" style="margin:8px 0;"></div>
         }
 
-        <h3 class="section-label" style="margin-bottom:12px;">Все пользователи</h3>
+        <h3 class="section-label" style="margin-bottom:12px;">Друзья</h3>
         @for (user of getUnpinnedUsers(); track user.id) {
           <div (click)="openChat(user)"
             class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
@@ -267,7 +267,7 @@ import { CryptoService } from '../../services/crypto.service';
             }
           }
 
-          <h3 class="section-label" style="margin-bottom:12px;">Все пользователи</h3>
+          <h3 class="section-label" style="margin-bottom:12px;">Друзья</h3>
           @for (user of getUnpinnedUsers(); track user.id) {
             <div (click)="openChat(user)"
               class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
