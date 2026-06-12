@@ -72,6 +72,17 @@ func main() {
 	fedQueue := federation.NewQueue(fedTransport)
 	fedHealth := federation.NewHealthChecker(fedTransport, fedQueue)
 	fedHandler := federation.NewFederationHandler(fedTransport, fedQueue, fedHealth)
+	fedHandler.OnIncomingMessage = func(fromUserID, toUserID int64, content, msgType string, createdAt string, images []string) {
+		h.SendToUser(toUserID, fiber.Map{
+			"type":       "message",
+			"from":       fromUserID,
+			"to":         toUserID,
+			"content":    content,
+			"msg_type":   msgType,
+			"images":     images,
+			"created_at": createdAt,
+		})
+	}
 	handlers.InitFederationGlobals(fedTransport, fedQueue, fedHealth)
 	cache.EnsureCacheDir()
 	fedQueue.Start()

@@ -14,6 +14,7 @@ import (
 
 	"my-chat-backend/auth"
 	"my-chat-backend/database"
+	"my-chat-backend/federation"
 	"my-chat-backend/models"
 
 	"github.com/gofiber/contrib/websocket"
@@ -525,6 +526,34 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create post"})
 	}
 
+	// Forward public posts to all federated servers
+	if isPublic && fedTransport != nil {
+		rows, err := database.DB.Query("SELECT id FROM federation_servers WHERE status = 'active'")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var serverID int64
+				rows.Scan(&serverID)
+				fwdImages := make([]string, len(savedImages))
+				for i, img := range savedImages {
+					fwdImages[i] = c.BaseURL() + img
+				}
+				fedTransport.Send(federation.FederationRequest{
+					ServerID: serverID,
+					Endpoint: "/api/federation/v1/forward-post",
+					Method:   "POST",
+					Body: map[string]interface{}{
+						"user_id":    userID,
+						"content":    content,
+						"is_public":  true,
+						"images":     fwdImages,
+						"created_at": time.Now().Format(time.RFC3339),
+					},
+				})
+			}
+		}
+	}
+
 	return c.Status(201).JSON(fiber.Map{"id": postID, "message": "Post created"})
 }
 
@@ -588,13 +617,14 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 		UNION ALL
 		SELECT p.id, p.user_id, p.content, p.created_at, fu.username, fu.avatar_url, fu.is_admin, p.is_public
 		FROM posts p
-		JOIN federation_users fu ON p.user_id = fu.remote_id
+		JOIN federation_users fu ON p.user_id = fu.remote_id AND p.server_id = fu.server_id
 		WHERE p.server_id IS NOT NULL
-		  AND p.user_id IN (
+		  AND (p.is_public = 1
+		   OR p.user_id IN (
 			SELECT friend_id FROM friends WHERE user_id = ? AND server_id IS NOT NULL
 			UNION
 			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
-		)
+		))
 		ORDER BY 4 DESC
 		LIMIT 50
 	`, userID, userID, userID, userID, userID)
@@ -666,9 +696,12 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, '')
+		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
+			COALESCE(u.username, fu.username) as from_username,
+			COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id
 		FROM messages m
-		JOIN users u ON m.from_user_id = u.id
+		LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
+		LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
 		WHERE (m.from_user_id = ? AND m.to_user_id = ?)
 		   OR (m.from_user_id = ? AND m.to_user_id = ?)
 		ORDER BY m.created_at ASC
@@ -682,7 +715,8 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV); err != nil {
+		var serverID *int64
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -825,6 +859,34 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		encryptedContent: encryptedContent,
 		encryptedIV:      encryptedIV,
 		pushPreview:      pushPreview,
+	}
+
+	// Forward to federated server if recipient is a remote user
+	if fedTransport != nil {
+		var serverID int64
+		err := database.DB.QueryRow(
+			"SELECT server_id FROM federation_users WHERE remote_id = ?",
+			toUserID,
+		).Scan(&serverID)
+		if err == nil {
+			fwdImages := make([]string, len(images))
+			for i, img := range images {
+				fwdImages[i] = c.BaseURL() + img
+			}
+			fedTransport.Send(federation.FederationRequest{
+				ServerID: serverID,
+				Endpoint: "/api/federation/v1/send-message",
+				Method:   "POST",
+				Body: map[string]interface{}{
+					"from_user_id": fromUserID,
+					"to_user_id":   toUserID,
+					"content":      content,
+					"msg_type":     msgType,
+					"images":       fwdImages,
+					"created_at":   time.Now().Format(time.RFC3339),
+				},
+			})
+		}
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})

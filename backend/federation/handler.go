@@ -3,6 +3,7 @@ package federation
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -18,9 +19,10 @@ import (
 )
 
 type FederationHandler struct {
-	transport *Transport
-	queue     *Queue
-	health    *HealthChecker
+	transport       *Transport
+	queue           *Queue
+	health          *HealthChecker
+	OnIncomingMessage func(fromUserID, toUserID int64, content, msgType string, createdAt string, images []string)
 }
 
 func NewFederationHandler(transport *Transport, queue *Queue, health *HealthChecker) *FederationHandler {
@@ -102,6 +104,34 @@ func (fh *FederationHandler) HandleJoinInvite(c *fiber.Ctx) error {
 		localName = "MeowChat Server"
 	}
 
+	// Fetch users from the new server and import them
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		shareResp, shareErr := fh.transport.SendDirect(req.BaseURL+"/api/federation/v1/share-users", "POST", newToken, nil, nil)
+		if shareErr == nil && shareResp.StatusCode == 200 {
+			var remoteUsers []struct {
+				RemoteID  int64  `json:"remote_id"`
+				Username  string `json:"username"`
+				AvatarURL string `json:"avatar_url"`
+				Email     string `json:"email"`
+				IsAdmin   bool   `json:"is_admin"`
+			}
+			if err := json.Unmarshal(shareResp.Body, &remoteUsers); err == nil {
+				for _, u := range remoteUsers {
+					isAdminInt := 0
+					if u.IsAdmin {
+						isAdminInt = 1
+					}
+					database.DB.Exec(
+						`INSERT OR IGNORE INTO federation_users (server_id, remote_id, username, avatar_url, email, is_admin) VALUES (?, ?, ?, ?, ?, ?)`,
+						serverID, u.RemoteID, u.Username, u.AvatarURL, u.Email, isAdminInt,
+					)
+				}
+				log.Printf("Federation: imported %d users from new peer", len(remoteUsers))
+			}
+		}
+	}()
+
 	return c.Status(201).JSON(models.FederationJoinResponse{
 		ServerID:    serverID,
 		Name:        localName,
@@ -144,6 +174,10 @@ func (fh *FederationHandler) HandleSendMessage(c *fiber.Ctx) error {
 			"INSERT INTO message_images (message_id, image_url) VALUES (?, ?)",
 			messageID, imgURL,
 		)
+	}
+
+	if fh.OnIncomingMessage != nil {
+		fh.OnIncomingMessage(req.FromUserID, req.ToUserID, req.Content, req.MsgType, req.CreatedAt, req.Images)
 	}
 
 	return c.Status(201).JSON(fiber.Map{"id": messageID})

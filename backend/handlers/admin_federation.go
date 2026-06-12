@@ -180,6 +180,40 @@ func (h *Handler) AdminConnectFederation(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save server"})
 	}
 
+	var newServerID int64
+	database.DB.QueryRow("SELECT id FROM federation_servers WHERE base_url = ?", joinResp.BaseURL).Scan(&newServerID)
+
+	// Share users with the remote server
+	if newServerID > 0 {
+		shareResp, shareErr := fedTransport.Send(federation.FederationRequest{
+			ServerID: newServerID,
+			Endpoint: "/api/federation/v1/share-users",
+			Method:   "POST",
+		})
+		if shareErr == nil && shareResp.StatusCode == 200 {
+			var remoteUsers []struct {
+				RemoteID  int64  `json:"remote_id"`
+				Username  string `json:"username"`
+				AvatarURL string `json:"avatar_url"`
+				Email     string `json:"email"`
+				IsAdmin   bool   `json:"is_admin"`
+			}
+			if err := json.Unmarshal(shareResp.Body, &remoteUsers); err == nil {
+				for _, u := range remoteUsers {
+					isAdminInt := 0
+					if u.IsAdmin {
+						isAdminInt = 1
+					}
+					database.DB.Exec(
+						`INSERT OR IGNORE INTO federation_users (server_id, remote_id, username, avatar_url, email, is_admin) VALUES (?, ?, ?, ?, ?, ?)`,
+						newServerID, u.RemoteID, u.Username, u.AvatarURL, u.Email, isAdminInt,
+					)
+				}
+				log.Printf("Federation: imported %d users from new peer", len(remoteUsers))
+			}
+		}
+	}
+
 	return c.JSON(fiber.Map{"message": "Connected to " + joinResp.Name})
 }
 
