@@ -9,15 +9,20 @@
 ```
 backend/       # Go module: my-chat-backend
   main.go      # entrypoint, route registration
-  database/    # SQLite init + auto-migration (4 tables: users, messages, posts, post_images)
+  database/    # SQLite init + auto-migration (federation tables included)
   handlers/    # REST handlers + WebSocket hub (in-memory per-process)
     groups.go  # group chat CRUD + invites + messages (2026-06-07)
+    admin_federation.go  # admin federation API endpoints (2026-06-12)
+    federation_globals.go  # federation package globals bridge (2026-06-12)
+  federation/  # Federation/hive package (transport, queue, health, handlers, route, mediator)
+  cache/       # LRU disk cache for federation
   models/      # request/response structs
 uploads/avatars/ # avatar images (auto-created on server start)
 uploads/posts/   # post images (auto-created on server start)
+uploads/federation_cache/ # cached files from federated peers (created on server start)
 frontend/
   src/app/
-     components/{login,register,feed,chat,layout,admin,join-group}/  # standalone components
+     components/{login,register,feed,chat,layout,admin,join-group,admin-federation}/  # standalone components
     services/api.service.ts                        # all API calls + WebSocket connect
   proxy.conf.js   # dev API proxy → localhost:8080, with WS support
   nginx.conf      # prod: /api → backend:8080, SPA fallback
@@ -201,6 +206,8 @@ cd frontend && npm run build   # production build with service-worker
 
 - **Multi-device encryption**: Currently E2EE keys are stored in IndexedDB per-device. No key sync between devices. Solution: export/import key via QR code or password-encrypted backup, or use WebAuthn credential ID as a key wrapping mechanism.
 - **Multi-server collaboration**: The WebSocket hub is in-memory per-process. Horizontal scaling requires a pub/sub layer (Redis/NATS) for WebSocket events, push state, and online status across instances.
+- **Federation `AdminConnectFederation`**: Handler currently returns stub — needs full invite token validation + server-to-server handshake.
+- **Federation `HandleForwardPostImages`**: Not yet implemented — needed for image proxying to federated peers.
 - **UI fixes**: Various UI polish items — PWA install prompt, chat list virtualization for large groups, optimistic message sending with proper rollback, image upload progress indicators.
 
 ## Session (2026-06-07) — Group deletion + admin chat management
@@ -222,3 +229,25 @@ cd frontend && npm run build   # production build with service-worker
 - **Register page**: Reads `?invite=TOKEN` from URL or shows manual input — `register.ts`
 - **Settings — Invites**: Section to create, copy link, fullscreen QR overlay, revoke invites — `settings.ts`
 - **QR code**: `qrcode` npm package, fullscreen overlay with copy button — `settings.ts`, `package.json`
+
+## Session (2026-06-12) — Federation/Hive mesh network
+- **Spec & plan**: Written to `docs/superpowers/specs/2026-06-12-federation-hive-design.md` and `docs/superpowers/plans/2026-06-12-federation-hive-plan.md`
+- **DB migrations**: 6 federation tables (federation_servers, federation_users, federation_queue, federation_cache_entries, federation_network, federation_invites) + server_id on friends/messages/posts — `database/database.go`
+- **Federation models**: All request/response structs (ServerInfo, FederationEvent, PeerInfo, etc.) — `backend/models/federation.go`
+- **Transport**: HTTP client with retry (1s→5s→15s), auth via X-Federation-Token, SendDirect for raw recovery calls — `backend/federation/transport.go`
+- **Queue**: Background worker with 30s retry interval, drainFailedOnRecovery — `backend/federation/queue.go`
+- **Health**: Ping ticker (60min), manual ping endpoint, auto-drain on server recovery (draining→active) — `backend/federation/health.go`
+- **Incoming handlers**: 12 endpoints (send-message, forward-post, forward-key, bulk/users/messages/posts/bulk-done, gossip, recover-server, ping, cache-stats) — `backend/federation/handler.go`
+- **BFS routing**: Shortest-path search across federation_network table, GetRoute(src, dst) — `backend/federation/route.go`
+- **Mediator**: IsRemoteUser, ResolveUserID helpers — `backend/federation/mediator.go`
+- **LRU disk cache**: Per-server limit enforcement, accessed_at-based eviction, UpdateCacheStats goroutine — `backend/cache/lru_cache.go`
+- **Admin federation API**: CRUD servers (AddServer, RemoveServer, UpdateServer), CreateInvite, PingServer, BlockServer, UnblockServer, ClearServerCache, RestoreServer (one-click recovery with bulk-sync) — `backend/handlers/admin_federation.go`
+- **Federation globals**: Package-level federation references for handlers bridge — `backend/handlers/federation_globals.go`
+- **E2EE forwarding**: PutKey forwards public key to all active federated peers — `backend/handlers/e2ee.go`
+- **Extended handlers**: GetUsers UNION ALL federation_users, GetFeed UNION ALL federation_posts — `backend/handlers/handlers.go`
+- **Route registration**: Federation routes registered BEFORE AuthRequired, uses X-Federation-Token header auth — `main.go`
+- **CLI commands**: `go run . admin federation list` + `go run . admin federation invite [n]` — `main.go`
+- **Frontend**: AdminFederationComponent standalone component, 11 API methods, /admin/federation route, "Федерация" nav link — `admin-federation.ts`, `api.service.ts`, `app.routes.ts`, `admin.ts`
+- **Hybrid model**: REST + offline queue + gossip for unreliable connections. Compositional (server_id, user_id) IDs. Data duplicated on both servers. Gossip TTL=5 hops.
+- **Makefile**: Already had targets for admin CLI via docker compose exec
+- **Known quirks**: `syscall.Statfs_t` / `syscall.Statfs` undefined on Windows (handlers.go ~1299) — pre-existing, unrelated
