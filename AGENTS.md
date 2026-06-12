@@ -245,7 +245,8 @@ cd frontend && npm run build   # production build with service-worker
 
 ### UI fixes
 - **Admin federation tab**: Changed from separate route (`routerLink`) to in-page tab within `AdminComponent`. Added `'federation'` to `activeTab`, imported `AdminFederationComponent`, changed `<a>` to `<button>` — `admin.ts`
-- **Chat `+` button alignment**: Added `line-height:1; padding:0` to create-group buttons (desktop + mobile) so `+` sign centers vertically — `chat.ts`
+- **Chat `+` button alignment**: Replaced text `+` with SVG icon for reliable centering regardless of font metrics — `chat.ts`
+- **Chat label**: Renamed "Все пользователи" to "Друзья" — `chat.ts`
 
 ## Session (2026-06-06) — Invite-only registration + notification fixes
 - **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`
