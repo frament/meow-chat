@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"my-chat-backend/database"
+	"my-chat-backend/federation"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,6 +27,27 @@ func (h *Handler) PutKey(c *fiber.Ctx) error {
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save key"})
+	}
+
+	// Forward key to all federated servers
+	if fedTransport != nil {
+		rows, err := database.DB.Query("SELECT id FROM federation_servers WHERE status = 'active'")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var serverID int64
+				rows.Scan(&serverID)
+				fedTransport.Send(federation.FederationRequest{
+					ServerID: serverID,
+					Endpoint: "/api/federation/v1/forward-key",
+					Method:   "POST",
+					Body: map[string]interface{}{
+						"user_id":    userID,
+						"public_key": body.PublicKey,
+					},
+				})
+			}
+		}
 	}
 
 	return c.JSON(fiber.Map{"message": "Key saved"})
