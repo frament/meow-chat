@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -201,6 +203,8 @@ func runAdminCLI() {
 		fmt.Println("  go run . admin remove <username>        — Remove admin role")
 		fmt.Println("  go run . admin list                     — List all admins")
 		fmt.Println("  go run . admin reset-password <username> <password> — Reset user password")
+		fmt.Println("  go run . admin federation list          — List federation servers")
+		fmt.Println("  go run . admin federation invite [n]    — Create federation invite")
 		return
 	}
 
@@ -285,8 +289,54 @@ func runAdminCLI() {
 		}
 		fmt.Printf("Password for '%s' has been reset\n", username)
 
+	case "federation":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage:")
+			fmt.Println("  go run . admin federation list")
+			fmt.Println("  go run . admin federation invite [max_uses]")
+			return
+		}
+		fedAction := os.Args[3]
+		switch fedAction {
+		case "list":
+			rows, err := database.DB.Query("SELECT id, name, base_url, status, disk_cache_limit FROM federation_servers ORDER BY name")
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			defer rows.Close()
+			fmt.Println("Federation servers:")
+			for rows.Next() {
+				var id, limit int64
+				var name, baseURL, status string
+				if err := rows.Scan(&id, &name, &baseURL, &status, &limit); err != nil {
+					continue
+				}
+				fmt.Printf("  #%d  %s  %s  [%s]  cache: %dMB\n", id, name, baseURL, status, limit)
+			}
+		case "invite":
+			maxUses := 1
+			if len(os.Args) >= 5 {
+				maxUses, _ = strconv.Atoi(os.Args[4])
+			}
+			b := make([]byte, 32)
+			rand.Read(b)
+			token := hex.EncodeToString(b)
+			_, err := database.DB.Exec(
+				"INSERT INTO federation_invites (created_by, token, max_uses) VALUES (?, ?, ?)",
+				1, token, maxUses,
+			)
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			fmt.Printf("Invite token: %s\n", token)
+		default:
+			fmt.Printf("Unknown federation action: %s\n", fedAction)
+		}
+
 	default:
 		fmt.Printf("Unknown action: %s\n", action)
-		fmt.Println("Use: add <username>, remove <username>, list, or reset-password <username> <password>")
+		fmt.Println("Use: add <username>, remove <username>, list, reset-password <username> <password>, or federation <list|invite>")
 	}
 }
