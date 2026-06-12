@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"my-chat-backend/auth"
@@ -1285,34 +1284,7 @@ func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 		}
 	}
 
-	type DiskInfo struct {
-		Total    int64   `json:"total"`
-		Used     int64   `json:"used"`
-		Free     int64   `json:"free"`
-		TotalGB  float64 `json:"total_gb"`
-		UsedGB   float64 `json:"used_gb"`
-		FreeGB   float64 `json:"free_gb"`
-		UsedPct  float64 `json:"used_pct"`
-	}
-
-	disk := DiskInfo{}
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs("./uploads", &stat); err == nil {
-		total := int64(stat.Bsize) * int64(stat.Blocks)
-		free := int64(stat.Bsize) * int64(stat.Bavail)
-		used := total - free
-		disk = DiskInfo{
-			Total:   total,
-			Used:    used,
-			Free:    free,
-			TotalGB: float64(total) / (1 << 30),
-			UsedGB:  float64(used) / (1 << 30),
-			FreeGB:  float64(free) / (1 << 30),
-		}
-		if total > 0 {
-			disk.UsedPct = float64(used) / float64(total) * 100
-		}
-	}
+	disk := getDiskUsage("./uploads")
 
 	return c.JSON(fiber.Map{
 		"files": result,

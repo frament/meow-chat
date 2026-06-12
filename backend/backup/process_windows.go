@@ -47,3 +47,15 @@ func WritePIDFile(dbPath string) error {
 	path := PIDFilePath(dbPath)
 	return os.WriteFile(path, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 }
+
+func ShutdownContainer() {
+	// Docker doesn't run natively on Windows — no-op
+}
+
+func SendRestartSignal(pid int) error {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return proc.Kill()
+}

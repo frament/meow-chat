@@ -53,3 +53,11 @@ func WritePIDFile(dbPath string) error {
 	path := PIDFilePath(dbPath)
 	return os.WriteFile(path, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 }
+
+func ShutdownContainer() {
+	syscall.Kill(1, syscall.SIGTERM)
+}
+
+func SendRestartSignal(pid int) error {
+	return syscall.Kill(pid, syscall.SIGTERM)
+}

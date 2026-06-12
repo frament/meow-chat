@@ -7,9 +7,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
+		"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 
 	"my-chat-backend/auth"
@@ -428,7 +427,7 @@ func runAdminCLI() {
 
 		if backup.IsDocker() {
 			fmt.Println("Restore complete. Restarting container...")
-			syscall.Kill(1, syscall.SIGTERM)
+			backup.ShutdownContainer()
 		} else {
 			fmt.Println("Restore complete. Starting server...")
 			cmd := exec.Command(os.Args[0])

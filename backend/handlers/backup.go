@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -284,10 +283,7 @@ func (h *Handler) AdminRestoreBackup(c *fiber.Ctx) error {
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		p, _ := os.FindProcess(1)
-		if p != nil {
-			p.Signal(syscall.SIGTERM)
-		}
+		backup.SendRestartSignal(1)
 	}()
 
 	return c.JSON(fiber.Map{"message": "Restore in progress — restarting server"})
