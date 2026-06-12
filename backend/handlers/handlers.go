@@ -557,6 +557,7 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 		LIMIT 50
 	`, userID, userID, userID, userID, userID)
 	if err != nil {
+		log.Printf("GetFeed query error: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch feed"})
 	}
 	defer rows.Close()
