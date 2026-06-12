@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ApiService, User } from '../../services/api.service';
 
 interface FileEntry {
@@ -22,7 +23,7 @@ interface AdminGroupChat {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink],
   template: `
     <div class="max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
       <div class="card" style="padding:24px;">
@@ -44,6 +45,10 @@ interface AdminGroupChat {
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Чаты
           </button>
+          <a routerLink="/admin/federation"
+            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;transition:all 0.2s;">
+            Федерация
+          </a>
         </div>
 
         @if (activeTab === 'users') {

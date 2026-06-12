@@ -6,6 +6,7 @@ import { FeedComponent } from './components/feed/feed';
 import { ChatComponent } from './components/chat/chat';
 import { SettingsComponent } from './components/settings/settings';
 import { AdminComponent } from './components/admin/admin';
+import { AdminFederationComponent } from './components/admin-federation/admin-federation';
 import { AddFriendComponent } from './components/add-friend/add-friend';
 import { JoinGroupComponent } from './components/join-group/join-group';
 import { LayoutComponent } from './components/layout/layout';
@@ -36,6 +37,7 @@ export const routes: Routes = [
       { path: 'chat/group/:groupId', component: ChatComponent },
       { path: 'settings', component: SettingsComponent },
       { path: 'admin', component: AdminComponent },
+      { path: 'admin/federation', component: AdminFederationComponent },
     ],
   },
 ];

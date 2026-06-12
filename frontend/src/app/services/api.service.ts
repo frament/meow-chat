@@ -615,6 +615,69 @@ export class ApiService {
     );
   }
 
+  // Federation admin
+  getFederationServers() {
+    return this.http.get<any[]>(`${this.baseUrl}/admin/federation/servers`);
+  }
+
+  getFederationServer(id: number) {
+    return this.http.get<any>(`${this.baseUrl}/admin/federation/servers/${id}`);
+  }
+
+  createFederationInvite(maxUses = 1) {
+    return this.http.post<{ token: string; invite_url: string }>(
+      `${this.baseUrl}/admin/federation/invites`, { max_uses: maxUses }
+    );
+  }
+
+  connectFederation(inviteUrl: string) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/admin/federation/connect`, { invite_url: inviteUrl }
+    );
+  }
+
+  updateFederationServer(id: number, data: { name?: string; disk_cache_limit?: number }) {
+    return this.http.put<{ message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${id}`, data
+    );
+  }
+
+  pingFederationServer(id: number) {
+    return this.http.post<{ status: string; message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${id}/ping`, {}
+    );
+  }
+
+  blockFederationServer(id: number) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${id}/block`, {}
+    );
+  }
+
+  unblockFederationServer(id: number) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${id}/unblock`, {}
+    );
+  }
+
+  deleteFederationServer(id: number) {
+    return this.http.delete<{ message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${id}`
+    );
+  }
+
+  clearFederationCache(serverId: number) {
+    return this.http.delete<{ message: string }>(
+      `${this.baseUrl}/admin/federation/cache/${serverId}`
+    );
+  }
+
+  restoreFederation(peerUrl: string) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/admin/federation/restore`, { peer_url: peerUrl }
+    );
+  }
+
   disconnectWebSocket(): void {
     if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
     this.wsRetryTimer = null;
