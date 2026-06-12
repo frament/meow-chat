@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"my-chat-backend/auth"
+	"my-chat-backend/cache"
 	"my-chat-backend/database"
+	"my-chat-backend/federation"
 	"my-chat-backend/handlers"
 
 	"github.com/gofiber/contrib/websocket"
@@ -42,6 +45,15 @@ func main() {
 	if err := h.LoadVAPIDKeys(); err != nil {
 		log.Fatal("Failed to init VAPID keys:", err)
 	}
+
+	fedTransport := federation.NewTransport()
+	fedQueue := federation.NewQueue(fedTransport)
+	fedHealth := federation.NewHealthChecker(fedTransport, fedQueue)
+	fedHandler := federation.NewFederationHandler(fedTransport, fedQueue, fedHealth)
+	handlers.InitFederationGlobals(fedTransport, fedQueue, fedHealth)
+	cache.EnsureCacheDir()
+	fedQueue.Start()
+	fedHealth.Start()
 
 	app := fiber.New(fiber.Config{
 		AppName: "MyChat",
@@ -84,6 +96,23 @@ func main() {
 	}))
 
 	api.Get("/keys/:userId", h.GetKey)
+
+	fed := api.Group("/federation/v1")
+	fed.Use(fedHandler.AuthMiddleware)
+	fed.Head("/ping", fedHandler.HandlePing)
+	fed.Post("/ping", fedHandler.HandlePing)
+	fed.Post("/send-message", fedHandler.HandleSendMessage)
+	fed.Post("/forward-post", fedHandler.HandleForwardPost)
+	fed.Post("/forward-key", fedHandler.HandleForwardKey)
+	fed.Get("/get-key/:remoteId", fedHandler.HandleGetKey)
+	fed.Get("/get-user/:remoteId", fedHandler.HandleGetUser)
+	fed.Post("/share-users", fedHandler.HandleShareUsers)
+	fed.Get("/bulk/users", fedHandler.HandleBulkUsers)
+	fed.Get("/bulk/messages", fedHandler.HandleBulkMessages)
+	fed.Get("/bulk/posts", fedHandler.HandleBulkPosts)
+	fed.Post("/introduce", fedHandler.HandleIntroduce)
+	fed.Post("/gossip/new-peer", fedHandler.HandleGossipNewPeer)
+	fed.Post("/recover-server", fedHandler.HandleRecoverServer)
 
 	api.Use(handlers.AuthRequired)
 
