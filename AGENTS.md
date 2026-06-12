@@ -31,6 +31,7 @@ frontend/
 
 ## Preferences
 - **Execution style**: Inline (execute tasks in current session, not subagent-driven)
+- **TODO**: See `TODO.md` in repo root for remaining tasks
 
 ## Commands
 ```sh
