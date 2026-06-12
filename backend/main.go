@@ -120,6 +120,7 @@ func main() {
 	api.Get("/keys/:userId", h.GetKey)
 
 	fed := api.Group("/federation/v1")
+	fed.Post("/join", fedHandler.HandleJoinInvite)
 	fed.Use(fedHandler.AuthMiddleware)
 	fed.Head("/ping", fedHandler.HandlePing)
 	fed.Post("/ping", fedHandler.HandlePing)

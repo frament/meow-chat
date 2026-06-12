@@ -56,6 +56,19 @@ type FederationRecoverResponse struct {
 	KnownPeers []FederationServer `json:"known_peers"`
 }
 
+type FederationJoinRequest struct {
+	Token   string `json:"token"`
+	Name    string `json:"name"`
+	BaseURL string `json:"base_url"`
+}
+
+type FederationJoinResponse struct {
+	ServerID    int64  `json:"server_id"`
+	Name        string `json:"name"`
+	BaseURL     string `json:"base_url"`
+	ServerToken string `json:"server_token"`
+}
+
 type FederationServerUpdate struct {
 	Name           *string `json:"name,omitempty"`
 	DiskCacheLimit *int    `json:"disk_cache_limit,omitempty"`

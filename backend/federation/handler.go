@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log"
+	"os"
 	"strconv"
+	"time"
 
 	"my-chat-backend/database"
 	"my-chat-backend/models"
@@ -43,6 +45,66 @@ func (fh *FederationHandler) AuthMiddleware(c *fiber.Ctx) error {
 
 	c.Locals("federationServerId", serverID)
 	return c.Next()
+}
+
+func (fh *FederationHandler) HandleJoinInvite(c *fiber.Ctx) error {
+	var req models.FederationJoinRequest
+	if err := c.BodyParser(&req); err != nil || req.Token == "" || req.Name == "" || req.BaseURL == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "token, name, base_url required"})
+	}
+
+	var inviteID int64
+	var maxUses, useCount int
+	var expiresAt *time.Time
+	err := database.DB.QueryRow(
+		"SELECT id, max_uses, use_count, expires_at FROM federation_invites WHERE token = ?",
+		req.Token,
+	).Scan(&inviteID, &maxUses, &useCount, &expiresAt)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Invalid invite token"})
+	}
+
+	if maxUses > 0 && useCount >= maxUses {
+		return c.Status(410).JSON(fiber.Map{"error": "Invite token exhausted"})
+	}
+	if expiresAt != nil && time.Now().After(*expiresAt) {
+		return c.Status(410).JSON(fiber.Map{"error": "Invite token expired"})
+	}
+
+	database.DB.Exec("UPDATE federation_invites SET use_count = use_count + 1 WHERE id = ?", inviteID)
+
+	var existingID int64
+	err = database.DB.QueryRow(
+		"SELECT id FROM federation_servers WHERE base_url = ?", req.BaseURL,
+	).Scan(&existingID)
+	if err == nil {
+		return c.Status(409).JSON(fiber.Map{"error": "Server already connected"})
+	}
+
+	newToken := generateToken()
+	result, err := database.DB.Exec(
+		"INSERT INTO federation_servers (name, base_url, server_token, status) VALUES (?, ?, ?, 'active')",
+		req.Name, req.BaseURL, newToken,
+	)
+	if err != nil {
+		log.Println("Federation HandleJoinInvite insert error:", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to register server"})
+	}
+
+	serverID, _ := result.LastInsertId()
+
+	hostname, _ := os.Hostname()
+	localName := hostname
+	if localName == "" {
+		localName = "MeowChat Server"
+	}
+
+	return c.Status(201).JSON(models.FederationJoinResponse{
+		ServerID:    serverID,
+		Name:        localName,
+		BaseURL:     c.BaseURL(),
+		ServerToken: newToken,
+	})
 }
 
 func (fh *FederationHandler) HandlePing(c *fiber.Ctx) error {

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -125,7 +127,60 @@ func (h *Handler) AdminConnectFederation(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invite_url required"})
 	}
 
-	return c.JSON(fiber.Map{"message": "Connected"})
+	parsed, err := url.Parse(req.InviteURL)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid invite URL"})
+	}
+
+	token := parsed.Query().Get("token")
+	if token == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "No token in invite URL"})
+	}
+
+	remoteBaseURL := parsed.Scheme + "://" + parsed.Host
+	joinURL := remoteBaseURL + "/api/federation/v1/join"
+
+	hostname, _ := os.Hostname()
+	localName := hostname
+	if localName == "" {
+		localName = "MeowChat Server"
+	}
+	localBaseURL := c.BaseURL()
+
+	joinReq := models.FederationJoinRequest{
+		Token:   token,
+		Name:    localName,
+		BaseURL: localBaseURL,
+	}
+
+	resp, err := fedTransport.SendDirect(joinURL, "POST", "", joinReq, nil)
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": "Failed to contact server: " + err.Error()})
+	}
+	if resp.StatusCode == 404 || resp.StatusCode == 410 {
+		return c.Status(400).JSON(fiber.Map{"error": "Invite token invalid or expired"})
+	}
+	if resp.StatusCode == 409 {
+		return c.Status(409).JSON(fiber.Map{"error": "Server already connected"})
+	}
+	if resp.StatusCode != 201 {
+		return c.Status(502).JSON(fiber.Map{"error": "Server rejected connection: " + string(resp.Body)})
+	}
+
+	var joinResp models.FederationJoinResponse
+	if err := json.Unmarshal(resp.Body, &joinResp); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Invalid server response"})
+	}
+
+	_, err = database.DB.Exec(
+		"INSERT INTO federation_servers (name, base_url, server_token, status) VALUES (?, ?, ?, 'active')",
+		joinResp.Name, joinResp.BaseURL, joinResp.ServerToken,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save server"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Connected to " + joinResp.Name})
 }
 
 func (h *Handler) AdminUpdateFederationServer(c *fiber.Ctx) error {
