@@ -173,6 +173,17 @@ func main() {
 	admin.Get("/files", h.AdminListFiles)
 	admin.Get("/group-chats", h.AdminListGroupChats)
 	admin.Delete("/group-chats/:id", h.AdminDeleteGroupChat)
+	admin.Get("/federation/servers", h.AdminListFederationServers)
+	admin.Get("/federation/servers/:id", h.AdminGetFederationServer)
+	admin.Post("/federation/invites", h.AdminCreateFederationInvite)
+	admin.Post("/federation/connect", h.AdminConnectFederation)
+	admin.Put("/federation/servers/:id", h.AdminUpdateFederationServer)
+	admin.Post("/federation/servers/:id/ping", h.AdminPingFederationServer)
+	admin.Post("/federation/servers/:id/block", h.AdminBlockFederationServer)
+	admin.Post("/federation/servers/:id/unblock", h.AdminUnblockFederationServer)
+	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
+	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
+	admin.Post("/federation/restore", h.AdminRestoreFederation)
 
 	port := os.Getenv("PORT")
 	if port == "" {
