@@ -218,7 +218,7 @@ cd frontend && npm run build   # production build with service-worker
 - **Frontend**: `deleteGroupChat`, `getAdminGroupChats`, `adminDeleteGroupChat` API methods — `api.service.ts`
 - **AGENTS.md**: Added `TBD (Future work)` section
 
-## Session (2026-06-12) — Backup & Restore + Windows build fix + SQLite UNION ORDER BY fix
+## Session (2026-06-12) — Backup & Restore + Windows build fix + SQLite UNION ORDER BY fix + UI fixes
 
 ### Backup & Restore system
 - **Spec & plan**: Written to `docs/superpowers/specs/2026-06-12-backup-restore-design.md` and `docs/superpowers/plans/2026-06-12-backup-restore-plan.md`
@@ -242,6 +242,10 @@ cd frontend && npm run build   # production build with service-worker
 - **Windows `syscall.Kill` fix**: Moved `syscall.Kill(1, syscall.SIGTERM)` to `backup.SendRestartSignal()` / `backup.ShutdownContainer()` with platform build tags — `backend/backup/process.go`, `process_windows.go`
 - **SQLite UNION ORDER BY fix**: In compound SELECT (UNION/UNION ALL), SQLite requires ordinal positions not column names. Fixed `ORDER BY created_at DESC` → `ORDER BY 4 DESC` in `GetFeed`, `ORDER BY username` → `ORDER BY 2` in `GetUsers` — `handlers/handlers.go`
 - **Feed error logging**: Added `log.Printf` to `GetFeed` query error for debugging — `handlers/handlers.go`
+
+### UI fixes
+- **Admin federation tab**: Changed from separate route (`routerLink`) to in-page tab within `AdminComponent`. Added `'federation'` to `activeTab`, imported `AdminFederationComponent`, changed `<a>` to `<button>` — `admin.ts`
+- **Chat `+` button alignment**: Added `line-height:1; padding:0` to create-group buttons (desktop + mobile) so `+` sign centers vertically — `chat.ts`
 
 ## Session (2026-06-06) — Invite-only registration + notification fixes
 - **Push sound fix**: Reused Audio element, handled `play()` promise rejection, added `silent: true` to Notification to suppress system sound — `notification.service.ts`

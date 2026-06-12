@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { ApiService, User } from '../../services/api.service';
+import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
 interface FileEntry {
   name: string;
@@ -29,7 +29,7 @@ interface BackupEntry {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, AdminFederationComponent],
   template: `
     <div class="max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
       <div class="card" style="padding:24px;">
@@ -56,10 +56,11 @@ interface BackupEntry {
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Бэкапы
           </button>
-          <a routerLink="/admin/federation"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;transition:all 0.2s;">
+          <button (click)="activeTab = 'federation'; loadFederation()"
+            [style.background]="activeTab === 'federation' ? 'var(--accent-light)' : 'transparent'"
+            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Федерация
-          </a>
+          </button>
         </div>
 
         @if (activeTab === 'users') {
@@ -233,6 +234,10 @@ interface BackupEntry {
           }
         }
 
+        @if (activeTab === 'federation') {
+          <app-admin-federation />
+        }
+
         @if (activeTab === 'backups') {
           <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button (click)="createBackup()" [disabled]="backupLoading"
@@ -298,7 +303,7 @@ interface BackupEntry {
   `,
 })
 export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' | 'chats' | 'backups' = 'users';
+  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -322,6 +327,8 @@ export class AdminComponent implements OnInit {
   backupOk = false;
 
   constructor(public api: ApiService) {}
+
+  loadFederation() {}
 
   ngOnInit() {
     this.loadUsers();

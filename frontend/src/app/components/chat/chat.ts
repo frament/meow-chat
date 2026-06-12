@@ -17,8 +17,8 @@ import { CryptoService } from '../../services/crypto.service';
       <div class="w-72 card p-3 overflow-y-auto shrink-0">
         <div class="flex items-center justify-between" style="margin-bottom:8px;">
           <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
-          <button (click)="showCreateGroup = true"
-            style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
+           <button (click)="showCreateGroup = true"
+            style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
         </div>
         @for (group of groupChats; track group.id) {
           <div (click)="selectGroup(group)"
@@ -220,7 +220,7 @@ import { CryptoService } from '../../services/crypto.service';
           <div class="flex items-center justify-between" style="margin-bottom:8px;">
             <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
             <button (click)="showCreateGroup = true"
-              style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
+              style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;font-size:16px;cursor:pointer;">+</button>
           </div>
           @for (group of groupChats; track group.id) {
             <div (click)="selectGroup(group)"
