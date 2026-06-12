@@ -379,7 +379,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 			UNION
 			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
 		)
-		ORDER BY username
+		ORDER BY 2
 	`, userID, userID, userID, userID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
@@ -553,7 +553,7 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 			UNION
 			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
 		)
-		ORDER BY created_at DESC
+		ORDER BY 4 DESC
 		LIMIT 50
 	`, userID, userID, userID, userID, userID)
 	if err != nil {
