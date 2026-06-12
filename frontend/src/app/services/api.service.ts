@@ -371,6 +371,50 @@ export class ApiService {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/group-chats/${id}`);
   }
 
+  // ── Backup & Restore ──
+
+  checkHealth() {
+    return this.http.get<{ status: string }>(`${this.baseUrl}/health`);
+  }
+
+  getBackupSettings() {
+    return this.http.get<{ backup_dir: string }>(`${this.baseUrl}/admin/backup/settings`);
+  }
+
+  updateBackupSettings(backupDir: string) {
+    return this.http.put<{ message: string }>(`${this.baseUrl}/admin/backup/settings`, { backup_dir: backupDir });
+  }
+
+  getBackups() {
+    return this.http.get<{ filename: string; size_bytes: number; created_at: string }[]>(
+      `${this.baseUrl}/admin/backup/backups`
+    );
+  }
+
+  createBackup() {
+    return this.http.post<{ filename: string; size_bytes: number; created_at: string }>(
+      `${this.baseUrl}/admin/backup/backup`, {}
+    );
+  }
+
+  downloadBackupUrl(filename: string): string {
+    return `${this.baseUrl}/admin/backup/backups/${filename}`;
+  }
+
+  uploadBackup(file: File) {
+    const fd = new FormData();
+    fd.append('file', file);
+    return this.http.post<{ filename: string }>(`${this.baseUrl}/admin/backup/backups/upload`, fd);
+  }
+
+  deleteBackup(filename: string) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/backup/backups/${filename}`);
+  }
+
+  restoreBackup(filename: string) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/admin/backup/backups/${filename}/restore`, {});
+  }
+
   createInvite(maxUses = 1) {
     return this.http.post<{ token: string }>(`${this.baseUrl}/invites`, { max_uses: maxUses });
   }

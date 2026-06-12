@@ -20,6 +20,12 @@ interface AdminGroupChat {
   created_at: string;
 }
 
+interface BackupEntry {
+  filename: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 @Component({
   selector: 'app-admin',
   standalone: true,
@@ -44,6 +50,11 @@ interface AdminGroupChat {
             [style.background]="activeTab === 'chats' ? 'var(--accent-light)' : 'transparent'"
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Чаты
+          </button>
+          <button (click)="activeTab = 'backups'; loadBackups()"
+            [style.background]="activeTab === 'backups' ? 'var(--accent-light)' : 'transparent'"
+            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
+            Бэкапы
           </button>
           <a routerLink="/admin/federation"
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;transition:all 0.2s;">
@@ -221,12 +232,73 @@ interface AdminGroupChat {
             }
           }
         }
+
+        @if (activeTab === 'backups') {
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button (click)="createBackup()" [disabled]="backupLoading"
+              style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;">
+              {{ backupLoading ? '...' : 'Создать бэкап' }}
+            </button>
+            <label style="padding:8px 16px;border-radius:8px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);display:inline-flex;align-items:center;">
+              Загрузить бэкап
+              <input type="file" accept=".zip" (change)="uploadBackup($event)" style="display:none;">
+            </label>
+          </div>
+
+          @if (backupMsg) {
+            <p style="font-size:13px;margin-bottom:12px;" [style.color]="backupOk ? '#27ae60' : '#e74c3c'">{{ backupMsg }}</p>
+          }
+
+          @if (backupsLoading) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+          } @else if (backups.length === 0) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Бэкапы не найдены</p>
+          } @else {
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Файл</th>
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Размер</th>
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Дата</th>
+                    <th style="text-align:right;padding:8px 12px;font-weight:500;">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (b of backups; track b.filename) {
+                    <tr style="border-bottom:1px solid var(--divider);">
+                      <td style="padding:10px 12px;color:var(--text-primary);font-weight:500;">{{ b.filename }}</td>
+                      <td style="padding:10px 12px;color:var(--text-secondary);">{{ formatSize(b.size_bytes) }}</td>
+                      <td style="padding:10px 12px;color:var(--text-tertiary);font-size:13px;">{{ b.created_at | date:'dd.MM.yyyy HH:mm' }}</td>
+                      <td style="padding:10px 12px;text-align:right;">
+                        <div style="display:flex;gap:6px;justify-content:flex-end;">
+                          <a [href]="api.downloadBackupUrl(b.filename)" target="_blank"
+                            style="padding:4px 10px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);text-decoration:none;">
+                            Скачать
+                          </a>
+                          <button (click)="restoreBackup(b)" [disabled]="restoring === b.filename"
+                            style="padding:4px 10px;border-radius:6px;border:1px solid #e67e22;background:transparent;cursor:pointer;font-size:12px;color:#e67e22;">
+                            {{ restoring === b.filename ? '...' : 'Восстановить' }}
+                          </button>
+                          <button (click)="deleteBackup(b)"
+                            style="padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">
+                            Удалить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
       </div>
     </div>
   `,
 })
 export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' | 'chats' = 'users';
+  activeTab: 'users' | 'files' | 'chats' | 'backups' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -242,7 +314,14 @@ export class AdminComponent implements OnInit {
   chatActionMsg = '';
   chatActionOk = false;
 
-  constructor(private api: ApiService) {}
+  backups: BackupEntry[] = [];
+  backupsLoading = false;
+  backupLoading = false;
+  restoring: string | null = null;
+  backupMsg = '';
+  backupOk = false;
+
+  constructor(public api: ApiService) {}
 
   ngOnInit() {
     this.loadUsers();
@@ -346,5 +425,88 @@ export class AdminComponent implements OnInit {
 
   private clearChatMsg() {
     setTimeout(() => (this.chatActionMsg = ''), 3000);
+  }
+
+  loadBackups() {
+    this.backupsLoading = true;
+    this.api.getBackups().subscribe({
+      next: (list) => { this.backups = list; this.backupsLoading = false; },
+      error: () => this.backupsLoading = false,
+    });
+  }
+
+  createBackup() {
+    this.backupLoading = true;
+    this.backupMsg = '';
+    this.api.createBackup().subscribe({
+      next: (res) => {
+        this.backupLoading = false;
+        this.backupMsg = `Бэкап создан: ${res.filename}`;
+        this.backupOk = true;
+        this.loadBackups();
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+      error: () => {
+        this.backupLoading = false;
+        this.backupMsg = 'Ошибка создания бэкапа';
+        this.backupOk = false;
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+    });
+  }
+
+  uploadBackup(event: any) {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    this.backupLoading = true;
+    this.backupMsg = '';
+    this.api.uploadBackup(file).subscribe({
+      next: () => {
+        this.backupLoading = false;
+        this.backupMsg = 'Бэкап загружен';
+        this.backupOk = true;
+        this.loadBackups();
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+      error: () => {
+        this.backupLoading = false;
+        this.backupMsg = 'Ошибка загрузки';
+        this.backupOk = false;
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+    });
+    event.target.value = '';
+  }
+
+  restoreBackup(b: BackupEntry) {
+    if (!confirm(`Восстановить сервер из бэкапа "${b.filename}"? Сервер будет перезапущен.`)) return;
+    this.restoring = b.filename;
+    this.api.restoreBackup(b.filename).subscribe({
+      next: () => {
+        this.restoring = null;
+        this.backupMsg = 'Сервер восстанавливается...';
+        this.backupOk = true;
+      },
+      error: () => {
+        this.restoring = null;
+        this.backupMsg = 'Ошибка восстановления';
+        this.backupOk = false;
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+    });
+  }
+
+  deleteBackup(b: BackupEntry) {
+    if (!confirm(`Удалить бэкап "${b.filename}"?`)) return;
+    this.api.deleteBackup(b.filename).subscribe({
+      next: () => {
+        this.backups = this.backups.filter(x => x.filename !== b.filename);
+      },
+      error: () => {
+        this.backupMsg = 'Ошибка удаления';
+        this.backupOk = false;
+        setTimeout(() => this.backupMsg = '', 3000);
+      },
+    });
   }
 }

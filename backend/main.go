@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"my-chat-backend/auth"
+	"my-chat-backend/backup"
 	"my-chat-backend/cache"
 	"my-chat-backend/database"
 	"my-chat-backend/federation"
@@ -28,6 +32,23 @@ func cleanupExpiredPushCopies() {
 func main() {
 	database.InitDB()
 	database.SeedAdmin()
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/chat.db"
+	}
+	dataDir := filepath.Dir(dbPath)
+	restoredDB := filepath.Join(dataDir, "chat-restored.db")
+	if _, err := os.Stat(restoredDB); err == nil {
+		log.Println("Found pending restore — applying...")
+		if err := os.Rename(restoredDB, dbPath); err != nil {
+			log.Fatalf("Failed to apply restore: %v", err)
+		}
+		os.Remove(filepath.Join(dataDir, ".maintenance"))
+		os.Remove(filepath.Join(dataDir, ".restore-pending"))
+		log.Println("Restore applied successfully")
+	}
+
 	cleanupExpiredPushCopies()
 
 	// Periodic cleanup of expired push copies (every hour)
@@ -116,6 +137,17 @@ func main() {
 	fed.Post("/gossip/new-peer", fedHandler.HandleGossipNewPeer)
 	fed.Post("/recover-server", fedHandler.HandleRecoverServer)
 
+	api.Get("/health", func(c *fiber.Ctx) error {
+		dbPath := os.Getenv("DB_PATH")
+		if dbPath == "" {
+			dbPath = "./data/chat.db"
+		}
+		if _, err := os.Stat(filepath.Join(filepath.Dir(dbPath), ".maintenance")); err == nil {
+			return c.JSON(fiber.Map{"status": "maintenance"})
+		}
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
 	api.Use(handlers.AuthRequired)
 
 	api.Put("/keys", h.PutKey)
@@ -187,6 +219,18 @@ func main() {
 	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
 	admin.Post("/federation/restore", h.AdminRestoreFederation)
 
+	bak := api.Group("/admin/backup", handlers.AdminRequired)
+	bak.Get("/settings", h.GetBackupSettings)
+	bak.Put("/settings", h.UpdateBackupSettings)
+	bak.Get("/backups", h.AdminListBackups)
+	bak.Post("/backup", h.AdminCreateBackup)
+	bak.Post("/backups/upload", h.AdminUploadBackup)
+	bak.Get("/backups/:filename", h.AdminDownloadBackup)
+	bak.Delete("/backups/:filename", h.AdminDeleteBackup)
+	bak.Post("/backups/:filename/restore", h.AdminRestoreBackup)
+
+	backup.WritePIDFile(dbPath)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -205,10 +249,17 @@ func runAdminCLI() {
 		fmt.Println("  go run . admin reset-password <username> <password> — Reset user password")
 		fmt.Println("  go run . admin federation list          — List federation servers")
 		fmt.Println("  go run . admin federation invite [n]    — Create federation invite")
+		fmt.Println("  go run . admin backup [path]            — Create backup")
+		fmt.Println("  go run . admin restore <file.zip>       — Restore from backup")
 		return
 	}
 
 	action := os.Args[2]
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/chat.db"
+	}
+	workingDir, _ := os.Getwd()
 
 	switch action {
 	case "add":
@@ -335,8 +386,61 @@ func runAdminCLI() {
 			fmt.Printf("Unknown federation action: %s\n", fedAction)
 		}
 
+	case "backup":
+		backupDir := ""
+		if len(os.Args) >= 4 {
+			backupDir = os.Args[3]
+		} else {
+			cfg, err := backup.LoadConfig(dbPath)
+			if err != nil {
+				fmt.Printf("Error loading config: %v\n", err)
+				return
+			}
+			backupDir = cfg.BackupDir
+		}
+		zipPath, size, err := backup.CreateBackup(database.DB, dbPath, backupDir, workingDir)
+		if err != nil {
+			fmt.Printf("Error creating backup: %v\n", err)
+			return
+		}
+		fmt.Printf("Backup created: %s (%d bytes)\n", zipPath, size)
+
+	case "restore":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: go run . admin restore <file.zip>")
+			return
+		}
+		zipPath := os.Args[3]
+
+		pidFile := backup.PIDFilePath(dbPath)
+		if proc, err := backup.FindProcess(pidFile); err == nil && proc != nil {
+			fmt.Println("Stopping server...")
+			if err := backup.StopProcess(proc); err != nil {
+				fmt.Printf("Warning: stop error (ignoring): %v\n", err)
+			}
+			time.Sleep(1 * time.Second)
+		}
+
+		if err := backup.RestoreFromZip(zipPath, dbPath, workingDir); err != nil {
+			fmt.Printf("Error restoring: %v\n", err)
+			return
+		}
+
+		if backup.IsDocker() {
+			fmt.Println("Restore complete. Restarting container...")
+			syscall.Kill(1, syscall.SIGTERM)
+		} else {
+			fmt.Println("Restore complete. Starting server...")
+			cmd := exec.Command(os.Args[0])
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = os.Stdin
+			cmd.Env = os.Environ()
+			cmd.Start()
+		}
+
 	default:
 		fmt.Printf("Unknown action: %s\n", action)
-		fmt.Println("Use: add <username>, remove <username>, list, reset-password <username> <password>, or federation <list|invite>")
+		fmt.Println("Use: add <username>, remove <username>, list, reset-password <username> <password>, federation <list|invite>, backup [path], or restore <file.zip>")
 	}
 }

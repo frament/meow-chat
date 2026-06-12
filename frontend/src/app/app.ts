@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
-import { interval, fromEvent, filter, tap, Subscription } from 'rxjs';
+import { interval, fromEvent, filter, tap, map, switchMap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
@@ -27,9 +27,17 @@ import { CryptoService } from './services/crypto.service';
         </div>
       </div>
     }
+    @if (maintenanceMode()) {
+      <div style="position:fixed;inset:0;z-index:99999;background:var(--bg-body);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+        <div style="width:48px;height:48px;border:4px solid var(--border-default);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;"></div>
+        <p style="font-size:18px;font-weight:600;color:var(--text-primary);">Сервер восстанавливается...</p>
+        <p style="font-size:14px;color:var(--text-secondary);">Это может занять несколько минут</p>
+      </div>
+    }
     <router-outlet />
   `,
   styles: [`
+    @keyframes spin { to { transform: rotate(360deg); } }
     .update-banner {
       position: fixed;
       top: 0;
@@ -119,6 +127,8 @@ export class App implements OnInit, OnDestroy {
   readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
+  readonly maintenanceMode = signal(false);
+  #maintenanceSub: Subscription | null = null;
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   #badgeCount = 0;
 
@@ -219,6 +229,20 @@ export class App implements OnInit, OnDestroy {
       })
     );
 
+    this.#maintenanceSub = interval(3000)
+      .pipe(
+        filter(() => this.#api.currentUser() !== null),
+        switchMap(() => this.#api.checkHealth()),
+        map(res => res.status === 'maintenance')
+      )
+      .subscribe(isMaintenance => {
+        if (isMaintenance && !this.maintenanceMode()) {
+          this.maintenanceMode.set(true);
+        } else if (!isMaintenance && this.maintenanceMode()) {
+          location.reload();
+        }
+      });
+
     if (!this.#swPush.isEnabled) return;
 
     this.#api.getVapidPublicKey().subscribe({
@@ -232,6 +256,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.#sub.unsubscribe();
+    this.#maintenanceSub?.unsubscribe();
   }
 
   openChat(userId: number) {
