@@ -324,3 +324,9 @@ cd frontend && npm run build   # production build with service-worker
 - Updated `scrollToBottom()`: uses `CdkVirtualScrollViewport.scrollToIndex()` instead of `querySelectorAll` + `scrollTop` — `chat.ts`
 - Added `@ViewChild('scrollViewportDesktop')` and `@ViewChild('scrollViewportMobile')` — `chat.ts`
 - Build verified (`ng build` passes without errors)
+
+## Session (2026-06-12) — PWA install banner dismiss tracking
+- Added `localStorage.getItem('installDismissed')` check before showing install banner — `app.ts`
+- `dismissInstall()` persists flag via `localStorage.setItem('installDismissed', 'true')` — `app.ts`
+- `appinstalled` and `installApp`.accepted both clear the flag — `app.ts`
+- Banner no longer reappears after user dismisses it until app is installed

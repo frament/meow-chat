@@ -186,14 +186,18 @@ export class App implements OnInit, OnDestroy {
 
   constructor() {
     // PWA install prompt
+    const wasDismissed = localStorage.getItem('installDismissed') === 'true';
     window.addEventListener('beforeinstallprompt', (e: Event) => {
       e.preventDefault();
       this.#installPrompt = e;
-      this.canInstall.set(true);
+      if (!wasDismissed) {
+        this.canInstall.set(true);
+      }
     });
     window.addEventListener('appinstalled', () => {
       this.canInstall.set(false);
       this.#installPrompt = null;
+      localStorage.removeItem('installDismissed');
     });
 
     // Listen for push subscription change from service worker
@@ -363,6 +367,7 @@ export class App implements OnInit, OnDestroy {
       this.#installPrompt.userChoice.then((result: any) => {
         if (result.outcome === 'accepted') {
           this.canInstall.set(false);
+          localStorage.removeItem('installDismissed');
         }
         this.#installPrompt = null;
       });
@@ -372,6 +377,7 @@ export class App implements OnInit, OnDestroy {
   dismissInstall() {
     this.canInstall.set(false);
     this.#installPrompt = null;
+    localStorage.setItem('installDismissed', 'true');
   }
 
   openChat(userId: number) {
