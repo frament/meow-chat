@@ -454,7 +454,11 @@ export class ApiService {
   uploadBackup(file: File) {
     const fd = new FormData();
     fd.append('file', file);
-    return this.http.post<{ filename: string }>(`${this.baseUrl}/admin/backup/backups/upload`, fd);
+    return this.http.post<{ filename: string }>(
+      `${this.baseUrl}/admin/backup/backups/upload`,
+      fd,
+      { reportProgress: true, observe: 'events' }
+    );
   }
 
   deleteBackup(filename: string) {

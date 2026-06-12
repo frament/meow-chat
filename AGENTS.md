@@ -335,3 +335,8 @@ cd frontend && npm run build   # production build with service-worker
 - Added `HttpEventType.UploadProgress` handling to `uploadAvatar()` — `api.service.ts`
 - Added `uploadProgress` field + progress bar UI (percentage + gradient bar) in settings — `settings.ts`
 - ng build passes
+
+## Session (2026-06-12) — Backup upload progress bar
+- Added `HttpEventType.UploadProgress` handling to `uploadBackup()` — `api.service.ts`
+- Added `backupUploadProgress` field + progress bar UI in admin panel — `admin.ts`
+- ng build passes

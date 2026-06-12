@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { HttpEventType } from '@angular/common/http';
 import { ApiService, User } from '../../services/api.service';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
@@ -250,6 +251,15 @@ interface BackupEntry {
             </label>
           </div>
 
+          @if (backupLoading && backupUploadProgress > 0 && backupUploadProgress < 100) {
+            <div style="max-width:300px;margin-bottom:12px;">
+              <div style="height:4px;border-radius:4px;background:var(--border-light);overflow:hidden;">
+                <div style="height:100%;border-radius:4px;background:var(--accent-gradient);transition:width .2s;" [style.width.%]="backupUploadProgress"></div>
+              </div>
+              <p style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">{{ backupUploadProgress }}%</p>
+            </div>
+          }
+
           @if (backupMsg) {
             <p style="font-size:13px;margin-bottom:12px;" [style.color]="backupOk ? '#27ae60' : '#e74c3c'">{{ backupMsg }}</p>
           }
@@ -322,6 +332,7 @@ export class AdminComponent implements OnInit {
   backups: BackupEntry[] = [];
   backupsLoading = false;
   backupLoading = false;
+  backupUploadProgress = 0;
   restoring: string | null = null;
   backupMsg = '';
   backupOk = false;
@@ -466,14 +477,19 @@ export class AdminComponent implements OnInit {
     const file = event.target?.files?.[0];
     if (!file) return;
     this.backupLoading = true;
+    this.backupUploadProgress = 0;
     this.backupMsg = '';
     this.api.uploadBackup(file).subscribe({
-      next: () => {
-        this.backupLoading = false;
-        this.backupMsg = 'Бэкап загружен';
-        this.backupOk = true;
-        this.loadBackups();
-        setTimeout(() => this.backupMsg = '', 3000);
+      next: (event) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          this.backupUploadProgress = event.total ? Math.round(event.loaded / event.total * 100) : 0;
+        } else if (event.type === HttpEventType.Response) {
+          this.backupLoading = false;
+          this.backupMsg = 'Бэкап загружен';
+          this.backupOk = true;
+          this.loadBackups();
+          setTimeout(() => this.backupMsg = '', 3000);
+        }
       },
       error: () => {
         this.backupLoading = false;
