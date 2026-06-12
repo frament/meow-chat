@@ -5,13 +5,14 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
+import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, ScrollingModule],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -123,54 +124,57 @@ import { CryptoService } from '../../services/crypto.service';
           </div>
           }
 
-          <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
-            @for (msg of messages; track msg.id; let i = $index) {
-              @if (i === unreadDividerIdx) {
-                <div class="unread-divider"><span>Новые сообщения</span></div>
-              }
-              <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
-                <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
-                  [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
-                  @if (selectedGroup && msg.from_user_id !== currentUserId) {
-                    <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ msg.from_user }}</p>
-                  }
-                  @if ((msg.msg_type || 'text') === 'sticker') {
-                    <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                      <span style="font-size:2rem;">🎯</span>
-                      <span class="text-xs opacity-60">Sticker</span>
-                    </div>
-                  } @else if ((msg.msg_type || 'text') === 'gif') {
-                    <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                      <span style="font-size:1.25rem;font-weight:700;">GIF</span>
-                      @if (msg.content) { <span class="text-xs opacity-60">{{ msg.content }}</span> }
-                    </div>
-                  } @else if ((msg.msg_type || 'text') === 'poll') {
-                    <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
-                      <span class="text-sm font-medium">{{ msg.content || 'Poll' }}</span>
-                      <div class="flex items-center gap-2 text-xs opacity-60">
-                        <span>📊</span><span>Coming soon</span>
-                      </div>
-                    </div>
-                  } @else {
-                    @if (msg.content) { <p>{{ msg.content }}</p> }
-                    @if (!msg.content && msg.encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
-                    @if (msg.images && msg.images.length > 0) {
-                    <div class="flex flex-wrap gap-1 mt-1">
-                      @for (img of msg.images; track img.id || $index) {
-                      <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
-                      (click)="openImage(img.image_url)">
+          <cdk-virtual-scroll-viewport #scrollViewportDesktop itemSize="80" class="flex-1" style="min-height:0;">
+            <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
+              <ng-template cdkVirtualFor [cdkVirtualForOf]="displayMessages" let-item let-i="index">
+                @if ($any(item)._divider) {
+                  <div class="unread-divider"><span>Новые сообщения</span></div>
+                } @else {
+                  <div class="flex" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                    <div [class.chat-message-outgoing]="$any(item).from_user_id === currentUserId"
+                      [class.chat-message-incoming]="$any(item).from_user_id !== currentUserId">
+                      @if (selectedGroup && $any(item).from_user_id !== currentUserId) {
+                        <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ $any(item).from_user }}</p>
                       }
+                      @if (($any(item).msg_type || 'text') === 'sticker') {
+                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
+                          <span style="font-size:2rem;">🎯</span>
+                          <span class="text-xs opacity-60">Sticker</span>
+                        </div>
+                      } @else if (($any(item).msg_type || 'text') === 'gif') {
+                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
+                          <span style="font-size:1.25rem;font-weight:700;">GIF</span>
+                          @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
+                        </div>
+                      } @else if (($any(item).msg_type || 'text') === 'poll') {
+                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
+                          <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
+                          <div class="flex items-center gap-2 text-xs opacity-60">
+                            <span>📊</span><span>Coming soon</span>
+                          </div>
+                        </div>
+                      } @else {
+                        @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
+                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
+                        @if ($any(item).images && $any(item).images.length > 0) {
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          @for (img of $any(item).images; track img.id || $index) {
+                          <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                          (click)="openImage(img.image_url)">
+                          }
+                        </div>
+                        }
+                      }
+                      <p class="text-xs mt-1 opacity-70">
+                        {{ $any(item).created_at | date:'HH:mm' }}
+                        @if ($any(item).pending) { <span style="margin-left:4px;">⏳</span> }
+                      </p>
                     </div>
-                    }
-                  }
-                  <p class="text-xs mt-1 opacity-70">
-                    {{ msg.created_at | date:'HH:mm' }}
-                    @if (msg.pending) { <span style="margin-left:4px;">⏳</span> }
-                  </p>
-                </div>
-              </div>
-            }
-          </div>
+                  </div>
+                }
+              </ng-template>
+            </div>
+          </cdk-virtual-scroll-viewport>
 
           <!-- Desktop chat input -->
           <div>
@@ -344,54 +348,57 @@ import { CryptoService } from '../../services/crypto.service';
             </div>
           </div>
 
-          <div data-scroll-container class="flex-1 overflow-y-auto p-4" style="display:flex;flex-direction:column;gap:8px;">
-            @for (msg of messages; track msg.id; let i = $index) {
-              @if (i === unreadDividerIdx) {
-                <div class="unread-divider"><span>Новые сообщения</span></div>
-              }
-              <div class="flex" [class.justify-end]="msg.from_user_id === currentUserId">
-                <div [class.chat-message-outgoing]="msg.from_user_id === currentUserId"
-                  [class.chat-message-incoming]="msg.from_user_id !== currentUserId">
-                  @if (selectedGroup && msg.from_user_id !== currentUserId) {
-                    <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ msg.from_user }}</p>
-                  }
-                  @if ((msg.msg_type || 'text') === 'sticker') {
-                    <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                      <span style="font-size:2rem;">🎯</span>
-                      <span class="text-xs opacity-60">Sticker</span>
-                    </div>
-                  } @else if ((msg.msg_type || 'text') === 'gif') {
-                    <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                      <span style="font-size:1.25rem;font-weight:700;">GIF</span>
-                      @if (msg.content) { <span class="text-xs opacity-60">{{ msg.content }}</span> }
-                    </div>
-                  } @else if ((msg.msg_type || 'text') === 'poll') {
-                    <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
-                      <span class="text-sm font-medium">{{ msg.content || 'Poll' }}</span>
-                      <div class="flex items-center gap-2 text-xs opacity-60">
-                        <span>📊</span><span>Coming soon</span>
-                      </div>
-                    </div>
-                  } @else {
-                    @if (msg.content) { <p>{{ msg.content }}</p> }
-                    @if (!msg.content && msg.encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
-                    @if (msg.images && msg.images.length > 0) {
-                    <div class="flex flex-wrap gap-1 mt-1">
-                      @for (img of msg.images; track img.id || $index) {
-                      <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
-                      (click)="openImage(img.image_url)">
+          <cdk-virtual-scroll-viewport #scrollViewportMobile itemSize="80" class="flex-1" style="min-height:0;">
+            <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
+              <ng-template cdkVirtualFor [cdkVirtualForOf]="displayMessages" let-item let-i="index">
+                @if ($any(item)._divider) {
+                  <div class="unread-divider"><span>Новые сообщения</span></div>
+                } @else {
+                  <div class="flex" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                    <div [class.chat-message-outgoing]="$any(item).from_user_id === currentUserId"
+                      [class.chat-message-incoming]="$any(item).from_user_id !== currentUserId">
+                      @if (selectedGroup && $any(item).from_user_id !== currentUserId) {
+                        <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ $any(item).from_user }}</p>
                       }
+                      @if (($any(item).msg_type || 'text') === 'sticker') {
+                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
+                          <span style="font-size:2rem;">🎯</span>
+                          <span class="text-xs opacity-60">Sticker</span>
+                        </div>
+                      } @else if (($any(item).msg_type || 'text') === 'gif') {
+                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
+                          <span style="font-size:1.25rem;font-weight:700;">GIF</span>
+                          @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
+                        </div>
+                      } @else if (($any(item).msg_type || 'text') === 'poll') {
+                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
+                          <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
+                          <div class="flex items-center gap-2 text-xs opacity-60">
+                            <span>📊</span><span>Coming soon</span>
+                          </div>
+                        </div>
+                      } @else {
+                        @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
+                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
+                        @if ($any(item).images && $any(item).images.length > 0) {
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          @for (img of $any(item).images; track img.id || $index) {
+                          <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                          (click)="openImage(img.image_url)">
+                          }
+                        </div>
+                        }
+                      }
+                      <p class="text-xs mt-1 opacity-70">
+                        {{ $any(item).created_at | date:'HH:mm' }}
+                        @if ($any(item).pending) { <span style="margin-left:4px;">⏳</span> }
+                      </p>
                     </div>
-                    }
-                  }
-                  <p class="text-xs mt-1 opacity-70">
-                    {{ msg.created_at | date:'HH:mm' }}
-                    @if (msg.pending) { <span style="margin-left:4px;">⏳</span> }
-                  </p>
-                </div>
-              </div>
-            }
-          </div>
+                  </div>
+                }
+              </ng-template>
+            </div>
+          </cdk-virtual-scroll-viewport>
 
           <!-- Mobile chat input -->
           <div>
@@ -569,12 +576,29 @@ export class ChatComponent implements OnInit, OnDestroy {
   uploading = signal(false);
   uploadProgress = signal(0);
 
+  @ViewChild('scrollViewportDesktop') scrollViewportDesktop?: CdkVirtualScrollViewport;
+  @ViewChild('scrollViewportMobile') scrollViewportMobile?: CdkVirtualScrollViewport;
+
+  get displayMessages(): (Message | { _divider: true })[] {
+    if (this.unreadDividerIdx < 0) return this.messages;
+    const items: (Message | { _divider: true })[] = [];
+    for (let i = 0; i < this.messages.length; i++) {
+      if (i === this.unreadDividerIdx) {
+        items.push({ _divider: true });
+      }
+      items.push(this.messages[i]);
+    }
+    return items;
+  }
+
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        document.querySelectorAll<HTMLDivElement>('[data-scroll-container]').forEach(el => {
-          el.scrollTop = el.scrollHeight;
-        });
+        const len = this.displayMessages.length;
+        if (len > 0) {
+          this.scrollViewportDesktop?.scrollToIndex(len - 1, 'auto');
+          this.scrollViewportMobile?.scrollToIndex(len - 1, 'auto');
+        }
       });
     });
   }
