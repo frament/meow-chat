@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 240" width="800" height="240" fill="none">
+  <defs>
+    <linearGradient id="bg-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#e85d3a"/>
+    </linearGradient>
+    <linearGradient id="text-g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="800" height="240" fill="url(#bg-g)" rx="16"/>
+  <!-- Grid dots pattern -->
+  <g opacity="0.05">
+    <circle cx="50" cy="50" r="2" fill="#fff"/>
+    <circle cx="150" cy="80" r="2" fill="#fff"/>
+    <circle cx="250" cy="40" r="2" fill="#fff"/>
+    <circle cx="350" cy="90" r="2" fill="#fff"/>
+    <circle cx="450" cy="60" r="2" fill="#fff"/>
+    <circle cx="550" cy="100" r="2" fill="#fff"/>
+    <circle cx="650" cy="50" r="2" fill="#fff"/>
+    <circle cx="750" cy="80" r="2" fill="#fff"/>
+    <circle cx="100" cy="180" r="2" fill="#fff"/>
+    <circle cx="200" cy="140" r="2" fill="#fff"/>
+    <circle cx="300" cy="190" r="2" fill="#fff"/>
+    <circle cx="400" cy="150" r="2" fill="#fff"/>
+    <circle cx="500" cy="200" r="2" fill="#fff"/>
+    <circle cx="600" cy="160" r="2" fill="#fff"/>
+    <circle cx="700" cy="190" r="2" fill="#fff"/>
+  </g>
+  <!-- Cat in speech bubble logo -->
+  <g transform="translate(60, 55)">
+    <rect x="6" y="14" width="100" height="75" rx="28" fill="url(#accent-g)"/>
+    <path d="M34 93 L44 78 L52 92" fill="url(#accent-g)"/>
+    <path d="M34 41 L24 20 L42 33Z" fill="#fff"/>
+    <path d="M80 41 L90 20 L72 33Z" fill="#fff"/>
+    <ellipse cx="56" cy="61" rx="22" ry="18" fill="#fff"/>
+    <ellipse cx="47" cy="56" rx="3.5" ry="4.5" fill="#1e293b"/>
+    <ellipse cx="65" cy="56" rx="3.5" ry="4.5" fill="#1e293b"/>
+    <circle cx="48" cy="55" r="1.8" fill="#fff"/>
+    <circle cx="66" cy="55" r="1.8" fill="#fff"/>
+    <path d="M54 66 L56 68.5 L58 66" fill="#f59e0b" stroke="#f59e0b" stroke-width="1"/>
+    <path d="M49 70.5 Q56 77 63 70.5" stroke="#1e293b" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <line x1="28" y1="63" x2="42" y2="65" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+    <line x1="28" y1="70" x2="42" y2="68" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+    <line x1="84" y1="63" x2="70" y2="65" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+    <line x1="84" y1="70" x2="70" y2="68" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.7"/>
+  </g>
+  <!-- Title -->
+  <text x="240" y="110" font-family="'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif" font-size="52" font-weight="700" fill="url(#text-g)" letter-spacing="-1">MeowChat</text>
+  <!-- Subtitle -->
+  <text x="242" y="150" font-family="'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif" font-size="18" fill="#94a3b8" font-weight="400" letter-spacing="0.5">Чат в реальном времени · Федерация · E2EE</text>
+  <!-- Divider line -->
+  <line x1="240" y1="165" x2="520" y2="165" stroke="#334155" stroke-width="1"/>
+  <!-- Tech tags -->
+  <rect x="242" y="178" width="50" height="22" rx="6" fill="#334155"/>
+  <text x="250" y="193" font-family="monospace" font-size="11" fill="#94a3b8">Go</text>
+  <rect x="300" y="178" width="62" height="22" rx="6" fill="#334155"/>
+  <text x="308" y="193" font-family="monospace" font-size="11" fill="#94a3b8">Angular</text>
+  <rect x="370" y="178" width="52" height="22" rx="6" fill="#334155"/>
+  <text x="378" y="193" font-family="monospace" font-size="11" fill="#94a3b8">SQLite</text>
+  <rect x="430" y="178" width="80" height="22" rx="6" fill="#334155"/>
+  <text x="438" y="193" font-family="monospace" font-size="11" fill="#94a3b8">WebSocket</text>
+  <!-- Version badge -->
+  <rect x="240" y="212" width="100" height="18" rx="9" fill="url(#accent-g)"/>
+  <text x="252" y="225" font-family="monospace" font-size="10" fill="#fff" font-weight="600">v1.0.0</text>
+</svg>

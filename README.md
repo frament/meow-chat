@@ -1,8 +1,30 @@
-# my-chat
+<p align="center">
+  <img src="design-mockups/favicon3.png" width="80" height="80" alt="MeowChat">
+</p>
 
-![version](https://img.shields.io/badge/version-1.0.0-blue)
+<h1 align="center">MeowChat</h1>
 
-Чат в реальном времени с федеративной mesh-сетью: Go бэкенд (Fiber + SQLite + WebSocket) и Angular 20 фронтенд (standalone + Tailwind v4).
+<p align="center">
+  <b>Чат в реальном времени с федеративной mesh-сетью</b><br>
+  Go + Angular · WebSocket · E2EE · Federation · Docker
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
+  <img src="https://img.shields.io/badge/Go-1.23-00ADD8" alt="go">
+  <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
+  <img src="https://img.shields.io/badge/tests-253_%E2%9C%85-brightgreen" alt="tests">
+</p>
+
+<p align="center">
+  <a href="#🚀-установка">Установка</a> ·
+  <a href="#🔗-федеративная-совместимость">Федерация</a> ·
+  <a href="#разработка-локально">Разработка</a> ·
+  <a href="#cli-администрирование">CLI</a>
+</p>
+
+---
 
 ## 🚀 Установка
 
