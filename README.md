@@ -31,8 +31,8 @@
 ### Вариант 1: Docker (рекомендуется)
 
 ```sh
-git clone https://github.com/.../my-chat.git
-cd my-chat
+git clone https://github.com/.../meow-chat.git
+cd meow-chat
 make build   # docker compose build
 make up      # docker compose up -d
 ```
@@ -45,29 +45,29 @@ make up      # docker compose up -d
 ### Вариант 2: Linux VDS (прямая установка)
 
 ```sh
-git clone https://github.com/.../my-chat.git
-cd my-chat
+git clone https://github.com/.../meow-chat.git
+cd meow-chat
 sudo make install
 ```
 
 `make install` собирает бэкенд + фронтенд, создаёт systemd-сервис, настраивает nginx.  
-После установки отредактируйте `/etc/my-chat.env` и запустите:
+После установки отредактируйте `/etc/meow-chat.env` и запустите:
 
 ```sh
-sudo systemctl start my-chat
-sudo systemctl enable my-chat
+sudo systemctl start meow-chat
+sudo systemctl enable meow-chat
 ```
 
 ### Вариант 3: Windows
 
 ```cmd
-git clone https://github.com/.../my-chat.git
-cd my-chat
+git clone https://github.com/.../meow-chat.git
+cd meow-chat
 install.bat
 ```
 
 Собирает бэкенд и фронтенд, создаёт директории.  
-Для запуска: `set DB_PATH=./data/chat.db && my-chat-server.exe`  
+Для запуска: `set DB_PATH=./data/chat.db && meow-chat-server.exe`  
 Для service-режима используйте nssm (см. инструкцию в выводе install.bat).
 
 ## 🔄 Обновление
@@ -81,7 +81,7 @@ make update   # git pull + docker compose build + up -d
 ```sh
 git pull
 sudo make install
-sudo systemctl restart my-chat
+sudo systemctl restart meow-chat
 ```
 
 ### MAJOR-обновления

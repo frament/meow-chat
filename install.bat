@@ -24,7 +24,7 @@ cd backend
 set CGO_ENABLED=1
 for /f "tokens=*" %%i in ('git describe --tags --always --dirty 2^>nul') do set GIT_VERSION=%%i
 if "!GIT_VERSION!"=="" set GIT_VERSION=dev
-go build -ldflags="-X my-chat-backend/version.Version=!GIT_VERSION!" -o my-chat-server.exe .
+go build -ldflags="-X my-chat-backend/version.Version=!GIT_VERSION!" -o meow-chat-server.exe .
 if %errorlevel% neq 0 (
     echo ERROR: Backend build failed
     exit /b 1
@@ -53,15 +53,15 @@ if not exist "uploads\messages" mkdir uploads\messages
 if not exist "uploads\federation_cache" mkdir uploads\federation_cache
 
 :: Copy binaries
-copy /Y backend\my-chat-server.exe my-chat-server.exe >nul
+copy /Y backend\meow-chat-server.exe meow-chat-server.exe >nul
 
 echo.
 echo ===== Install complete =====
 echo.
-echo To run: set DB_PATH=./data/chat.db ^&^& my-chat-server.exe
+echo To run: set DB_PATH=./data/chat.db ^&^& meow-chat-server.exe
 echo.
 echo Or register as Windows service using nssm:
-echo   nssm install MeowChat "C:\path\to\my-chat-server.exe"
+echo   nssm install MeowChat "C:\path\to\meow-chat-server.exe"
 echo   nssm set MeowChat AppDirectory "C:\path\to\project"
 echo   nssm set MeowChat AppEnvironmentExtra "DB_PATH=./data/chat.db"
 echo   nssm start MeowChat

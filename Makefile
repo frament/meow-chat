@@ -29,16 +29,16 @@ dev-frontend:
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
-LIBDIR ?= /var/lib/my-chat
-WWWDIR ?= /var/www/my-chat
+LIBDIR ?= /var/lib/meow-chat
+WWWDIR ?= /var/www/meow-chat
 SYSTEMD_DIR ?= /etc/systemd/system
 NGINX_DIR ?= /etc/nginx/sites-available
-MY_CHAT_USER ?= my-chat
+MEOW_CHAT_USER ?= meow-chat
 
 install: install-backend install-frontend install-systemd install-nginx
 
 install-backend:
-	cd backend && CGO_ENABLED=1 go build -ldflags="-X my-chat-backend/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)" -o $(BINDIR)/my-chat-server .
+	cd backend && CGO_ENABLED=1 go build -ldflags="-X my-chat-backend/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)" -o $(BINDIR)/meow-chat-server .
 
 install-frontend:
 	cd frontend && npm ci --omit=dev 2>/dev/null || true
@@ -46,26 +46,26 @@ install-frontend:
 
 install-systemd:
 	install -d -m 755 $(LIBDIR)/data $(LIBDIR)/uploads/avatars $(LIBDIR)/uploads/posts $(LIBDIR)/uploads/messages $(LIBDIR)/uploads/federation_cache
-	install -d -m 755 /etc/my-chat
-	install -m 644 contrib/env.template /etc/my-chat/env.template
-	[ -f /etc/my-chat.env ] || cp contrib/env.template /etc/my-chat.env
-	install -m 644 contrib/systemd/my-chat.service $(SYSTEMD_DIR)/my-chat.service
+	install -d -m 755 /etc/meow-chat
+	install -m 644 contrib/env.template /etc/meow-chat/env.template
+	[ -f /etc/meow-chat.env ] || cp contrib/env.template /etc/meow-chat.env
+	install -m 644 contrib/systemd/meow-chat.service $(SYSTEMD_DIR)/meow-chat.service
 	systemctl daemon-reload
-	systemctl enable my-chat
-	chown -R $(MY_CHAT_USER):$(MY_CHAT_USER) $(LIBDIR) 2>/dev/null || true
+	systemctl enable meow-chat
+	chown -R $(MEOW_CHAT_USER):$(MEOW_CHAT_USER) $(LIBDIR) 2>/dev/null || true
 
 install-nginx:
-	install -m 644 contrib/nginx/my-chat.conf $(NGINX_DIR)/my-chat.conf
-	[ -L /etc/nginx/sites-enabled/my-chat ] || ln -s $(NGINX_DIR)/my-chat.conf /etc/nginx/sites-enabled/
+	install -m 644 contrib/nginx/meow-chat.conf $(NGINX_DIR)/meow-chat.conf
+	[ -L /etc/nginx/sites-enabled/meow-chat ] || ln -s $(NGINX_DIR)/meow-chat.conf /etc/nginx/sites-enabled/
 	nginx -t && systemctl reload nginx || true
 
 uninstall:
-	systemctl stop my-chat 2>/dev/null || true
-	systemctl disable my-chat 2>/dev/null || true
-	rm -f $(SYSTEMD_DIR)/my-chat.service
-	rm -f $(BINDIR)/my-chat-server
-	rm -f $(NGINX_DIR)/my-chat.conf
-	rm -f /etc/nginx/sites-enabled/my-chat
+	systemctl stop meow-chat 2>/dev/null || true
+	systemctl disable meow-chat 2>/dev/null || true
+	rm -f $(SYSTEMD_DIR)/meow-chat.service
+	rm -f $(BINDIR)/meow-chat-server
+	rm -f $(NGINX_DIR)/meow-chat.conf
+	rm -f /etc/nginx/sites-enabled/meow-chat
 	rm -rf $(WWWDIR)
 	systemctl daemon-reload
 

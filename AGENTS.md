@@ -7,7 +7,7 @@
 
 ## Project structure
 ```
-backend/       # Go module: my-chat-backend
+backend/       # Go module: my-chat-backend (repo: meow-chat)
   main.go      # entrypoint, route registration
   database/    # SQLite init + auto-migration (federation tables included)
   handlers/    # REST handlers + WebSocket hub (in-memory per-process)

@@ -32,10 +32,10 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS post_images (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS post_reactions (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id), UNIQUE(post_id, user_id, emoji))`,
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token_id TEXT UNIQUE NOT NULL, expires_at DATETIME NOT NULL)`,
-		`CREATE TABLE IF NOT EXISTS group_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, creator_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS group_chat_members (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, user_id INTEGER NOT NULL, FOREIGN KEY (group_id) REFERENCES group_chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id), UNIQUE(group_id, user_id))`,
-		`CREATE TABLE IF NOT EXISTS group_chat_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, created_by INTEGER NOT NULL, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES group_chats(id) ON DELETE CASCADE)`,
-		`CREATE TABLE IF NOT EXISTS group_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, sender_id INTEGER NOT NULL, content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES group_chats(id) ON DELETE CASCADE, FOREIGN KEY (sender_id) REFERENCES users(id))`,
+		`CREATE TABLE IF NOT EXISTS group_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS group_chat_members (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL, user_id INTEGER NOT NULL, FOREIGN KEY (group_chat_id) REFERENCES group_chats(id) ON DELETE CASCADE, FOREIGN KEY (user_id) REFERENCES users(id), UNIQUE(group_chat_id, user_id))`,
+		`CREATE TABLE IF NOT EXISTS group_chat_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 0, use_count INTEGER DEFAULT 0, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_chat_id) REFERENCES group_chats(id) ON DELETE CASCADE)`,
+		`CREATE TABLE IF NOT EXISTS group_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL, from_user_id INTEGER NOT NULL, content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', encrypted_content TEXT DEFAULT '', encrypted_iv TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_chat_id) REFERENCES group_chats(id) ON DELETE CASCADE, FOREIGN KEY (from_user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS group_message_images (id INTEGER PRIMARY KEY AUTOINCREMENT, group_message_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (group_message_id) REFERENCES group_messages(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS invite_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, created_by INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 1, use_count INTEGER DEFAULT 0, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS friends (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, friend_id INTEGER NOT NULL, server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (friend_id) REFERENCES users(id), UNIQUE(user_id, friend_id))`,
@@ -43,15 +43,44 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS pinned_users (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pinned_user_id INTEGER NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (pinned_user_id) REFERENCES users(id), UNIQUE(user_id, pinned_user_id))`,
 		`CREATE TABLE IF NOT EXISTS push_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, credential_id BLOB NOT NULL UNIQUE, public_key BLOB NOT NULL, attestation_type TEXT, aaguid BLOB, sign_count INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS user_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, device_name TEXT NOT NULL, device_public_key TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS device_auth_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, requester_device_id INTEGER NOT NULL, device_public_key TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS user_keys_backup (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, encrypted_identity_key TEXT NOT NULL, backup_salt TEXT NOT NULL, recovery_phrase_hash TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, server_url TEXT UNIQUE NOT NULL, server_name TEXT, token TEXT, status TEXT DEFAULT 'active', blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS user_devices (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id           INTEGER NOT NULL,
+			device_name       TEXT NOT NULL,
+			device_public_key TEXT NOT NULL,
+			device_id         TEXT NOT NULL UNIQUE,
+			last_seen         DATETIME,
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS device_auth_requests (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id           INTEGER NOT NULL,
+			device_name       TEXT NOT NULL,
+			device_public_key TEXT NOT NULL,
+			device_id         TEXT NOT NULL,
+			status            TEXT DEFAULT 'pending',
+			encrypted_key     TEXT,
+			iv                TEXT,
+			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at        DATETIME DEFAULT (datetime('now', '+15 minutes'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_keys_backup (
+			user_id                  INTEGER PRIMARY KEY,
+			encrypted_key            TEXT NOT NULL,
+			iv                       TEXT NOT NULL,
+			salt                     TEXT NOT NULL,
+			hash_iterations          INTEGER DEFAULT 100000,
+			recovery_phrase_encrypted TEXT,
+			recovery_phrase_salt     TEXT,
+			recovery_phrase_iv       TEXT,
+			updated_at               DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS federation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL REFERENCES federation_servers(id), remote_id INTEGER NOT NULL, username TEXT NOT NULL, avatar_url TEXT DEFAULT '', email TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_id, remote_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, event_type TEXT NOT NULL, payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
-		`CREATE TABLE IF NOT EXISTS federation_cache_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, cache_key TEXT NOT NULL, cache_value TEXT, accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
+		`CREATE TABLE IF NOT EXISTS federation_cache_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, cache_key TEXT NOT NULL, cache_value TEXT, size_bytes INTEGER DEFAULT 0, accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
 		`CREATE TABLE IF NOT EXISTS federation_network (id INTEGER PRIMARY KEY AUTOINCREMENT, server_a_id INTEGER NOT NULL, server_b_id INTEGER NOT NULL, hop_count INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_a_id, server_b_id))`,
-		`CREATE TABLE IF NOT EXISTS federation_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
+		`CREATE TABLE IF NOT EXISTS federation_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, created_by INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 1, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS federation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, remote_post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, is_public INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
 	}
 	for _, q := range execs {
@@ -113,7 +142,69 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/posts/:id/react", AuthRequired, h.ToggleReaction)
 	app.Get("/feed", AuthRequired, h.GetFeed)
 
+	app.Post("/group-chats", AuthRequired, h.CreateGroupChat)
+	app.Get("/group-chats", AuthRequired, h.GetGroupChats)
+	app.Get("/group-chats/:id", AuthRequired, h.GetGroupChat)
+	app.Post("/group-chats/:id/members", AuthRequired, h.AddGroupMember)
+	app.Delete("/group-chats/:id/members/:userId", AuthRequired, h.RemoveGroupMember)
+	app.Delete("/group-chats/:id", AuthRequired, h.DeleteGroupChat)
+	app.Post("/group-chats/:id/invites", AuthRequired, h.CreateGroupInvite)
+	app.Get("/group-chat-invites/:token", AuthRequired, h.GetGroupInvite)
+	app.Post("/group-chat-invites/:token/join", AuthRequired, h.JoinGroupViaInvite)
+	app.Get("/group-chat-messages/:groupId", AuthRequired, h.GetGroupMessages)
+	app.Post("/group-chat-messages", AuthRequired, h.SendGroupMessage)
+
+	admin := app.Group("/admin")
+	admin.Use(AuthRequired)
+	admin.Use(AdminRequired)
+	admin.Get("/users", h.AdminListUsers)
+	admin.Post("/users/:id/make-admin", h.MakeAdmin)
+	admin.Post("/users/:id/remove-admin", h.RemoveAdmin)
+	admin.Get("/files", h.AdminListFiles)
+	admin.Get("/group-chats", h.AdminListGroupChats)
+	admin.Delete("/group-chats/:id", h.AdminDeleteGroupChat)
+	admin.Get("/federation/servers", h.AdminListFederationServers)
+	admin.Get("/federation/servers/:id", h.AdminGetFederationServer)
+	admin.Put("/federation/servers/:id", h.AdminUpdateFederationServer)
+	admin.Post("/federation/servers", h.AdminCreateFederationInvite)
+	admin.Post("/federation/servers/:id/block", h.AdminBlockFederationServer)
+	admin.Post("/federation/servers/:id/unblock", h.AdminUnblockFederationServer)
+	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
+	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
+	admin.Get("/backup/settings", h.GetBackupSettings)
+	admin.Put("/backup/settings", h.UpdateBackupSettings)
+	admin.Get("/backups", h.AdminListBackups)
+	admin.Post("/backups", h.AdminCreateBackup)
+	admin.Get("/backups/:filename/download", h.AdminDownloadBackup)
+	admin.Post("/backups/upload", h.AdminUploadBackup)
+	admin.Delete("/backups/:filename", h.AdminDeleteBackup)
+	admin.Post("/backups/:filename/restore", h.AdminRestoreBackup)
+
 	_ = adminID
+
+	// Push routes
+	h.LoadVAPIDKeys()
+	app.Get("/push/vapid-public-key", h.VAPIDPublicKey)
+	app.Post("/push/subscribe", AuthRequired, h.SubscribePush)
+	app.Post("/push/unsubscribe", AuthRequired, h.UnsubscribePush)
+
+	// Device routes
+	devices := app.Group("/devices")
+	devices.Use(AuthRequired)
+	devices.Post("/register", h.RegisterDevice)
+	devices.Get("/", h.ListDevices)
+	devices.Delete("/:deviceId", h.RemoveDevice)
+	devices.Post("/auth-request", h.CreateAuthRequest)
+	devices.Get("/auth-requests", h.ListAuthRequests)
+	devices.Get("/auth-requests/:id", h.GetAuthRequest)
+	devices.Post("/auth-requests/:id/deny", h.DenyAuthRequest)
+	devices.Post("/auth-requests/:id/approve", h.ApproveAuthRequest)
+	devices.Post("/keys/backup", h.UploadKeyBackup)
+	devices.Post("/keys/recover", h.RecoverKeys)
+	devices.Post("/recovery/generate", h.GenerateRecoveryPhrase)
+	devices.Post("/recovery/set", h.SetRecoveryPhraseBackup)
+	devices.Get("/recovery/status", h.GetRecoveryPhraseStatus)
+
 	return app, h, userID
 }
 

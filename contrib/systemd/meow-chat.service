@@ -4,10 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=my-chat
-WorkingDirectory=/var/lib/my-chat
-EnvironmentFile=-/etc/my-chat.env
-ExecStart=/usr/local/bin/my-chat-server
+User=meow-chat
+WorkingDirectory=/var/lib/meow-chat
+EnvironmentFile=-/etc/meow-chat.env
+ExecStart=/usr/local/bin/meow-chat-server
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
