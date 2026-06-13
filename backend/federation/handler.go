@@ -14,6 +14,7 @@ import (
 
 	"my-chat-backend/database"
 	"my-chat-backend/models"
+	"my-chat-backend/version"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -74,6 +75,10 @@ func (fh *FederationHandler) HandleJoinInvite(c *fiber.Ctx) error {
 	}
 	if expiresAt != nil && time.Now().After(*expiresAt) {
 		return c.Status(410).JSON(fiber.Map{"error": "Invite token expired"})
+	}
+
+	if req.Major != 0 && req.Major != database.CurrentMajor {
+		return c.Status(409).JSON(fiber.Map{"error": fmt.Sprintf("Incompatible version: remote v%d.x.x, local v%d.x.x", req.Major, database.CurrentMajor)})
 	}
 
 	database.DB.Exec("UPDATE federation_invites SET use_count = use_count + 1 WHERE id = ?", inviteID)
@@ -137,6 +142,8 @@ func (fh *FederationHandler) HandleJoinInvite(c *fiber.Ctx) error {
 		Name:        localName,
 		BaseURL:     c.BaseURL(),
 		ServerToken: newToken,
+		Version:     version.Version,
+		Major:       database.CurrentMajor,
 	})
 }
 

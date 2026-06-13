@@ -60,6 +60,8 @@ type FederationJoinRequest struct {
 	Token   string `json:"token"`
 	Name    string `json:"name"`
 	BaseURL string `json:"base_url"`
+	Version string `json:"version,omitempty"`
+	Major   int    `json:"major,omitempty"`
 }
 
 type FederationJoinResponse struct {
@@ -67,6 +69,8 @@ type FederationJoinResponse struct {
 	Name        string `json:"name"`
 	BaseURL     string `json:"base_url"`
 	ServerToken string `json:"server_token"`
+	Version     string `json:"version,omitempty"`
+	Major       int    `json:"major,omitempty"`
 }
 
 type FederationServerUpdate struct {

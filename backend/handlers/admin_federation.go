@@ -13,6 +13,7 @@ import (
 	"my-chat-backend/database"
 	"my-chat-backend/federation"
 	"my-chat-backend/models"
+	"my-chat-backend/version"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -151,6 +152,8 @@ func (h *Handler) AdminConnectFederation(c *fiber.Ctx) error {
 		Token:   token,
 		Name:    localName,
 		BaseURL: localBaseURL,
+		Version: version.Version,
+		Major:   database.CurrentMajor,
 	}
 
 	resp, err := fedTransport.SendDirect(joinURL, "POST", "", joinReq, nil)
@@ -170,6 +173,10 @@ func (h *Handler) AdminConnectFederation(c *fiber.Ctx) error {
 	var joinResp models.FederationJoinResponse
 	if err := json.Unmarshal(resp.Body, &joinResp); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Invalid server response"})
+	}
+
+	if joinResp.Major != 0 && joinResp.Major != database.CurrentMajor {
+		return c.Status(409).JSON(fiber.Map{"error": fmt.Sprintf("Peer incompatible: remote v%d.x.x, local v%d.x.x", joinResp.Major, database.CurrentMajor)})
 	}
 
 	_, err = database.DB.Exec(
