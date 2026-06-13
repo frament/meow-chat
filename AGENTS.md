@@ -367,3 +367,10 @@ cd frontend && npm run build   # production build with service-worker
 - **Windows**: `install.bat` — builds backend + frontend, creates dirs, nssm instructions
 - **README**: Promo banner with favicon3.png + badges; AI-Assisted Development section; installation/update/federation docs
 - **All commits pushed, tag `v1.0.0` created and pushed**
+
+## Session (2026-06-13) — Repo rename my-chat → meow-chat + final polish
+- **README banner**: Promo layout with favicon3.png, version/license/Go/Angular/tests badges, nav links
+- **README AI section**: "AI-Assisted Development" note — all code written by human with AI assistant
+- **Repo rename**: All references updated — `my-chat` → `meow-chat` in README, Makefile, install.bat, contrib/, .gitignore; git remote updated
+- **Files renamed**: `contrib/systemd/my-chat.service` → `meow-chat.service`, `contrib/nginx/my-chat.conf` → `meow-chat.conf`
+- **All pushed to `github.com/frament/meow-chat.git`**
