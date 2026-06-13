@@ -438,6 +438,10 @@ func migrate() {
 		log.Fatal("Failed to create messages uploads directory:", err)
 	}
 
+	if err := InitSchemaVersion(); err != nil {
+		log.Fatal("Schema version init failed:", err)
+	}
+
 	log.Println("Database migrated successfully")
 }
 
@@ -497,6 +501,50 @@ type WebAuthnCredentialRow struct {
 	AAGUID          []byte
 	SignCount       uint32
 	CreatedAt       string
+}
+
+type SchemaVersion struct {
+	Major int
+	Minor int
+	Patch int
+}
+
+const CurrentMajor = 1
+const CurrentMinor = 0
+const CurrentPatch = 0
+
+func InitSchemaVersion() error {
+	_, err := DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version (
+		major INTEGER NOT NULL,
+		minor INTEGER NOT NULL,
+		patch INTEGER NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return err
+	}
+
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&count)
+	if count == 0 {
+		_, err = DB.Exec("INSERT INTO schema_version (major, minor, patch) VALUES (?, ?, ?)",
+			CurrentMajor, CurrentMinor, CurrentPatch)
+	}
+	return err
+}
+
+func GetSchemaVersion() (*SchemaVersion, error) {
+	var sv SchemaVersion
+	err := DB.QueryRow("SELECT major, minor, patch FROM schema_version LIMIT 1").Scan(&sv.Major, &sv.Minor, &sv.Patch)
+	if err != nil {
+		return nil, err
+	}
+	return &sv, nil
+}
+
+func UpdateSchemaVersion(major, minor, patch int) error {
+	_, err := DB.Exec("UPDATE schema_version SET major = ?, minor = ?, patch = ?, updated_at = CURRENT_TIMESTAMP", major, minor, patch)
+	return err
 }
 
 func SeedAdmin() {

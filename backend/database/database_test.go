@@ -27,7 +27,7 @@ func TestInitDBCreatesTables(t *testing.T) {
 		"pinned_users", "invite_tokens", "user_devices", "device_auth_requests",
 		"user_keys_backup", "federation_servers", "federation_users",
 		"federation_queue", "federation_cache_entries", "federation_network",
-		"federation_invites",
+		"federation_invites", "schema_version",
 	}
 	for _, name := range tables {
 		var exists int
@@ -80,4 +80,27 @@ func TestCreateUserAndUniqueUsername(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for duplicate username")
 	}
+}
+
+func TestSchemaVersion(t *testing.T) {
+	setupTestDB(t)
+	sv, err := GetSchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sv.Major != CurrentMajor || sv.Minor != CurrentMinor || sv.Patch != CurrentPatch {
+		t.Errorf("expected %d.%d.%d, got %d.%d.%d", CurrentMajor, CurrentMinor, CurrentPatch, sv.Major, sv.Minor, sv.Patch)
+	}
+}
+
+func TestUpdateSchemaVersion(t *testing.T) {
+	setupTestDB(t)
+	if err := UpdateSchemaVersion(2, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	sv, _ := GetSchemaVersion()
+	if sv.Major != 2 {
+		t.Errorf("expected major 2, got %d", sv.Major)
+	}
+	UpdateSchemaVersion(CurrentMajor, CurrentMinor, CurrentPatch)
 }

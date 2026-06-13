@@ -32,6 +32,20 @@ func main() {
 	database.InitDB()
 	database.SeedAdmin()
 
+	sv, err := database.GetSchemaVersion()
+	if err != nil {
+		log.Fatalf("Failed to read schema version: %v", err)
+	}
+	if sv.Major != database.CurrentMajor {
+		log.Fatalf("MAJOR version mismatch: database is v%d.x.x, server expects v%d.x.x. Run backup and migrate.", sv.Major, database.CurrentMajor)
+	}
+	if sv.Minor != database.CurrentMinor || sv.Patch != database.CurrentPatch {
+		if err := database.UpdateSchemaVersion(database.CurrentMajor, database.CurrentMinor, database.CurrentPatch); err != nil {
+			log.Fatalf("Failed to update schema version: %v", err)
+		}
+		log.Printf("Schema updated: v%d.%d.%d → v%d.%d.%d", sv.Major, sv.Minor, sv.Patch, database.CurrentMajor, database.CurrentMinor, database.CurrentPatch)
+	}
+
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "./data/chat.db"
