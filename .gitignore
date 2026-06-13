@@ -13,6 +13,7 @@ Thumbs.db
 
 # Built binaries
 my-chat-backend.exe
+meow-chat-server.exe
 
 # Generated keys (contains private key)
 vapid_keys.json
