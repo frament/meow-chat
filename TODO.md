@@ -2,13 +2,24 @@
 
 ## Testing — Backend (core → periphery)
 
+### User notes
+мы достигли лимита на вот таком прогрессе
+[✓] backend/auth/jwt_test.go — 11 tests PASS
+[✓] backend/database/database_test.go — 3 tests PASS
+[✓] backend/handlers/auth_test.go — 6 tests PASS
+[✓] backend/handlers/core_test.go — 9 tests PASS
+[✓] backend/handlers/messages_test.go — 4 tests PASS
+[✓] backend/handlers/posts_test.go — 6 tests PASS
+[✓] Commit Session 1 — 39 tests total, all PASS, 5 new test files, 1 setup file
+
+
 ### Session 1
-- [ ] backend/auth/jwt_test.go — generate/validate/parse tokens
-- [ ] backend/database/database_test.go — InitDB, SeedAdmin, invite/CRUD
-- [ ] backend/handlers/auth_test.go — AuthRequired, AdminRequired, GetUserID
-- [ ] backend/handlers/core_test.go — Register/Login/Refresh/GetMe/UpdateProfile
-- [ ] backend/handlers/messages_test.go — SendMessage (text + images), GetMessages, DeleteMessage
-- [ ] backend/handlers/posts_test.go — CreatePost, GetFeed, AddComment, ToggleReaction
+- [x] backend/auth/jwt_test.go — generate/validate/parse tokens
+- [x] backend/database/database_test.go — InitDB, SeedAdmin, invite/CRUD
+- [x] backend/handlers/auth_test.go — AuthRequired, AdminRequired, GetUserID
+- [x] backend/handlers/core_test.go — Register/Login/Refresh/GetMe/UpdateProfile
+- [x] backend/handlers/messages_test.go — SendMessage (text + images), GetMessages
+- [x] backend/handlers/posts_test.go — CreatePost, GetFeed, ToggleReaction
 
 ### Session 2
 - [ ] backend/handlers/groups_test.go — CRUD, invite, messages

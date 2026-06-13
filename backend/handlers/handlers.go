@@ -621,9 +621,9 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 		WHERE p.server_id IS NOT NULL
 		  AND (p.is_public = 1
 		   OR p.user_id IN (
-			SELECT friend_id FROM friends WHERE user_id = ? AND server_id IS NOT NULL
+			SELECT friend_id FROM friends WHERE user_id = ? AND friends.server_id IS NOT NULL
 			UNION
-			SELECT user_id FROM friends WHERE friend_id = ? AND server_id IS NOT NULL
+			SELECT user_id FROM friends WHERE friend_id = ? AND friends.server_id IS NOT NULL
 		))
 		ORDER BY 4 DESC
 		LIMIT 50

@@ -336,7 +336,13 @@ cd frontend && npm run build   # production build with service-worker
 - Added `uploadProgress` field + progress bar UI (percentage + gradient bar) in settings — `settings.ts`
 - ng build passes
 
-## Session (2026-06-12) — Backup upload progress bar
-- Added `HttpEventType.UploadProgress` handling to `uploadBackup()` — `api.service.ts`
-- Added `backupUploadProgress` field + progress bar UI in admin panel — `admin.ts`
-- ng build passes
+## Session (2026-06-12) — Testing Session 1: auth, database, core handlers, messages, posts
+- `backend/auth/jwt_test.go` — 11 tests: generate/validate/parse access & refresh tokens, expired/wrong sig/garbage/type mixup
+- `backend/database/database_test.go` — 3 tests: InitDB creates all tables, SeedAdmin idempotent, unique username
+- `backend/handlers/auth_test.go` — 6 tests: AuthRequired (no header/invalid format/invalid token/valid), AdminRequired (non-admin/admin)
+- `backend/handlers/core_test.go` — 9 tests: Register (success/missing invite/invalid/exhausted), Login (success/wrong password/nonexistent), Refresh, UpdateProfile
+- `backend/handlers/messages_test.go` — 4 tests: SendMessage (multipart), GetMessages (empty/with messages/access denied)
+- `backend/handlers/posts_test.go` — 6 tests: CreatePost (text only/empty/public), GetFeed (empty/with posts), ToggleReaction
+- Found & fixed: `friends.server_id` ambiguous column in `GetFeed` query
+- Added shared test helpers: `handlers_test_setup.go` (in-memory SQLite, Fiber test app, channel drain goroutine)
+- **39 tests total, all PASS**
