@@ -346,3 +346,24 @@ cd frontend && npm run build   # production build with service-worker
 - Found & fixed: `friends.server_id` ambiguous column in `GetFeed` query
 - Added shared test helpers: `handlers_test_setup.go` (in-memory SQLite, Fiber test app, channel drain goroutine)
 - **39 tests total, all PASS**
+
+## Session (2026-06-12/13) — Testing Sessions 2-4: groups, admin, push, devices, federation, backup, cache
+- **Session 2**: `handlers/groups_test.go` (11), `handlers/admin_test.go` (6), `handlers/push_test.go` (5) — 44 tests all PASS
+- **Session 3**: `handlers/devices_test.go` (16), `handlers/admin_federation_test.go` (9), `handlers/backup_test.go` (4) — 73 handler tests all PASS
+- **Session 4**: `backup/config_test.go` (6), `backup/backup_test.go` (5), `cache/lru_cache_test.go` (8), `federation/mediator_test.go` (7), `federation/route_test.go` (5), `federation/transport_test.go` (9), `federation/queue_test.go` (4), `federation/health_test.go` (5), `federation/handler_test.go` (24) — 160 tests total all PASS
+- Production bug fixes: `friends.server_id` ambiguous column in `GetFeed`; test DDL matched to production schemas; env var race in backup tests fixed with unique DB paths
+
+## Session (2026-06-13) — Testing Sessions 5-7: frontend (84 tests)
+- **Services**: `theme.service.spec.ts` (8), `notification.service.spec.ts` (8), `crypto.service.spec.ts` (7), `auth.interceptor.spec.ts` (11), `api.service.spec.ts` (7)
+- **Components**: `app.component.spec.ts` (7), `login.component.spec.ts` (3), `register.component.spec.ts` (3), `layout.component.spec.ts` (4), `feed.component.spec.ts` (4), `chat.component.spec.ts` (8), `settings.component.spec.ts` (2), `admin.component.spec.ts` (2), `device-auth.component.spec.ts` (3), `admin-federation.component.spec.ts` (3), `add-friend.component.spec.ts` (2), `join-group.component.spec.ts` (2)
+- **Total**: 84 frontend tests, all PASS
+- Combined with 169 backend tests = **253 tests total, 0 failures**
+
+## Session (2026-06-13) — Versioning strategy + install scripts + v1.0.0 release
+- **Versioning**: SemVer, breaking only in MAJOR; `backend/version/version.go`; `GET /api/version` endpoint
+- **Schema migration**: `schema_version` table (major/minor/patch); startup MAJOR check → FATAL on mismatch; auto-update MINOR/PATCH
+- **Federation handshake**: Version in `FederationJoinRequest`/`FederationJoinResponse`; MAJOR mismatch → 409 reject
+- **Linux VDS**: `make install` target; `contrib/systemd/my-chat.service`; `contrib/nginx/my-chat.conf`; `contrib/env.template`
+- **Windows**: `install.bat` — builds backend + frontend, creates dirs, nssm instructions
+- **README**: Promo banner with favicon3.png + badges; AI-Assisted Development section; installation/update/federation docs
+- **All commits pushed, tag `v1.0.0` created and pushed**
