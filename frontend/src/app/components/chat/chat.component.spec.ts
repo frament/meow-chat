@@ -81,7 +81,7 @@ describe('ChatComponent', () => {
   });
 
   it('renders message input area after selecting a user', fakeAsync(() => {
-    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, created_at: '', is_online: false };
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const input = compiled.querySelector('input[type="text"]');
@@ -89,7 +89,7 @@ describe('ChatComponent', () => {
   }));
 
   it('renders type selector buttons after selecting a user', fakeAsync(() => {
-    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, created_at: '', is_online: false };
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('button');
@@ -98,7 +98,7 @@ describe('ChatComponent', () => {
   }));
 
   it('renders send button after selecting a user', fakeAsync(() => {
-    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, created_at: '', is_online: false };
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const sendBtn = compiled.querySelector('button[title="Отправить"]');
