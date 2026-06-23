@@ -385,6 +385,10 @@ func migrate() {
 	if count == 0 {
 		DB.Exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
 	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_banned'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+	}
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE posts ADD COLUMN is_public INTEGER DEFAULT 0")

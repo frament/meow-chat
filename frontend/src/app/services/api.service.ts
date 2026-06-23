@@ -8,6 +8,7 @@ export interface User {
   email: string;
   avatar_url: string;
   is_admin: boolean;
+  is_banned: boolean;
   created_at: string;
   is_online: boolean;
 }
@@ -415,6 +416,22 @@ export class ApiService {
 
   adminDeleteGroupChat(id: number) {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/group-chats/${id}`);
+  }
+
+  adminBlockUser(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/admin/users/${id}/block`, {});
+  }
+
+  adminUnblockUser(id: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/admin/users/${id}/unblock`, {});
+  }
+
+  adminDeleteUser(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/users/${id}`);
+  }
+
+  adminDeleteFile(path: string) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/files`, { body: { path } });
   }
 
   deleteGroupChat(id: number) {

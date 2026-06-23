@@ -363,16 +363,21 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 	}
 
 	var user models.User
+	var isBanned bool
 	err := database.DB.QueryRow(
-		"SELECT id, username, email, password, avatar_url, is_admin FROM users WHERE username = ?",
+		"SELECT id, username, email, password, avatar_url, is_admin, is_banned FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.IsAdmin)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.AvatarURL, &user.IsAdmin, &isBanned)
 
 	if err == sql.ErrNoRows {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	if isBanned {
+		return c.Status(403).JSON(fiber.Map{"error": "Аккаунт заблокирован"})
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
@@ -1436,7 +1441,7 @@ func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
-	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, is_admin, created_at FROM users ORDER BY username")
+	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, is_admin, is_banned, created_at FROM users ORDER BY username")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
 	}
@@ -1448,6 +1453,7 @@ func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
 		Email     string    `json:"email"`
 		AvatarURL string    `json:"avatar_url"`
 		IsAdmin   bool      `json:"is_admin"`
+		IsBanned  bool      `json:"is_banned"`
 		CreatedAt time.Time `json:"created_at"`
 		IsOnline  bool      `json:"is_online"`
 	}
@@ -1455,7 +1461,7 @@ func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
 	users := make([]AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.IsBanned, &u.CreatedAt); err != nil {
 			continue
 		}
 		u.IsOnline = h.onlineUsers[u.ID]
@@ -1498,6 +1504,154 @@ func (h *Handler) RemoveAdmin(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Admin rights removed"})
+}
+
+func (h *Handler) AdminBlockUser(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	adminID := c.Locals("userId").(int64)
+	if targetID == adminID {
+		return c.Status(400).JSON(fiber.Map{"error": "Нельзя заблокировать самого себя"})
+	}
+
+	result, err := database.DB.Exec("UPDATE users SET is_banned = 1 WHERE id = ?", targetID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to block user"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "User blocked"})
+}
+
+func (h *Handler) AdminUnblockUser(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	result, err := database.DB.Exec("UPDATE users SET is_banned = 0 WHERE id = ?", targetID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to unblock user"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "User unblocked"})
+}
+
+func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	adminID := c.Locals("userId").(int64)
+	if targetID == adminID {
+		return c.Status(400).JSON(fiber.Map{"error": "Нельзя удалить самого себя"})
+	}
+
+	var avatarURL string
+	database.DB.QueryRow("SELECT avatar_url FROM users WHERE id = ?", targetID).Scan(&avatarURL)
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to start transaction"})
+	}
+	defer tx.Rollback()
+
+	tables := []string{
+		"DELETE FROM messages WHERE from_user_id = ?",
+		"DELETE FROM messages WHERE to_user_id = ?",
+		"DELETE FROM friends WHERE user_id = ?",
+		"DELETE FROM friends WHERE friend_id = ?",
+		"DELETE FROM group_chat_members WHERE user_id = ?",
+		"DELETE FROM group_chat_invites WHERE created_by = ?",
+		"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)",
+		"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)",
+		"DELETE FROM posts WHERE user_id = ?",
+		"DELETE FROM pinned_users WHERE user_id = ?",
+		"DELETE FROM pinned_users WHERE pinned_user_id = ?",
+		"DELETE FROM webauthn_credentials WHERE user_id = ?",
+		"DELETE FROM refresh_tokens WHERE user_id = ?",
+		"DELETE FROM group_key_shares WHERE user_id = ?",
+		"DELETE FROM group_key_shares WHERE key_creator_id = ?",
+		"DELETE FROM push_subscriptions WHERE user_id = ?",
+		"DELETE FROM webauthn_sessions WHERE user_id = ?",
+		"DELETE FROM backup_settings WHERE user_id = ?",
+		"DELETE FROM devices WHERE user_id = ?",
+	}
+
+	for _, q := range tables {
+		if _, err := tx.Exec(q, targetID, targetID); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to clean user data"})
+		}
+	}
+
+	result, err := tx.Exec("DELETE FROM users WHERE id = ?", targetID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete user"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to commit"})
+	}
+
+	if avatarURL != "" {
+		avatarPath := "." + avatarURL
+		os.Remove(avatarPath)
+	}
+
+	return c.JSON(fiber.Map{"message": "User deleted"})
+}
+
+func (h *Handler) AdminDeleteFile(c *fiber.Ctx) error {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.Path == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Path is required"})
+	}
+
+	filePath := "." + req.Path
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid path"})
+	}
+
+	uploadsAbs, err := filepath.Abs("./uploads")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	if !strings.HasPrefix(absPath, uploadsAbs) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied: file outside uploads"})
+	}
+
+	if err := os.Remove(filePath); err != nil {
+		if os.IsNotExist(err) {
+			return c.Status(404).JSON(fiber.Map{"error": "File not found"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete file"})
+	}
+
+	return c.JSON(fiber.Map{"message": "File deleted"})
 }
 
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {

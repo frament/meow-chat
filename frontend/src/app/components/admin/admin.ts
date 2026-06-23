@@ -74,9 +74,8 @@ interface BackupEntry {
                   <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
                     <th style="text-align:left;padding:8px 12px;font-weight:500;">Пользователь</th>
                     <th style="text-align:left;padding:8px 12px;font-weight:500;">Email</th>
-                    <th style="text-align:center;padding:8px 12px;font-weight:500;">Админ</th>
                     <th style="text-align:center;padding:8px 12px;font-weight:500;">Статус</th>
-                    <th style="text-align:right;padding:8px 12px;font-weight:500;">Действие</th>
+                    <th style="text-align:right;padding:8px 12px;font-weight:500;">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,27 +102,45 @@ interface BackupEntry {
                       </td>
                       <td style="padding:10px 12px;color:var(--text-secondary);">{{ user.email }}</td>
                       <td style="padding:10px 12px;text-align:center;">
-                        @if (user.is_admin) {
-                          <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:500;background:var(--accent-light);color:var(--accent);">Да</span>
-                        } @else {
-                          <span style="color:var(--text-tertiary);font-size:13px;">Нет</span>
-                        }
-                      </td>
-                      <td style="padding:10px 12px;text-align:center;">
-                        @if (user.is_online) {
-                          <span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#34d399;">В сети</span>
+                        @if (user.is_banned) {
+                          <span style="font-size:13px;color:#e74c3c;">Заблокирован</span>
+                        } @else if (user.is_online) {
+                          <span style="font-size:13px;color:#34d399;">В сети</span>
                         } @else {
                           <span style="color:var(--text-tertiary);font-size:13px;">Не в сети</span>
                         }
                       </td>
-                      <td style="padding:10px 12px;text-align:right;">
-                        @if (actionLoading === user.id) {
-                          <span style="font-size:13px;color:var(--text-tertiary);">...</span>
-                        } @else if (user.is_admin) {
-                          <button (click)="removeAdmin(user)" style="padding:4px 12px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:var(--text-secondary);transition:all 0.2s;">Снять админа</button>
-                        } @else {
-                          <button (click)="makeAdmin(user)" style="padding:4px 12px;border-radius:6px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:13px;transition:all 0.2s;">Назначить админом</button>
-                        }
+                      <td style="padding:10px 12px;text-align:right;white-space:nowrap;">
+                        <div style="display:flex;gap:2px;justify-content:flex-end;align-items:center;">
+                          @if (actionLoading === user.id) {
+                            <span style="font-size:13px;color:var(--text-tertiary);">...</span>
+                          } @else {
+                            <button (click)="user.is_admin ? removeAdmin(user) : makeAdmin(user)"
+                              [title]="user.is_admin ? 'Снять админа' : 'Назначить админом'"
+                              style="padding:5px;border-radius:6px;border:none;background:transparent;cursor:pointer;transition:all 0.2s;"
+                              [style.color]="user.is_admin ? 'var(--accent)' : 'var(--text-tertiary)'">
+                              @if (user.is_admin) {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" stroke-width="0"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                              } @else {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                              }
+                            </button>
+                            <button (click)="user.is_banned ? unblockUser(user) : blockUser(user)"
+                              [title]="user.is_banned ? 'Разблокировать' : 'Заблокировать'"
+                              style="padding:5px;border-radius:6px;border:none;background:transparent;cursor:pointer;transition:all 0.2s;"
+                              [style.color]="user.is_banned ? '#e67e22' : 'var(--text-tertiary)'">
+                              @if (user.is_banned) {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>
+                              } @else {
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                              }
+                            </button>
+                            <button (click)="deleteUser(user)" title="Удалить"
+                              style="padding:5px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;transition:all 0.2s;">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                          }
+                        </div>
                       </td>
                     </tr>
                   }
@@ -209,6 +226,7 @@ interface BackupEntry {
                       <th style="text-align:left;padding:8px 12px;font-weight:500;">Размер</th>
                       <th style="text-align:left;padding:8px 12px;font-weight:500;">Дата</th>
                       <th style="text-align:left;padding:8px 12px;font-weight:500;">Путь</th>
+                      <th style="text-align:right;padding:8px 12px;font-weight:500;">Действие</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -226,6 +244,16 @@ interface BackupEntry {
                         <td style="padding:10px 12px;color:var(--text-secondary);">{{ formatSize(file.size) }}</td>
                         <td style="padding:10px 12px;color:var(--text-secondary);">{{ file.mod_time | date:'dd.MM.yyyy HH:mm' }}</td>
                         <td style="padding:10px 12px;color:var(--text-tertiary);font-size:13px;">{{ file.path }}</td>
+                        <td style="padding:10px 12px;text-align:right;">
+                          @if (deleteFileLoading === file.path) {
+                            <span style="font-size:13px;color:var(--text-tertiary);">...</span>
+                          } @else {
+                            <button (click)="deleteFile(file)" title="Удалить"
+                              style="padding:5px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;transition:all 0.2s;">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                          }
+                        </td>
                       </tr>
                     }
                   </tbody>
@@ -322,6 +350,7 @@ export class AdminComponent implements OnInit {
   actionLoading: number | null = null;
   actionMsg = '';
   actionOk = false;
+  deleteFileLoading: string | null = null;
 
   chats: AdminGroupChat[] = [];
   loadingChats = false;
@@ -396,6 +425,85 @@ export class AdminComponent implements OnInit {
       error: () => {
         this.actionLoading = null;
         this.actionMsg = 'Ошибка снятия прав администратора';
+        this.actionOk = false;
+        this.clearMsg();
+      },
+    });
+  }
+
+  blockUser(user: User) {
+    if (!confirm(`Заблокировать пользователя ${user.username}?`)) return;
+    this.actionLoading = user.id;
+    this.actionMsg = '';
+    this.api.adminBlockUser(user.id).subscribe({
+      next: () => {
+        user.is_banned = true;
+        this.actionLoading = null;
+        this.actionMsg = `Пользователь ${user.username} заблокирован`;
+        this.actionOk = true;
+        this.clearMsg();
+      },
+      error: () => {
+        this.actionLoading = null;
+        this.actionMsg = 'Ошибка блокировки пользователя';
+        this.actionOk = false;
+        this.clearMsg();
+      },
+    });
+  }
+
+  unblockUser(user: User) {
+    this.actionLoading = user.id;
+    this.actionMsg = '';
+    this.api.adminUnblockUser(user.id).subscribe({
+      next: () => {
+        user.is_banned = false;
+        this.actionLoading = null;
+        this.actionMsg = `Пользователь ${user.username} разблокирован`;
+        this.actionOk = true;
+        this.clearMsg();
+      },
+      error: () => {
+        this.actionLoading = null;
+        this.actionMsg = 'Ошибка разблокировки пользователя';
+        this.actionOk = false;
+        this.clearMsg();
+      },
+    });
+  }
+
+  deleteUser(user: User) {
+    if (!confirm(`Удалить пользователя ${user.username}? Все его данные будут безвозвратно удалены.`)) return;
+    this.actionLoading = user.id;
+    this.actionMsg = '';
+    this.api.adminDeleteUser(user.id).subscribe({
+      next: () => {
+        this.users = this.users.filter(u => u.id !== user.id);
+        this.actionLoading = null;
+        this.actionMsg = `Пользователь ${user.username} удалён`;
+        this.actionOk = true;
+        this.clearMsg();
+      },
+      error: () => {
+        this.actionLoading = null;
+        this.actionMsg = 'Ошибка удаления пользователя';
+        this.actionOk = false;
+        this.clearMsg();
+      },
+    });
+  }
+
+  deleteFile(file: FileEntry) {
+    if (!confirm(`Удалить файл "${file.name}"?`)) return;
+    this.deleteFileLoading = file.path;
+    this.api.adminDeleteFile(file.path).subscribe({
+      next: () => {
+        this.files = this.files.filter(f => f.path !== file.path);
+        this.deleteFileLoading = null;
+      },
+      error: () => {
+        this.deleteFileLoading = null;
+        this.actionMsg = 'Ошибка удаления файла';
         this.actionOk = false;
         this.clearMsg();
       },

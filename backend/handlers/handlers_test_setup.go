@@ -25,7 +25,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	database.DB = db
 
 	execs := []string{
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_user_id INTEGER NOT NULL, to_user_id INTEGER NOT NULL, content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', encrypted_content TEXT DEFAULT '', encrypted_iv TEXT DEFAULT '', server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (from_user_id) REFERENCES users(id), FOREIGN KEY (to_user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS message_images (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, content TEXT NOT NULL, is_public INTEGER DEFAULT 0, server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))`,
@@ -161,7 +161,11 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Get("/users", h.AdminListUsers)
 	admin.Post("/users/:id/make-admin", h.MakeAdmin)
 	admin.Post("/users/:id/remove-admin", h.RemoveAdmin)
+	admin.Post("/users/:id/block", h.AdminBlockUser)
+	admin.Post("/users/:id/unblock", h.AdminUnblockUser)
+	admin.Delete("/users/:id", h.AdminDeleteUser)
 	admin.Get("/files", h.AdminListFiles)
+	admin.Delete("/files", h.AdminDeleteFile)
 	admin.Get("/group-chats", h.AdminListGroupChats)
 	admin.Delete("/group-chats/:id", h.AdminDeleteGroupChat)
 	admin.Get("/federation/servers", h.AdminListFederationServers)
