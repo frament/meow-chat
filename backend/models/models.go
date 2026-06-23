@@ -9,6 +9,7 @@ type User struct {
 	Password  string    `json:"-"`
 	AvatarURL string    `json:"avatar_url"`
 	IsAdmin   bool      `json:"is_admin"`
+	IsBanned  bool      `json:"is_banned"`
 	CreatedAt time.Time `json:"created_at"`
 	IsOnline  bool      `json:"is_online"`
 }

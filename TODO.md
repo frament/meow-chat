@@ -1,8 +1,8 @@
-# ✅ All Done — 253 tests across 29 files
+# ✅ All Done — 260 tests across 29 files
 
 ## Test Summary
 
-### Backend — 169 tests (Go, 18 files)
+### Backend — 176 tests (Go, 18 files)
 | Package | Tests |
 |---------|-------|
 | `backend/auth/jwt_test.go` | 11 |
@@ -12,7 +12,7 @@
 | `backend/handlers/messages_test.go` | 4 |
 | `backend/handlers/posts_test.go` | 6 |
 | `backend/handlers/groups_test.go` | 11 |
-| `backend/handlers/admin_test.go` | 6 |
+| `backend/handlers/admin_test.go` | 13 |
 | `backend/handlers/push_test.go` | 5 |
 | `backend/handlers/webauthn_test.go` | 4 |
 | `backend/handlers/devices_test.go` | 16 |
@@ -23,7 +23,7 @@
 | `backend/backup/process_test.go` | 5 |
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/federation/*_test.go` (6 files) | 54 |
-| **Backend total** | **169** |
+| **Backend total** | **176** |
 
 ### Frontend — 84 tests (11 files)
 | Component/Service | Tests |
@@ -47,7 +47,7 @@
 | `join-group.component.spec.ts` | 2 |
 | **Frontend total** | **84** |
 
-### Grand total: 253 tests, 0 failures ✅
+### Grand total: 260 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`

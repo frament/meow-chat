@@ -75,6 +75,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 			recovery_phrase_iv       TEXT,
 			updated_at               DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS group_key_shares (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), encrypted_key TEXT NOT NULL, iv TEXT NOT NULL, key_creator_id INTEGER DEFAULT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(group_chat_id, user_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS federation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL REFERENCES federation_servers(id), remote_id INTEGER NOT NULL, username TEXT NOT NULL, avatar_url TEXT DEFAULT '', email TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_id, remote_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, event_type TEXT NOT NULL, payload TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,

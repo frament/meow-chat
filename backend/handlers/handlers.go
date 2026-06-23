@@ -1567,30 +1567,40 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
-	tables := []string{
-		"DELETE FROM messages WHERE from_user_id = ?",
-		"DELETE FROM messages WHERE to_user_id = ?",
-		"DELETE FROM friends WHERE user_id = ?",
-		"DELETE FROM friends WHERE friend_id = ?",
-		"DELETE FROM group_chat_members WHERE user_id = ?",
-		"DELETE FROM group_chat_invites WHERE created_by = ?",
-		"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)",
-		"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)",
-		"DELETE FROM posts WHERE user_id = ?",
-		"DELETE FROM pinned_users WHERE user_id = ?",
-		"DELETE FROM pinned_users WHERE pinned_user_id = ?",
-		"DELETE FROM webauthn_credentials WHERE user_id = ?",
-		"DELETE FROM refresh_tokens WHERE user_id = ?",
-		"DELETE FROM group_key_shares WHERE user_id = ?",
-		"DELETE FROM group_key_shares WHERE key_creator_id = ?",
-		"DELETE FROM push_subscriptions WHERE user_id = ?",
-		"DELETE FROM webauthn_sessions WHERE user_id = ?",
-		"DELETE FROM backup_settings WHERE user_id = ?",
-		"DELETE FROM devices WHERE user_id = ?",
+	tables := []struct {
+		query string
+		args  []int64
+	}{
+		{"DELETE FROM messages WHERE from_user_id = ?", []int64{targetID}},
+		{"DELETE FROM messages WHERE to_user_id = ?", []int64{targetID}},
+		{"DELETE FROM friends WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM friends WHERE friend_id = ?", []int64{targetID}},
+		{"DELETE FROM group_chat_members WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM group_messages WHERE from_user_id = ?", []int64{targetID}},
+		{"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
+		{"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
+		{"DELETE FROM posts WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM group_message_images WHERE group_message_id IN (SELECT id FROM group_messages WHERE from_user_id = ?)", []int64{targetID}},
+		{"DELETE FROM pinned_users WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM pinned_users WHERE pinned_user_id = ?", []int64{targetID}},
+		{"DELETE FROM webauthn_credentials WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM refresh_tokens WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM group_key_shares WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM group_key_shares WHERE key_creator_id = ?", []int64{targetID}},
+		{"DELETE FROM push_subscriptions WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM user_devices WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM device_auth_requests WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM invite_tokens WHERE created_by = ?", []int64{targetID}},
+		{"DELETE FROM message_images WHERE message_id IN (SELECT id FROM messages WHERE from_user_id = ?)", []int64{targetID}},
+		{"DELETE FROM user_keys_backup WHERE user_id = ?", []int64{targetID}},
 	}
 
-	for _, q := range tables {
-		if _, err := tx.Exec(q, targetID, targetID); err != nil {
+	for _, t := range tables {
+		args := make([]interface{}, len(t.args))
+		for i, a := range t.args {
+			args[i] = a
+		}
+		if _, err := tx.Exec(t.query, args...); err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to clean user data"})
 		}
 	}
