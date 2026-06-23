@@ -110,7 +110,7 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
                   <div class="reaction-picker" (click)="$event.stopPropagation()">
                     @for (r of getAvailableEmojis(post); track r) {
                       <button (click)="toggleReaction(post, r); pickerPostId = null; $event.stopPropagation()"
-                        style="padding:4px 8px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:18px;transition:all 0.1s;">
+                        style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:18px;transition:all 0.1s;">
                         {{ r }}
                       </button>
                     }
