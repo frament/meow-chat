@@ -15,14 +15,22 @@ import (
 
 func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	t.Helper()
-
 	os.MkdirAll("./uploads/messages", 0755)
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	tmpFile, err := os.CreateTemp("", "chat-test-*.db")
 	if err != nil {
 		t.Fatal(err)
 	}
+	tmpFile.Close()
+	dbPath := tmpFile.Name()
+
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(2)
 	database.DB = db
+	t.Cleanup(func() { db.Close(); os.Remove(dbPath) })
 
 	execs := []string{
 		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
@@ -83,6 +91,9 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS federation_network (id INTEGER PRIMARY KEY AUTOINCREMENT, server_a_id INTEGER NOT NULL, server_b_id INTEGER NOT NULL, hop_count INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_a_id, server_b_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, created_by INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 1, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS federation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, remote_post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, is_public INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
+		`CREATE TABLE IF NOT EXISTS polls (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE, group_message_id INTEGER REFERENCES group_messages(id) ON DELETE CASCADE, question TEXT NOT NULL, is_multiple_choice INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, CHECK ((message_id IS NOT NULL AND group_message_id IS NULL) OR (message_id IS NULL AND group_message_id IS NOT NULL)))`,
+		`CREATE TABLE IF NOT EXISTS poll_options (id INTEGER PRIMARY KEY AUTOINCREMENT, poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE, text TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS poll_votes (id INTEGER PRIMARY KEY AUTOINCREMENT, poll_option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(poll_option_id, user_id))`,
 	}
 	for _, q := range execs {
 		if _, err := database.DB.Exec(q); err != nil {
@@ -187,6 +198,8 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Post("/backups/:filename/restore", h.AdminRestoreBackup)
 
 	_ = adminID
+
+	app.Post("/polls/:id/vote", AuthRequired, h.CastVote)
 
 	// Push routes
 	h.LoadVAPIDKeys()

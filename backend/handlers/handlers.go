@@ -60,6 +60,7 @@ type wsMessage struct {
 	encryptedContent  string
 	encryptedIV       string
 	pushPreview       string
+	pollData          fiber.Map
 }
 
 func NewHandler() *Handler {
@@ -150,6 +151,9 @@ func (h *Handler) runHub() {
 						payload["encrypted_content"] = msg.encryptedContent
 						payload["encrypted_iv"] = msg.encryptedIV
 					}
+					if msg.pollData != nil {
+						payload["poll"] = msg.pollData
+					}
 					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
@@ -224,6 +228,9 @@ func (h *Handler) runHub() {
 			if msg.encryptedContent != "" {
 				payload["encrypted_content"] = msg.encryptedContent
 				payload["encrypted_iv"] = msg.encryptedIV
+			}
+			if msg.pollData != nil {
+				payload["poll"] = msg.pollData
 			}
 
 			for _, memberID := range memberIDs {
@@ -824,6 +831,8 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 				}
 			}
 		}
+
+		loadPollsForMessages(messages, authUserID, false)
 	}
 
 	return c.JSON(messages)
@@ -868,6 +877,24 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		pushPreview = content
 	}
 
+	pollOptions := form.Value["poll_options[]"]
+	pollMultiple := false
+	if vals, ok := form.Value["poll_multiple"]; ok && len(vals) > 0 && vals[0] == "true" {
+		pollMultiple = true
+	}
+
+	if msgType == "poll" {
+		if content == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Poll question required"})
+		}
+		if len(pollOptions) < 2 {
+			return c.Status(400).JSON(fiber.Map{"error": "At least 2 poll options required"})
+		}
+		if len(pollOptions) > 20 {
+			return c.Status(400).JSON(fiber.Map{"error": "Maximum 20 poll options allowed"})
+		}
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -888,6 +915,30 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	messageID, _ := result.LastInsertId()
+
+	var pollID int64
+	if msgType == "poll" {
+		pres, err := tx.Exec(
+			"INSERT INTO polls (message_id, question, is_multiple_choice) VALUES (?, ?, ?)",
+			messageID, content, pollMultiple,
+		)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to create poll"})
+		}
+		pollID, _ = pres.LastInsertId()
+		for _, optText := range pollOptions {
+			if optText == "" {
+				continue
+			}
+			_, err := tx.Exec(
+				"INSERT INTO poll_options (poll_id, text) VALUES (?, ?)",
+				pollID, optText,
+			)
+			if err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to create poll option"})
+			}
+		}
+	}
 
 	var images []string
 	for _, file := range files {
@@ -917,6 +968,14 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	var senderName string
 	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", fromUserID).Scan(&senderName)
 
+	var pollData fiber.Map
+	if pollID > 0 {
+		options := loadPollOptions(pollID, fromUserID)
+		pollData = fiber.Map{
+			"id": pollID, "question": content, "is_multiple_choice": pollMultiple, "options": options,
+		}
+	}
+
 	h.broadcast <- wsMessage{
 		messageID:        messageID,
 		from:             fromUserID,
@@ -929,6 +988,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		encryptedContent: encryptedContent,
 		encryptedIV:      encryptedIV,
 		pushPreview:      pushPreview,
+		pollData:         pollData,
 	}
 
 	// Forward to federated server if recipient is a remote user
@@ -959,7 +1019,11 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(201).JSON(fiber.Map{"id": messageID, "message": "Message sent"})
+	resp := fiber.Map{"id": messageID, "message": "Message sent"}
+	if pollData != nil {
+		resp["poll"] = pollData
+	}
+	return c.Status(201).JSON(resp)
 }
 
 func (h *Handler) UploadAvatar(c *fiber.Ctx) error {

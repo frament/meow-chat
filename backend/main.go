@@ -239,6 +239,8 @@ func main() {
 	api.Get("/group-chat-messages/:groupId", h.GetGroupMessages)
 	api.Post("/group-chat-messages", h.SendGroupMessage)
 
+	api.Post("/polls/:id/vote", h.CastVote)
+
 	api.Post("/upload-avatar", h.UploadAvatar)
 	api.Put("/profile", h.UpdateProfile)
 

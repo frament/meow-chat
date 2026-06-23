@@ -68,6 +68,24 @@ export interface GroupWsMessage {
 export type AnyWsMessage = WsMessage | GroupWsMessage;
 export type WsMessageType = WsMessage['type'] | GroupWsMessage['type'];
 
+export interface PollOption {
+  id: number;
+  poll_id: number;
+  text: string;
+  vote_count: number;
+  voted: boolean;
+}
+
+export interface Poll {
+  id: number;
+  message_id?: number;
+  group_message_id?: number;
+  question: string;
+  is_multiple_choice: boolean;
+  options: PollOption[];
+  created_at: string;
+}
+
 export interface Message {
   id: number;
   from_user_id: number;
@@ -81,6 +99,7 @@ export interface Message {
   encrypted_content?: string;
   encrypted_iv?: string;
   pending?: boolean;
+  poll?: Poll;
 }
 
 export interface GroupChat {
@@ -239,7 +258,7 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
@@ -247,6 +266,12 @@ export class ApiService {
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
+    if (pollOptions) {
+      for (const opt of pollOptions) {
+        formData.append('poll_options[]', opt);
+      }
+    }
+    if (pollMultiple) formData.append('poll_multiple', 'true');
     for (const file of files) {
       formData.append('images', file);
     }
@@ -307,7 +332,7 @@ export class ApiService {
     );
   }
 
-  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
     const formData = new FormData();
     formData.append('group_chat_id', String(groupId));
     formData.append('content', content);
@@ -315,6 +340,12 @@ export class ApiService {
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
+    if (pollOptions) {
+      for (const opt of pollOptions) {
+        formData.append('poll_options[]', opt);
+      }
+    }
+    if (pollMultiple) formData.append('poll_multiple', 'true');
     for (const file of files) {
       formData.append('images', file);
     }
@@ -325,7 +356,7 @@ export class ApiService {
   }
 
   // Upload methods with progress reporting
-  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
@@ -333,6 +364,12 @@ export class ApiService {
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
+    if (pollOptions) {
+      for (const opt of pollOptions) {
+        formData.append('poll_options[]', opt);
+      }
+    }
+    if (pollMultiple) formData.append('poll_multiple', 'true');
     for (const file of files) {
       formData.append('images', file);
     }
@@ -342,7 +379,7 @@ export class ApiService {
     });
   }
 
-  sendGroupMessageWithProgress(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string) {
+  sendGroupMessageWithProgress(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
     const formData = new FormData();
     formData.append('group_chat_id', String(groupId));
     formData.append('content', content);
@@ -350,6 +387,12 @@ export class ApiService {
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
+    if (pollOptions) {
+      for (const opt of pollOptions) {
+        formData.append('poll_options[]', opt);
+      }
+    }
+    if (pollMultiple) formData.append('poll_multiple', 'true');
     for (const file of files) {
       formData.append('images', file);
     }
@@ -881,6 +924,15 @@ export class ApiService {
   getRecoveryPhraseStatus() {
     return this.http.get<{ has_recovery_phrase: boolean }>(
       `${this.baseUrl}/devices/recovery-phrase`
+    );
+  }
+
+  // ── Polls ──
+
+  castVote(pollId: number, optionId: number) {
+    return this.http.post<{ message: string; options: PollOption[] }>(
+      `${this.baseUrl}/polls/${pollId}/vote`,
+      { option_id: optionId }
     );
   }
 

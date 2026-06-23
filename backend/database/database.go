@@ -269,6 +269,31 @@ func migrate() {
 			created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at               DATETIME NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS polls (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+			group_message_id INTEGER REFERENCES group_messages(id) ON DELETE CASCADE,
+			question TEXT NOT NULL,
+			is_multiple_choice INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			CHECK (
+				(message_id IS NOT NULL AND group_message_id IS NULL) OR
+				(message_id IS NULL AND group_message_id IS NOT NULL)
+			)
+		)`,
+		`CREATE TABLE IF NOT EXISTS poll_options (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+			text TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS poll_votes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			poll_option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(poll_option_id, user_id)
+		)`,
 		`CREATE TABLE IF NOT EXISTS group_key_shares (
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,

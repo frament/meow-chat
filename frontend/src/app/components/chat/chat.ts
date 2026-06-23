@@ -147,11 +147,34 @@ import { CryptoService } from '../../services/crypto.service';
                           @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
                         </div>
                       } @else if (($any(item).msg_type || 'text') === 'poll') {
-                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
+                        @let poll = $any(item).poll;
+                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
-                          <div class="flex items-center gap-2 text-xs opacity-60">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Coming soon</span>
+                          @if (poll && poll.options) {
+                          <div class="flex flex-col gap-1.5 mt-1">
+                            @for (opt of poll.options; track opt.id) {
+                            <button (click)="castVote(poll.id, opt.id)"
+                              [style.borderColor]="opt.voted ? 'var(--accent)' : 'var(--divider)'"
+                              [style.background]="opt.voted ? 'var(--accent-light)' : 'transparent'"
+                              class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs w-full text-left transition-all"
+                              style="border:1px solid;cursor:pointer;">
+                              <span class="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[10px]"
+                                [style.background]="opt.voted ? 'var(--accent)' : 'var(--bg-overlay)'"
+                                [style.color]="opt.voted ? 'white' : 'var(--text-tertiary)'">
+                                {{ opt.vote_count }}
+                              </span>
+                              <span class="flex-1" style="color:var(--text-primary);">{{ opt.text }}</span>
+                              @if (opt.voted) {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                              }
+                            </button>
+                            }
                           </div>
+                          <span class="text-xs opacity-50">
+                            @let tv = computeTotalVotes(poll);
+                            {{ tv }} голос{{ tv === 1 ? '' : (tv >= 2 && tv <= 4 ? 'а' : 'ов') }}
+                          </span>
+                          }
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
@@ -175,7 +198,6 @@ import { CryptoService } from '../../services/crypto.service';
               </ng-template>
             </div>
           </cdk-virtual-scroll-viewport>
-
           <!-- Desktop chat input -->
           <div>
             @if (previews.length > 0) {
@@ -191,7 +213,7 @@ import { CryptoService } from '../../services/crypto.service';
             </div>
             }
             <div class="flex gap-1 px-4 py-1.5" style="border-top:1px solid var(--divider);">
-              @for (t of msgTypes; track t.id) {
+              @for (t of visibleMsgTypes; track t.id) {
                 <button (click)="messageType = t.id"
                   [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
                   [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-tertiary)'"
@@ -202,6 +224,30 @@ import { CryptoService } from '../../services/crypto.service';
                 </button>
               }
             </div>
+            @if (messageType === 'poll') {
+            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
+                style="height:36px;box-sizing:border-box;">
+              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
+              <div class="flex items-center gap-2">
+                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
+                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
+                @if (pollOptions.length > 2) {
+                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                }
+              </div>
+              }
+              <div class="flex items-center gap-2">
+                <button (click)="addPollOption()" class="text-xs"
+                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
+                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
+                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
+                  Несколько вариантов
+                </label>
+              </div>
+            </div>
+            } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
               @if (uploading()) {
               <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
@@ -216,7 +262,7 @@ import { CryptoService } from '../../services/crypto.service';
               </button>
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;"
-              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : messageType === 'image' ? 'Подпись к изображению...' : 'Скоро...'">
+              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -224,6 +270,7 @@ import { CryptoService } from '../../services/crypto.service';
               </svg>
               </button>
             </div>
+            }
           </div>
         }
       </div>
@@ -371,11 +418,34 @@ import { CryptoService } from '../../services/crypto.service';
                           @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
                         </div>
                       } @else if (($any(item).msg_type || 'text') === 'poll') {
-                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
+                        @let poll = $any(item).poll;
+                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
-                          <div class="flex items-center gap-2 text-xs opacity-60">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Coming soon</span>
+                          @if (poll && poll.options) {
+                          <div class="flex flex-col gap-1.5 mt-1">
+                            @for (opt of poll.options; track opt.id) {
+                            <button (click)="castVote(poll.id, opt.id)"
+                              [style.borderColor]="opt.voted ? 'var(--accent)' : 'var(--divider)'"
+                              [style.background]="opt.voted ? 'var(--accent-light)' : 'transparent'"
+                              class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs w-full text-left transition-all"
+                              style="border:1px solid;cursor:pointer;">
+                              <span class="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[10px]"
+                                [style.background]="opt.voted ? 'var(--accent)' : 'var(--bg-overlay)'"
+                                [style.color]="opt.voted ? 'white' : 'var(--text-tertiary)'">
+                                {{ opt.vote_count }}
+                              </span>
+                              <span class="flex-1" style="color:var(--text-primary);">{{ opt.text }}</span>
+                              @if (opt.voted) {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                              }
+                            </button>
+                            }
                           </div>
+                          <span class="text-xs opacity-50">
+                            @let tv = computeTotalVotes(poll);
+                            {{ tv }} голос{{ tv === 1 ? '' : (tv >= 2 && tv <= 4 ? 'а' : 'ов') }}
+                          </span>
+                          }
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
@@ -415,7 +485,7 @@ import { CryptoService } from '../../services/crypto.service';
             </div>
             }
             <div class="flex gap-1 px-4 py-1.5" style="border-top:1px solid var(--divider);">
-              @for (t of msgTypes; track t.id) {
+              @for (t of visibleMsgTypes; track t.id) {
                 <button (click)="messageType = t.id"
                   [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
                   [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-tertiary)'"
@@ -426,6 +496,30 @@ import { CryptoService } from '../../services/crypto.service';
                 </button>
               }
             </div>
+            @if (messageType === 'poll') {
+            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
+                style="height:36px;box-sizing:border-box;">
+              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
+              <div class="flex items-center gap-2">
+                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
+                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
+                @if (pollOptions.length > 2) {
+                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                }
+              </div>
+              }
+              <div class="flex items-center gap-2">
+                <button (click)="addPollOption()" class="text-xs"
+                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
+                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
+                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
+                  Несколько вариантов
+                </label>
+              </div>
+            </div>
+            } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
               @if (uploading()) {
               <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
@@ -440,7 +534,7 @@ import { CryptoService } from '../../services/crypto.service';
               </button>
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;"
-              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : messageType === 'image' ? 'Подпись к изображению...' : 'Скоро...'">
+              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -448,6 +542,7 @@ import { CryptoService } from '../../services/crypto.service';
               </svg>
               </button>
             </div>
+            }
           </div>
         </div>
       }
@@ -555,6 +650,15 @@ export class ChatComponent implements OnInit, OnDestroy {
     { id: 'gif', icon: '<span style="font-weight:800;font-size:11px;">GIF</span>', label: 'GIF' },
     { id: 'poll', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', label: 'Опрос' },
   ];
+  pollOptions: string[] = ['', ''];
+  pollMultiple = false;
+
+  get visibleMsgTypes(): { id: MsgType; icon: string; label: string }[] {
+    if (!this.selectedGroup) {
+      return this.msgTypes.filter(t => t.id !== 'poll');
+    }
+    return this.msgTypes;
+  }
   selectedFiles: File[] = [];
   previews: string[] = [];
   currentUserId = 0;
@@ -655,6 +759,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             created_at: data.created_at || new Date().toISOString(),
             from_user: data.from_name || this.selectedUser.username,
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
+            poll: data.poll || undefined,
           };
           this.messages.push(msg);
           localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
@@ -676,9 +781,24 @@ export class ChatComponent implements OnInit, OnDestroy {
             created_at: data.created_at || new Date().toISOString(),
             from_user: data.from_name || '',
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
+            poll: data.poll || undefined,
           };
           this.messages.push(msg);
           this.scrollToBottom();
+        }
+        if (data.type === 'poll_update') {
+          const pollId = data.poll_id;
+          const msgId = data.message_id || data.group_message_id;
+          const idx = this.messages.findIndex(m => (m as any).poll?.id === pollId);
+          if (idx >= 0) {
+            (this.messages[idx] as any).poll = {
+              id: pollId,
+              options: data.options,
+              total_votes: data.total_votes,
+              multiple: data.multiple,
+            };
+            this.messages = [...this.messages];
+          }
         }
       })
     );
@@ -815,6 +935,13 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!this.messageContent.trim() && this.selectedFiles.length === 0) return;
     const type = this.messageType;
 
+    if (type === 'poll') {
+      const validOptions = this.pollOptions.filter(o => o.trim());
+      if (validOptions.length < 2) {
+        return;
+      }
+    }
+
     const rawContent = this.messageContent;
     const files = [...this.selectedFiles];
 
@@ -862,11 +989,12 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.clearFiles();
       this.scrollToBottom();
 
+      const pollOpts = type === 'poll' ? this.pollOptions.filter(o => o.trim()) : undefined;
       const hasFiles = files.length > 0;
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview)
+        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -883,7 +1011,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
+        this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res.id),
           error: () => this.rollbackOptimistic(tempId),
         });
@@ -907,11 +1035,12 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.clearFiles();
       this.scrollToBottom();
 
+      const pollOpts = type === 'poll' ? this.pollOptions.filter(o => o.trim()) : undefined;
       const hasFiles = files.length > 0;
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendMessageWithProgress(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview)
+        this.api.sendMessageWithProgress(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -928,11 +1057,16 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview).subscribe({
+        this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res.id),
           error: () => this.rollbackOptimistic(tempId),
         });
       }
+    }
+    if (type === 'poll') {
+      this.pollOptions = ['', ''];
+      this.pollMultiple = false;
+      this.messageType = 'text';
     }
   }
 
@@ -978,6 +1112,57 @@ export class ChatComponent implements OnInit, OnDestroy {
   private clearFiles() {
     this.selectedFiles = [];
     this.previews = [];
+  }
+
+  // ── Polls ──
+
+  addPollOption() {
+    if (this.pollOptions.length < 20) {
+      this.pollOptions.push('');
+    }
+  }
+
+  removePollOption(idx: number) {
+    if (this.pollOptions.length > 2) {
+      this.pollOptions.splice(idx, 1);
+    }
+  }
+
+  trackPollOption(idx: number, _item: string): number {
+    return idx;
+  }
+
+  castVote(pollId: number, optionId: number) {
+    this.api.castVote(pollId, optionId).subscribe({
+      next: (res) => {
+        this.updatePollData(pollId, res.options);
+      },
+    });
+  }
+
+  private updatePollData(pollId: number, options: { id: number; vote_count: number; voted: boolean }[]) {
+    for (const msg of this.messages) {
+      if (msg.poll?.id === pollId) {
+        for (const opt of options) {
+          const existing = msg.poll.options.find(o => o.id === opt.id);
+          if (existing) {
+            existing.vote_count = opt.vote_count;
+            existing.voted = opt.voted;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  computeTotalVotes(poll: any): number {
+    return poll?.options?.reduce((acc: number, opt: any) => acc + (opt.vote_count || 0), 0) || 0;
+  }
+
+  private handlePollUpdate(data: any) {
+    if (data.poll_id) {
+      this.updatePollData(data.poll_id, data.options);
+    }
   }
 
   @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;

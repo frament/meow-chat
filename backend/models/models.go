@@ -26,6 +26,7 @@ type Message struct {
 	Images           []PostImage `json:"images,omitempty"`
 	EncryptedContent string      `json:"encrypted_content,omitempty"`
 	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
+	Poll             *Poll       `json:"poll,omitempty"`
 }
 
 type GroupChat struct {
@@ -149,6 +150,28 @@ type PushSubscriptionRequest struct {
 
 type DeleteSubscriptionRequest struct {
 	Endpoint string `json:"endpoint"`
+}
+
+type Poll struct {
+	ID               int64        `json:"id"`
+	MessageID        *int64       `json:"message_id,omitempty"`
+	GroupMessageID   *int64       `json:"group_message_id,omitempty"`
+	Question         string       `json:"question"`
+	IsMultipleChoice bool         `json:"is_multiple_choice"`
+	Options          []PollOption `json:"options"`
+	CreatedAt        time.Time    `json:"created_at"`
+}
+
+type PollOption struct {
+	ID        int64  `json:"id"`
+	PollID    int64  `json:"poll_id"`
+	Text      string `json:"text"`
+	VoteCount int    `json:"vote_count"`
+	Voted     bool   `json:"voted"`
+}
+
+type PollVoteRequest struct {
+	OptionID int64 `json:"option_id"`
 }
 
 type FriendInvite struct {

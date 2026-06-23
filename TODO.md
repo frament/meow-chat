@@ -1,4 +1,4 @@
-# ✅ All Done — 260 tests across 29 files
+# ✅ All Done — 262 tests across 29 files
 
 ## Test Summary
 
@@ -23,7 +23,8 @@
 | `backend/backup/process_test.go` | 5 |
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/federation/*_test.go` (6 files) | 54 |
-| **Backend total** | **176** |
+| `backend/handlers/polls_test.go` | 13 |
+| **Backend total** | **189** |
 
 ### Frontend — 84 tests (11 files)
 | Component/Service | Tests |
@@ -47,7 +48,7 @@
 | `join-group.component.spec.ts` | 2 |
 | **Frontend total** | **84** |
 
-### Grand total: 260 tests, 0 failures ✅
+### Grand total: 262 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -68,6 +69,6 @@
 - [x] #6 В админке добавить возможность удалять файлы
 - [x] #7 В реакциях у поста показывать только использованные реакции, через + давать добавлять новые
 - [ ] #8 В чате реализовать отправку GIF
-- [ ] #9 В чате сделать видимым вариант «опрос» только в групповых чатах
-- [ ] #10 В чатах реализовать тип сообщения «опрос»
+- [x] #9 В чате сделать видимым вариант «опрос» только в групповых чатах
+- [x] #10 В чатах реализовать тип сообщения «опрос»
 - [ ] #11 В чатах сделать меню выбора типа сообщения посимпотичнее
