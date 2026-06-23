@@ -22,6 +22,10 @@
 - **Бэкенд**: `AdminDeleteFile` с валидацией пути (только внутри `./uploads/`), роут `DELETE /admin/files`
 - **Фронтенд**: кнопка с иконкой корзины в таблице файлов
 
+### #7 — Реакции: показывать только использованные
+- `frontend/feed.ts`: вместо всех 7 эмодзи под каждым постом теперь показываются только те, у которых `count > 0`
+- Добавлена кнопка "+" — открывает picker с оставшимися эмодзи, закрывается при клике вне или выборе
+
 ## Файлы
 - `backend/database/database.go` — +4 строки миграция `is_banned`
 - `backend/handlers/handlers.go` — хендлеры (блокировка, удаление, файлы)
@@ -29,8 +33,9 @@
 - `backend/main.go` — новые роуты
 - `frontend/src/app/services/api.service.ts` — методы API
 - `frontend/src/app/components/admin/admin.ts` — UI иконками
-- `TODO.md` — помечены #5, #6 как выполненные
+- `frontend/src/app/components/feed/feed.ts` — реакции, picker "+"
+- `TODO.md` — помечены #5, #6, #7 как выполненные
 
 ## Тесты
-- 169 Go-тестов, 84 Angular-тестов — все проходят
+- 176 Go-тестов, 84 Angular-тестов — все проходят
 - build backend и frontend — успешно

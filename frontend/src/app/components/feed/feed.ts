@@ -90,22 +90,47 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
               }
             </div>
           }
-          <div class="flex flex-wrap gap-1 mt-3 pt-2" style="border-top:1px solid var(--divider);">
-            @for (r of reactionEmojis; track r) {
+          <div class="flex flex-wrap gap-1 mt-3 pt-2" style="border-top:1px solid var(--divider);position:relative;">
+            @for (r of getActiveReactions(post); track r) {
               <button (click)="toggleReaction(post, r)"
                 [style.background]="hasReacted(post, r) ? 'var(--accent-light)' : 'transparent'"
                 [style.border-color]="hasReacted(post, r) ? 'var(--accent)' : 'var(--border-default)'"
                 style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;border:1px solid;cursor:pointer;font-size:15px;line-height:1;transition:all 0.15s;">
                 {{ r }}
-                @if (getReactionCount(post, r) > 0) {
-                  <span style="font-size:12px;color:var(--text-secondary);font-weight:500;">{{ getReactionCount(post, r) }}</span>
-                }
+                <span style="font-size:12px;color:var(--text-secondary);font-weight:500;">{{ getReactionCount(post, r) }}</span>
               </button>
+            }
+            @if (getAvailableEmojis(post).length > 0) {
+              <div style="position:relative;" #pickerContainer>
+                <button (click)="togglePicker(post.id)"
+                  style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;border:1px solid var(--border-default);cursor:pointer;font-size:18px;color:var(--text-tertiary);background:transparent;transition:all 0.15s;">
+                  +
+                </button>
+                @if (pickerPostId === post.id) {
+                  <div class="reaction-picker" (click)="$event.stopPropagation()">
+                    @for (r of getAvailableEmojis(post); track r) {
+                      <button (click)="toggleReaction(post, r); pickerPostId = null"
+                        style="padding:4px 8px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:18px;transition:all 0.1s;">
+                        {{ r }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
             }
           </div>
         </div>
       }
     </div>
+
+    <style>
+      .reaction-picker {
+        position:absolute;bottom:100%;left:0;margin-bottom:4px;display:flex;gap:2px;padding:6px 8px;
+        border-radius:12px;background:var(--bg-body);border:1px solid var(--border-default);
+        box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10;
+      }
+      .reaction-picker button:hover { background:var(--bg-card-hover); }
+    </style>
 
     @if (viewerImages) {
       <div class="viewer-overlay" (click)="closeViewer()">
@@ -129,8 +154,22 @@ export class FeedComponent implements OnInit {
   uploading = signal(false);
   uploadProgress = signal(0);
   reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
+  pickerPostId: number | null = null;
   viewerImages: PostImage[] | null = null;
   viewerIndex = 0;
+
+  getActiveReactions(post: Post): string[] {
+    return post.reactions?.filter(r => r.count > 0).map(r => r.emoji) ?? [];
+  }
+
+  getAvailableEmojis(post: Post): string[] {
+    const used = new Set(this.getActiveReactions(post));
+    return this.reactionEmojis.filter(e => !used.has(e));
+  }
+
+  togglePicker(postId: number) {
+    this.pickerPostId = this.pickerPostId === postId ? null : postId;
+  }
 
   hasReacted(post: Post, emoji: string): boolean {
     return post.reactions?.some(r => r.emoji === emoji && r.reacted) ?? false;
@@ -161,6 +200,9 @@ export class FeedComponent implements OnInit {
 
   ngOnInit() {
     this.loadFeed();
+    document.addEventListener('click', () => {
+      this.pickerPostId = null;
+    });
   }
 
   loadFeed() {
