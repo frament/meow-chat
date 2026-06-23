@@ -17,3 +17,6 @@ meow-chat-server.exe
 
 # Generated keys (contains private key)
 vapid_keys.json
+
+# LeanKG
+.leankg/
