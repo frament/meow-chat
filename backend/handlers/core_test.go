@@ -64,6 +64,60 @@ func TestRegister_InvalidInvite(t *testing.T) {
 	}
 }
 
+func TestRegister_AutoFriend(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses) VALUES (1, 'friend-token', 10)")
+
+	body := `{"username":"frienduser","email":"friend@example.com","password":"secret123","invite_token":"friend-token"}`
+	req, _ := http.NewRequest("POST", "/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var friendCount int
+	err = database.DB.QueryRow(
+		"SELECT COUNT(*) FROM friends WHERE (user_id=1 AND friend_id=3) OR (user_id=3 AND friend_id=1)",
+	).Scan(&friendCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if friendCount != 1 {
+		t.Errorf("expected friend relationship between inviter (1) and new user (3), got %d rows", friendCount)
+	}
+}
+
+func TestRegister_AutoFriend_NoDuplicate(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses) VALUES (1, 'dup-token', 10)")
+	database.DB.Exec("INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (1, 3)")
+
+	body := `{"username":"dupuser","email":"dup@example.com","password":"secret123","invite_token":"dup-token"}`
+	req, _ := http.NewRequest("POST", "/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var friendCount int
+	database.DB.QueryRow(
+		"SELECT COUNT(*) FROM friends WHERE (user_id=1 AND friend_id=3) OR (user_id=3 AND friend_id=1)",
+	).Scan(&friendCount)
+	if friendCount != 1 {
+		t.Errorf("expected exactly 1 friend row, got %d", friendCount)
+	}
+}
+
 func TestRegister_ExhaustedInvite(t *testing.T) {
 	app, _, _ := setupTestApp(t)
 

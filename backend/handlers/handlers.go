@@ -342,7 +342,13 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
 
-	result, err := database.DB.Exec(
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		"INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
 		req.Username, req.Email, string(hashedPassword),
 	)
@@ -350,9 +356,30 @@ func (h *Handler) Register(c *fiber.Ctx) error {
 		return c.Status(409).JSON(fiber.Map{"error": "Username or email already exists"})
 	}
 
-	database.DB.Exec("UPDATE invite_tokens SET use_count = use_count + 1 WHERE id = ?", tokID)
+	_, err = tx.Exec("UPDATE invite_tokens SET use_count = use_count + 1 WHERE id = ?", tokID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
 
 	id, _ := result.LastInsertId()
+
+	friend1 := createdBy
+	friend2 := id
+	if friend1 > friend2 {
+		friend1, friend2 = friend2, friend1
+	}
+	_, err = tx.Exec(
+		"INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)",
+		friend1, friend2,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+
 	return c.Status(201).JSON(fiber.Map{"id": id, "message": "User created"})
 }
 
