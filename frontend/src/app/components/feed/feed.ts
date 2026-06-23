@@ -37,7 +37,7 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
           </div>
           }
           <label class="btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-            <span>📷</span> Добавить фото
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Добавить фото
             <input type="file" multiple accept="image/*" (change)="onFilesSelected($event)" class="hidden">
           </label>
           <label class="flex items-center gap-2 text-sm" style="color:var(--text-secondary);cursor:pointer;margin-left:12px;">
@@ -71,6 +71,9 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
               <p class="post-username">{{ post.username }}</p>
               <p class="post-time">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>
             </div>
+            @if (api.currentUser()?.id === post.user_id || api.currentUser()?.is_admin) {
+              <button (click)="deletePost(post)" class="text-xs px-2 py-1 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);border:1px solid var(--border-default);cursor:pointer;" title="Удалить пост">✕</button>
+            }
           </div>
           <p class="post-content">{{ post.content }}</p>
           @if (post.images && post.images.length > 0) {
@@ -154,7 +157,7 @@ export class FeedComponent implements OnInit {
     });
   }
 
-  constructor(private api: ApiService) {}
+  constructor(protected api: ApiService) {}
 
   ngOnInit() {
     this.loadFeed();
@@ -162,6 +165,16 @@ export class FeedComponent implements OnInit {
 
   loadFeed() {
     this.api.getFeed().subscribe((posts) => (this.posts = posts));
+  }
+
+  deletePost(post: Post) {
+    if (!confirm('Удалить этот пост?')) return;
+    this.api.deletePost(post.id).subscribe({
+      next: () => {
+        this.posts = this.posts.filter(p => p.id !== post.id);
+      },
+      error: () => alert('Не удалось удалить пост'),
+    });
   }
 
   onFilesSelected(event: Event) {

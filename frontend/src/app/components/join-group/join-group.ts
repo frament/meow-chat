@@ -28,7 +28,7 @@ import { CryptoService } from '../../services/crypto.service';
           <p class="text-lg font-semibold mb-6" style="color:var(--text-primary);">{{ groupName }}</p>
           @if (joinSuccess) {
             <div class="mb-4">
-              <p style="color:#27ae60;font-weight:500;margin-bottom:8px;">Вы присоединились к группе! 🎉</p>
+              <p style="color:#27ae60;font-weight:500;margin-bottom:8px;">Вы присоединились к группе!</p>
               <button (click)="router.navigate(['/chat', 'group', groupChatId])" class="btn-primary" style="padding:8px 20px;">Открыть чат</button>
             </div>
           } @else if (joinError) {

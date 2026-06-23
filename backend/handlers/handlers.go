@@ -601,6 +601,44 @@ func (h *Handler) ToggleReaction(c *fiber.Ctx) error {
 	return c.Status(201).JSON(fiber.Map{"action": "added", "emoji": body.Emoji})
 }
 
+func (h *Handler) DeletePost(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	isAdmin, _ := c.Locals("isAdmin").(bool)
+	postID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid post ID"})
+	}
+
+	var ownerID int64
+	err = database.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&ownerID)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Post not found"})
+	}
+
+	if ownerID != userID && !isAdmin {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	rows, err := database.DB.Query("SELECT image_url FROM post_images WHERE post_id = ?", postID)
+	if err == nil {
+		for rows.Next() {
+			var imgURL string
+			if rows.Scan(&imgURL) == nil {
+				filePath := "." + imgURL
+				os.Remove(filePath)
+			}
+		}
+		rows.Close()
+	}
+
+	_, err = database.DB.Exec("DELETE FROM posts WHERE id = ?", postID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete post"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Post deleted"})
+}
+
 func (h *Handler) GetFeed(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	rows, err := database.DB.Query(`

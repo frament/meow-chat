@@ -218,6 +218,7 @@ func main() {
 	api.Post("/friend-invite/:token/accept", h.AcceptFriendInvite)
 
 	api.Post("/posts", h.CreatePost)
+	api.Delete("/posts/:id", h.DeletePost)
 	api.Post("/posts/:id/react", h.ToggleReaction)
 	api.Get("/feed", h.GetFeed)
 

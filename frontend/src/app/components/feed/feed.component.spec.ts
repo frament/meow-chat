@@ -11,6 +11,7 @@ describe('FeedComponent', () => {
   const mockApi = {
     currentUser: signal({ id: 1, username: 'test', avatar_url: '' }),
     getFeed: jasmine.createSpy().and.returnValue(of([])),
+    deletePost: jasmine.createSpy().and.returnValue(of({})),
     wsMessages$: of(null),
     totalUnread: computed(() => 0),
   };
@@ -54,5 +55,39 @@ describe('FeedComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const btn = Array.from(compiled.querySelectorAll('button')).find(b => b.textContent?.includes('Опубликовать'));
     expect(btn).toBeTruthy();
+  });
+
+  it('shows delete button on own post', () => {
+    component.posts = [{
+      id: 1,
+      user_id: 1,
+      content: 'Test post',
+      created_at: new Date().toISOString(),
+      username: 'test',
+      avatar_url: '',
+      is_admin: false,
+      is_public: false,
+    }];
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const deleteBtn = compiled.querySelector('button[title="Удалить пост"]');
+    expect(deleteBtn).toBeTruthy();
+  });
+
+  it('hides delete button on other user post', () => {
+    component.posts = [{
+      id: 2,
+      user_id: 2,
+      content: 'Other post',
+      created_at: new Date().toISOString(),
+      username: 'other',
+      avatar_url: '',
+      is_admin: false,
+      is_public: false,
+    }];
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const deleteBtn = compiled.querySelector('button[title="Удалить пост"]');
+    expect(deleteBtn).toBeFalsy();
   });
 });

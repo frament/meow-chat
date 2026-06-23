@@ -509,6 +509,10 @@ export class ApiService {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/friends/${id}`);
   }
 
+  deletePost(id: number) {
+    return this.http.delete(`${this.baseUrl}/posts/${id}`);
+  }
+
   toggleReaction(postId: number, emoji: string) {
     return this.http.post<{ action: string; emoji: string }>(
       `${this.baseUrl}/posts/${postId}/react`,

@@ -28,7 +28,7 @@ import { ApiService } from '../../services/api.service';
           <p style="color:var(--text-tertiary);font-size:13px;margin-bottom:16px;">хочет добавить вас в друзья</p>
           @if (acceptSuccess) {
             <div class="mb-4">
-              <p style="color:#27ae60;font-weight:500;margin-bottom:8px;">Вы стали друзьями! 🎉</p>
+              <p style="color:#27ae60;font-weight:500;margin-bottom:8px;">Вы стали друзьями!</p>
               <button (click)="router.navigate(['/chat'])" class="btn-primary" style="padding:8px 20px;">Написать</button>
             </div>
           } @else if (acceptError) {

@@ -38,7 +38,7 @@ import { CryptoService } from '../../services/crypto.service';
           <div class="divider" style="margin:8px 0;"></div>
         }
         @if (getPinnedUsers().length > 0) {
-          <h3 class="section-label" style="margin-bottom:12px;">📌 Закреплённые</h3>
+          <h3 class="section-label" style="margin-bottom:12px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg> Закреплённые</h3>
           @for (user of getPinnedUsers(); track user.id) {
             <div (click)="openChat(user)"
               class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors"
@@ -65,7 +65,7 @@ import { CryptoService } from '../../services/crypto.service';
               @if (user.is_online) {
                 <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
               }
-              <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Открепить">📌</button>
+              <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
           }
           <div class="divider" style="margin:8px 0;"></div>
@@ -98,7 +98,7 @@ import { CryptoService } from '../../services/crypto.service';
             @if (user.is_online) {
               <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
             }
-            <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Закрепить">📌</button>
+            <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
           </div>
         }
       </div>
@@ -115,7 +115,7 @@ import { CryptoService } from '../../services/crypto.service';
           <div class="flex items-center gap-3 px-4 py-3" style="border-bottom:1px solid var(--divider);">
             <h3 class="font-medium" style="color:var(--text-primary);">{{ selectedGroup.name }}</h3>
             <button (click)="loadGroupInfo()"
-              style="margin-left:auto;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;">ℹ️</button>
+              style="margin-left:auto;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
           </div>
           }
           @if (selectedUser) {
@@ -138,7 +138,7 @@ import { CryptoService } from '../../services/crypto.service';
                       }
                       @if (($any(item).msg_type || 'text') === 'sticker') {
                         <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <span style="font-size:2rem;">🎯</span>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                           <span class="text-xs opacity-60">Sticker</span>
                         </div>
                       } @else if (($any(item).msg_type || 'text') === 'gif') {
@@ -150,12 +150,12 @@ import { CryptoService } from '../../services/crypto.service';
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
                           <div class="flex items-center gap-2 text-xs opacity-60">
-                            <span>📊</span><span>Coming soon</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Coming soon</span>
                           </div>
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
-                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
+                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;opacity:0.6;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Зашифрованное сообщение</p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -167,7 +167,7 @@ import { CryptoService } from '../../services/crypto.service';
                       }
                       <p class="text-xs mt-1 opacity-70">
                         {{ $any(item).created_at | date:'HH:mm' }}
-                        @if ($any(item).pending) { <span style="margin-left:4px;">⏳</span> }
+                        @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
                     </div>
                   </div>
@@ -251,7 +251,7 @@ import { CryptoService } from '../../services/crypto.service';
             <div class="divider"></div>
           }
           @if (getPinnedUsers().length > 0) {
-            <h3 class="section-label" style="margin-bottom:12px;">📌 Закреплённые</h3>
+            <h3 class="section-label" style="margin-bottom:12px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg> Закреплённые</h3>
             @for (user of getPinnedUsers(); track user.id) {
               <div (click)="openChat(user)"
                 class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
@@ -342,7 +342,7 @@ import { CryptoService } from '../../services/crypto.service';
               } @else {
               <div class="flex items-center gap-2">
                 <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ selectedGroup?.name }}</h3>
-                <button (click)="loadGroupInfo()" class="text-xs" style="color:var(--text-tertiary);">ℹ️</button>
+                <button (click)="loadGroupInfo()" class="text-xs" style="color:var(--text-tertiary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
               </div>
               }
             </div>
@@ -362,7 +362,7 @@ import { CryptoService } from '../../services/crypto.service';
                       }
                       @if (($any(item).msg_type || 'text') === 'sticker') {
                         <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <span style="font-size:2rem;">🎯</span>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                           <span class="text-xs opacity-60">Sticker</span>
                         </div>
                       } @else if (($any(item).msg_type || 'text') === 'gif') {
@@ -374,12 +374,12 @@ import { CryptoService } from '../../services/crypto.service';
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[180px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
                           <div class="flex items-center gap-2 text-xs opacity-60">
-                            <span>📊</span><span>Coming soon</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Coming soon</span>
                           </div>
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
-                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;">🔒 Зашифрованное сообщение</p> }
+                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;opacity:0.6;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Зашифрованное сообщение</p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -391,7 +391,7 @@ import { CryptoService } from '../../services/crypto.service';
                       }
                       <p class="text-xs mt-1 opacity-70">
                         {{ $any(item).created_at | date:'HH:mm' }}
-                        @if ($any(item).pending) { <span style="margin-left:4px;">⏳</span> }
+                        @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
                     </div>
                   </div>
@@ -550,10 +550,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   messageType: MsgType = 'text';
   readonly msgTypes: { id: MsgType; icon: string; label: string }[] = [
     { id: 'text', icon: 'Aa', label: 'Текст' },
-    { id: 'image', icon: '🖼', label: 'Фото' },
-    { id: 'sticker', icon: '🎯', label: 'Стикер' },
-    { id: 'gif', icon: 'GIF', label: 'GIF' },
-    { id: 'poll', icon: '📊', label: 'Опрос' },
+    { id: 'image', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', label: 'Фото' },
+    { id: 'sticker', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', label: 'Стикер' },
+    { id: 'gif', icon: '<span style="font-weight:800;font-size:11px;">GIF</span>', label: 'GIF' },
+    { id: 'poll', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', label: 'Опрос' },
   ];
   selectedFiles: File[] = [];
   previews: string[] = [];

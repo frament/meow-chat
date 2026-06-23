@@ -139,6 +139,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Get("/messages", AuthRequired, h.GetMessages)
 	app.Post("/messages", AuthRequired, h.SendMessage)
 	app.Post("/posts", AuthRequired, h.CreatePost)
+	app.Delete("/posts/:id", AuthRequired, h.DeletePost)
 	app.Post("/posts/:id/react", AuthRequired, h.ToggleReaction)
 	app.Get("/feed", AuthRequired, h.GetFeed)
 
