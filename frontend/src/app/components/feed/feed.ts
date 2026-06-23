@@ -101,15 +101,15 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
               </button>
             }
             @if (getAvailableEmojis(post).length > 0) {
-              <div style="position:relative;" #pickerContainer>
-                <button (click)="togglePicker(post.id)"
-                  style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;border:1px solid var(--border-default);cursor:pointer;font-size:18px;color:var(--text-tertiary);background:transparent;transition:all 0.15s;">
-                  +
+              <div style="position:relative;">
+                <button (click)="togglePicker(post.id, $event)"
+                  style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;border:1px solid var(--border-default);cursor:pointer;color:var(--text-tertiary);background:transparent;transition:all 0.15s;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
                 @if (pickerPostId === post.id) {
                   <div class="reaction-picker" (click)="$event.stopPropagation()">
                     @for (r of getAvailableEmojis(post); track r) {
-                      <button (click)="toggleReaction(post, r); pickerPostId = null"
+                      <button (click)="toggleReaction(post, r); pickerPostId = null; $event.stopPropagation()"
                         style="padding:4px 8px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:18px;transition:all 0.1s;">
                         {{ r }}
                       </button>
@@ -167,7 +167,8 @@ export class FeedComponent implements OnInit {
     return this.reactionEmojis.filter(e => !used.has(e));
   }
 
-  togglePicker(postId: number) {
+  togglePicker(postId: number, event: Event) {
+    event.stopPropagation();
     this.pickerPostId = this.pickerPostId === postId ? null : postId;
   }
 
