@@ -46,9 +46,10 @@
 | `admin-federation.component.spec.ts` | 3 |
 | `add-friend.component.spec.ts` | 2 |
 | `join-group.component.spec.ts` | 2 |
-| **Frontend total** | **91** |
+| `post-dialog.component.spec.ts` | 14 |
+| **Frontend total** | **102** |
 
-### Grand total: 280 tests, 0 failures ✅
+### Grand total: 291 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -59,7 +60,7 @@
 - [x] Sessions 1-7 all complete — every file in TODO.md has tests
 
 ## New TODOs (2026-06-25)
-- [ ] #12 Вынести публикацию поста в отдельный dialog/page
+- [x] #12 Вынести публикацию поста в отдельный dialog/page ✓
 - [ ] #13 Создать систему обнаружения новых версий из GitHub
 - [x] #1 Автоматически добавлять пользователя в друзья к тому кто дал приглашение на сервер
 - [ ] #2 Проверить проблему обновления чата при добавлении нового пользователя: пользователь создает приглашение (через PWA) → другой принимает → оба заходят в новый чат → пользователь из PWA отправляет сообщение → второй не получает
