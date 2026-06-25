@@ -26,7 +26,7 @@
 | `backend/handlers/polls_test.go` | 13 |
 | **Backend total** | **189** |
 
-### Frontend — 84 tests (11 files)
+### Frontend — 91 tests (17 files)
 | Component/Service | Tests |
 |-------------------|-------|
 | `theme.service.spec.ts` | 8 |
@@ -39,16 +39,16 @@
 | `register.component.spec.ts` | 3 |
 | `layout.component.spec.ts` | 4 |
 | `feed.component.spec.ts` | 4 |
-| `chat.component.spec.ts` | 8 |
+| `chat.component.spec.ts` | 13 |
 | `settings.component.spec.ts` | 2 |
-| `admin.component.spec.ts` | 2 |
+| `admin.component.spec.ts` | 4 |
 | `device-auth.component.spec.ts` | 3 |
 | `admin-federation.component.spec.ts` | 3 |
 | `add-friend.component.spec.ts` | 2 |
 | `join-group.component.spec.ts` | 2 |
-| **Frontend total** | **84** |
+| **Frontend total** | **91** |
 
-### Grand total: 262 tests, 0 failures ✅
+### Grand total: 280 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -58,12 +58,12 @@
 - [x] Testing design spec written and committed
 - [x] Sessions 1-7 all complete — every file in TODO.md has tests
 
-## New TODOs (2026-06-23)
+## New TODOs (2026-06-25)
 - [ ] #12 Вынести публикацию поста в отдельный dialog/page
 - [ ] #13 Создать систему обнаружения новых версий из GitHub
 - [x] #1 Автоматически добавлять пользователя в друзья к тому кто дал приглашение на сервер
 - [ ] #2 Проверить проблему обновления чата при добавлении нового пользователя: пользователь создает приглашение (через PWA) → другой принимает → оба заходят в новый чат → пользователь из PWA отправляет сообщение → второй не получает
-- [ ] #3 Исправить внешний вид админки для mobile
+- [x] #3 Исправить внешний вид админки для mobile ✓
 - [x] #4 Добавить возможность удалять свои посты (для админов — любые посты на своем сервере)
 - [x] #5 В админке добавить возможность удалять/блокировать пользователей
 - [x] #6 В админке добавить возможность удалять файлы
@@ -71,4 +71,4 @@
 - [ ] #8 В чате реализовать отправку GIF
 - [x] #9 В чате сделать видимым вариант «опрос» только в групповых чатах
 - [x] #10 В чатах реализовать тип сообщения «опрос»
-- [ ] #11 В чатах сделать меню выбора типа сообщения посимпотичнее
+- [x] #11 В чатах сделать меню выбора типа сообщения посимпотичнее ✓
