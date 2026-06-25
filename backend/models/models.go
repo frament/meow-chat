@@ -181,3 +181,24 @@ type FriendInvite struct {
 	UsedBy    *int64    `json:"used_by,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type GiphyResult struct {
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	PreviewURL string `json:"preview_url"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+}
+
+type GiphySearchResponse struct {
+	Results []GiphyResult `json:"results"`
+}
+
+type GiphyKeyResponse struct {
+	Key    string `json:"key"`
+	HasKey bool   `json:"has_key"`
+}
+
+type GiphyKeyUpdateRequest struct {
+	Key string `json:"key"`
+}
