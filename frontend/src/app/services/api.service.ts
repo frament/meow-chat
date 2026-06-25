@@ -148,6 +148,23 @@ export interface AuthResponse {
   user: LoginResponse;
 }
 
+export interface GiphyResult {
+  id: string;
+  url: string;
+  preview_url: string;
+  width: number;
+  height: number;
+}
+
+export interface GiphySearchResponse {
+  results: GiphyResult[];
+}
+
+export interface GiphyKeyResponse {
+  key: string;
+  has_key: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
@@ -459,6 +476,26 @@ export class ApiService {
 
   adminDeleteGroupChat(id: number) {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/group-chats/${id}`);
+  }
+
+  searchGiphy(query: string, offset = 0, limit = 20) {
+    return this.http.get<GiphySearchResponse>(`${this.baseUrl}/giphy/search`, {
+      params: { q: query, offset, limit },
+    });
+  }
+
+  getGiphyTrending(offset = 0, limit = 20) {
+    return this.http.get<GiphySearchResponse>(`${this.baseUrl}/giphy/trending`, {
+      params: { offset, limit },
+    });
+  }
+
+  getGiphyKey() {
+    return this.http.get<GiphyKeyResponse>(`${this.baseUrl}/admin/settings/giphy-key`);
+  }
+
+  updateGiphyKey(key: string) {
+    return this.http.put<{ ok: boolean }>(`${this.baseUrl}/admin/settings/giphy-key`, { key });
   }
 
   adminBlockUser(id: number) {
