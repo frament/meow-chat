@@ -142,12 +142,7 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                           <span class="text-xs opacity-60">Sticker</span>
                         </div>
-                      } @else if (($any(item).msg_type || 'text') === 'gif') {
-                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <span style="font-size:1.25rem;font-weight:700;">GIF</span>
-                          @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
-                        </div>
-                      } @else if (($any(item).msg_type || 'text') === 'poll') {
+                       } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
@@ -449,12 +444,7 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                           <span class="text-xs opacity-60">Sticker</span>
                         </div>
-                      } @else if (($any(item).msg_type || 'text') === 'gif') {
-                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <span style="font-size:1.25rem;font-weight:700;">GIF</span>
-                          @if ($any(item).content) { <span class="text-xs opacity-60">{{ $any(item).content }}</span> }
-                        </div>
-                      } @else if (($any(item).msg_type || 'text') === 'poll') {
+                       } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
                           <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
