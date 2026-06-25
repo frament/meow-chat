@@ -176,6 +176,15 @@ func (h *Handler) AddGroupMember(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to add member"})
 	}
 
+	var groupName string
+	database.DB.QueryRow("SELECT name FROM group_chats WHERE id = ?", groupID).Scan(&groupName)
+
+	h.SendToUser(targetID, fiber.Map{
+		"type":          "group_joined",
+		"group_chat_id": groupID,
+		"group_name":    groupName,
+	})
+
 	return c.JSON(fiber.Map{"message": "Member added"})
 }
 
@@ -337,6 +346,12 @@ func (h *Handler) JoinGroupViaInvite(c *fiber.Ctx) error {
 
 	var groupName string
 	database.DB.QueryRow("SELECT name FROM group_chats WHERE id = ?", inv.GroupChatID).Scan(&groupName)
+
+	h.SendToUser(userID, fiber.Map{
+		"type":          "group_joined",
+		"group_chat_id": inv.GroupChatID,
+		"group_name":    groupName,
+	})
 
 	return c.JSON(fiber.Map{
 		"message":       "Joined group",

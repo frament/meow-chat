@@ -925,6 +925,13 @@ export class ChatComponent implements OnInit, OnDestroy {
             this.messages = [...this.messages];
           }
         }
+        if (data.type === 'group_joined') {
+          this.loadGroupChats();
+          const groupId = data.group_chat_id;
+          if (groupId && !this.selectedGroup) {
+            this.resolvePendingGroupChat(groupId);
+          }
+        }
       })
     );
   }
