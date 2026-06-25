@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, HostListener } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -212,17 +212,38 @@ import { CryptoService } from '../../services/crypto.service';
               }
             </div>
             }
-            <div class="flex gap-1 px-4 py-1.5" style="border-top:1px solid var(--divider);">
-              @for (t of visibleMsgTypes; track t.id) {
-                <button (click)="messageType = t.id"
-                  [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
-                  [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-tertiary)'"
-                  [title]="t.label"
-                  style="flex:1;height:30px;display:flex;align-items:center;justify-content:center;gap:3px;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer;transition:all 0.15s;">
-                  <span>{{ t.icon }}</span>
-                  <span style="font-weight:500;">{{ t.label }}</span>
+            <div class="flex gap-1 px-4 py-1.5 items-center" style="border-top:1px solid var(--divider);">
+              <div class="type-menu-container" style="position:relative;">
+                <button (click)="showTypeMenu = !showTypeMenu"
+                  [title]="currentTypeLabel"
+                  style="height:30px;display:flex;align-items:center;gap:4px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);font-family:inherit;transition:all 0.15s;">
+                  <span [innerHTML]="currentTypeIcon"></span>
+                  <span>{{ currentTypeLabel }}</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
-              }
+                @if (showTypeMenu) {
+                  <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
+                    @for (t of visibleMsgTypes; track t.id) {
+                      @if (t.id === 'sticker' || t.id === 'gif') {
+                        <button disabled
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                          <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                          <span>{{ t.label }}</span>
+                          <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
+                        </button>
+                      } @else {
+                        <button (click)="selectType(t.id)"
+                          [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
+                          [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-primary)'"
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;">
+                          <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                          <span>{{ t.label }}</span>
+                        </button>
+                      }
+                    }
+                  </div>
+                }
+              </div>
             </div>
             @if (messageType === 'poll') {
             <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
@@ -484,17 +505,38 @@ import { CryptoService } from '../../services/crypto.service';
               }
             </div>
             }
-            <div class="flex gap-1 px-4 py-1.5" style="border-top:1px solid var(--divider);">
-              @for (t of visibleMsgTypes; track t.id) {
-                <button (click)="messageType = t.id"
-                  [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
-                  [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-tertiary)'"
-                  [title]="t.label"
-                  style="flex:1;height:30px;display:flex;align-items:center;justify-content:center;gap:3px;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer;transition:all 0.15s;">
-                  <span>{{ t.icon }}</span>
-                  <span style="font-weight:500;">{{ t.label }}</span>
+            <div class="flex gap-1 px-4 py-1.5 items-center" style="border-top:1px solid var(--divider);">
+              <div class="type-menu-container" style="position:relative;">
+                <button (click)="showTypeMenu = !showTypeMenu"
+                  [title]="currentTypeLabel"
+                  style="height:30px;display:flex;align-items:center;gap:4px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);font-family:inherit;transition:all 0.15s;">
+                  <span [innerHTML]="currentTypeIcon"></span>
+                  <span>{{ currentTypeLabel }}</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
-              }
+                @if (showTypeMenu) {
+                  <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
+                    @for (t of visibleMsgTypes; track t.id) {
+                      @if (t.id === 'sticker' || t.id === 'gif') {
+                        <button disabled
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                          <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                          <span>{{ t.label }}</span>
+                          <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
+                        </button>
+                      } @else {
+                        <button (click)="selectType(t.id)"
+                          [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
+                          [style.color]="messageType === t.id ? 'var(--accent)' : 'var(--text-primary)'"
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;">
+                          <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                          <span>{{ t.label }}</span>
+                        </button>
+                      }
+                    }
+                  </div>
+                }
+              </div>
             </div>
             @if (messageType === 'poll') {
             <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
@@ -652,6 +694,33 @@ export class ChatComponent implements OnInit, OnDestroy {
   ];
   pollOptions: string[] = ['', ''];
   pollMultiple = false;
+  showTypeMenu = false;
+
+  get currentTypeIcon(): string {
+    return this.msgTypes.find(t => t.id === this.messageType)?.icon || 'Aa';
+  }
+
+  get currentTypeLabel(): string {
+    return this.msgTypes.find(t => t.id === this.messageType)?.label || '';
+  }
+
+  selectType(id: MsgType) {
+    this.messageType = id;
+    this.showTypeMenu = false;
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (this.showTypeMenu && !target.closest('.type-menu-container')) {
+      this.showTypeMenu = false;
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapePress() {
+    this.showTypeMenu = false;
+  }
 
   get visibleMsgTypes(): { id: MsgType; icon: string; label: string }[] {
     if (!this.selectedGroup) {

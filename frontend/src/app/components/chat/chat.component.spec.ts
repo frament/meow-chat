@@ -88,13 +88,55 @@ describe('ChatComponent', () => {
     expect(input).toBeTruthy();
   }));
 
-  it('renders type selector buttons after selecting a user', fakeAsync(() => {
+  it('renders type toggle button with current type label after selecting a user', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    const buttons = compiled.querySelectorAll('button');
-    const typeBtn = Array.from(buttons).find(b => b.textContent?.includes('Текст'));
-    expect(typeBtn).toBeTruthy();
+    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
+    expect(container).toBeTruthy();
+    const toggleBtn = container?.querySelector('button') as HTMLButtonElement;
+    expect(toggleBtn).toBeTruthy();
+    expect(toggleBtn.textContent).toContain('Текст');
+  }));
+
+  it('opens popup menu on toggle button click', fakeAsync(() => {
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
+    fixture.detectChanges();
+    expect(component.showTypeMenu).toBeFalse();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
+    const toggleBtn = container?.querySelector('button') as HTMLButtonElement;
+    toggleBtn.click();
+    fixture.detectChanges();
+    expect(component.showTypeMenu).toBeTrue();
+  }));
+
+  it('selects type from popup menu', fakeAsync(() => {
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
+    component.showTypeMenu = true;
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
+    const allButtons = container?.querySelectorAll('button') || [];
+    const fotoBtn = Array.from(allButtons).find(b => b.textContent?.includes('Фото'));
+    expect(fotoBtn).toBeTruthy();
+    expect(fotoBtn?.hasAttribute('disabled')).toBeFalse();
+    fotoBtn?.click();
+    fixture.detectChanges();
+    expect(component.messageType).toBe('image');
+    expect(component.showTypeMenu).toBeFalse();
+  }));
+
+  it('shows disabled sticker and gif items in popup', fakeAsync(() => {
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
+    component.showTypeMenu = true;
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
+    const disabledBtns = container?.querySelectorAll('button[disabled]') || [];
+    const disabledTexts = Array.from(disabledBtns).map(b => b.textContent?.trim());
+    expect(disabledTexts.some(t => t?.includes('Стикер'))).toBeTrue();
+    expect(disabledTexts.some(t => t?.includes('GIF'))).toBeTrue();
   }));
 
   it('renders send button after selecting a user', fakeAsync(() => {

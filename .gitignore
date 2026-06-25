@@ -20,3 +20,7 @@ vapid_keys.json
 
 # LeanKG
 .leankg/
+
+# Brainstorm session files
+.superpowers/
+mockups/
