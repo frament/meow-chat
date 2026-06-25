@@ -1,54 +1,22 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { HttpEventType } from '@angular/common/http';
-import { filter } from 'rxjs/operators';
 import { ApiService, Post, PostImage } from '../../services/api.service';
+import { PostDialogComponent } from '../post-dialog/post-dialog';
 
 @Component({
   selector: 'app-feed',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, PostDialogComponent],
   template: `
     <div class="px-4 py-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
-      <div class="card new-post">
-        <h2 class="text-lg font-semibold mb-3" style="color:var(--text-primary);">Новый пост</h2>
-        <textarea [(ngModel)]="newPostContent" rows="3" placeholder="Что у вас нового?"></textarea>
+      <button (click)="postDialog.open()"
+        class="w-full flex items-center gap-2 px-4 py-3 rounded-xl text-sm cursor-pointer transition-colors"
+        style="border:2px dashed var(--border-default);color:var(--text-secondary);background:transparent;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Написать пост...
+      </button>
 
-        @if (previews.length > 0) {
-          <div class="flex flex-wrap gap-2 mt-3">
-            @for (preview of previews; track $index) {
-              <div class="relative w-20 h-20">
-                <img [src]="preview" class="w-full h-full object-cover rounded-lg" style="border:1px solid var(--border-default);">
-                <button (click)="removeFile($index)"
-                  class="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center hover:opacity-90"
-                  style="background:#e74c3c;color:white;">
-                  ✕
-                </button>
-              </div>
-            }
-          </div>
-        }
-
-        <div class="flex flex-wrap gap-2 mt-3">
-          @if (uploading()) {
-          <div style="width:100%;height:3px;background:var(--divider);border-radius:2px;margin-bottom:4px;">
-            <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:2px;transition:width 0.2s;"></div>
-          </div>
-          }
-          <label class="btn-secondary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Добавить фото
-            <input type="file" multiple accept="image/*" (change)="onFilesSelected($event)" class="hidden">
-          </label>
-          <label class="flex items-center gap-2 text-sm" style="color:var(--text-secondary);cursor:pointer;margin-left:12px;">
-            <input type="checkbox" [(ngModel)]="isPublic" class="w-4 h-4">
-            <span>Показать всем</span>
-          </label>
-          <button (click)="createPost()" class="btn-primary" style="margin-left:auto;">
-            Опубликовать
-          </button>
-        </div>
-      </div>
+      <app-post-dialog #postDialog (postCreated)="loadFeed()" />
 
       @for (post of posts; track post.id) {
         <div class="card">
@@ -146,13 +114,9 @@ import { ApiService, Post, PostImage } from '../../services/api.service';
   `,
 })
 export class FeedComponent implements OnInit {
+  @ViewChild('postDialog') postDialog!: PostDialogComponent;
+
   posts: Post[] = [];
-  newPostContent = '';
-  selectedFiles: File[] = [];
-  previews: string[] = [];
-  isPublic = false;
-  uploading = signal(false);
-  uploadProgress = signal(0);
   reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
   pickerPostId: number | null = null;
   viewerImages: PostImage[] | null = null;
@@ -218,60 +182,6 @@ export class FeedComponent implements OnInit {
       },
       error: () => alert('Не удалось удалить пост'),
     });
-  }
-
-  onFilesSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files) {
-      for (let i = 0; i < input.files.length; i++) {
-        const file = input.files[i];
-        if (this.selectedFiles.length >= 10) break;
-        this.selectedFiles.push(file);
-        const reader = new FileReader();
-        reader.onload = (e) => this.previews.push(e.target!.result as string);
-        reader.readAsDataURL(file);
-      }
-      input.value = '';
-    }
-  }
-
-  removeFile(index: number) {
-    this.selectedFiles.splice(index, 1);
-    this.previews.splice(index, 1);
-  }
-
-  createPost() {
-    if (!this.newPostContent.trim() && this.selectedFiles.length === 0) return;
-    const hasFiles = this.selectedFiles.length > 0;
-    if (hasFiles) {
-      this.uploading.set(true);
-      this.uploadProgress.set(0);
-      this.api.createPostWithProgress(this.newPostContent, this.selectedFiles, this.isPublic)
-        .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
-        .subscribe({
-          next: (event: any) => {
-            if (event.type === HttpEventType.UploadProgress) {
-              this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
-            } else if (event.type === HttpEventType.Response) {
-              this.uploading.set(false);
-              this.newPostContent = '';
-              this.selectedFiles = [];
-              this.previews = [];
-              this.isPublic = false;
-              this.loadFeed();
-            }
-          },
-          error: () => { this.uploading.set(false); },
-        });
-    } else {
-      this.api.createPost(this.newPostContent, this.selectedFiles, this.isPublic).subscribe(() => {
-        this.newPostContent = '';
-        this.selectedFiles = [];
-        this.previews = [];
-        this.isPublic = false;
-        this.loadFeed();
-      });
-    }
   }
 
   openViewer(images: PostImage[], index: number) {
