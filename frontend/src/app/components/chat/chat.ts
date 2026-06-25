@@ -6,13 +6,14 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
-import { ApiService, User, Message, MsgType, GroupChat, GroupMember } from '../../services/api.service';
+import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
+import { GifPickerComponent } from './gif-picker/gif-picker';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule, ScrollingModule],
+  imports: [DatePipe, FormsModule, ScrollingModule, GifPickerComponent],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -224,13 +225,28 @@ import { CryptoService } from '../../services/crypto.service';
                 @if (showTypeMenu) {
                   <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
-                      @if (t.id === 'sticker' || t.id === 'gif') {
+                      @if (t.id === 'sticker') {
                         <button disabled
                           style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
                           <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
                           <span>{{ t.label }}</span>
                           <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
                         </button>
+                      } @else if (t.id === 'gif') {
+                        @if (giphyHasKey) {
+                          <button (click)="openGifPicker()"
+                            style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;color:var(--text-primary);">
+                            <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                            <span>{{ t.label }}</span>
+                          </button>
+                        } @else {
+                          <button disabled
+                            title="Настройте Giphy API Key в админке"
+                            style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                            <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                            <span>{{ t.label }}</span>
+                          </button>
+                        }
                       } @else {
                         <button (click)="selectType(t.id)"
                           [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
@@ -517,13 +533,28 @@ import { CryptoService } from '../../services/crypto.service';
                 @if (showTypeMenu) {
                   <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
-                      @if (t.id === 'sticker' || t.id === 'gif') {
+                      @if (t.id === 'sticker') {
                         <button disabled
                           style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
                           <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
                           <span>{{ t.label }}</span>
                           <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
                         </button>
+                      } @else if (t.id === 'gif') {
+                        @if (giphyHasKey) {
+                          <button (click)="openGifPicker()"
+                            style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;color:var(--text-primary);">
+                            <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                            <span>{{ t.label }}</span>
+                          </button>
+                        } @else {
+                          <button disabled
+                            title="Настройте Giphy API Key в админке"
+                            style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                            <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
+                            <span>{{ t.label }}</span>
+                          </button>
+                        }
                       } @else {
                         <button (click)="selectType(t.id)"
                           [style.background]="messageType === t.id ? 'var(--accent-light)' : 'transparent'"
@@ -677,6 +708,10 @@ import { CryptoService } from '../../services/crypto.service';
       </div>
     </div>
     }
+
+    @if (showGifPicker) {
+      <app-gif-picker (gifSelected)="onGifSelected($event)" />
+    }
   `,
 })
 export class ChatComponent implements OnInit, OnDestroy {
@@ -695,6 +730,31 @@ export class ChatComponent implements OnInit, OnDestroy {
   pollOptions: string[] = ['', ''];
   pollMultiple = false;
   showTypeMenu = false;
+  showGifPicker = false;
+
+  openGifPicker() {
+    if (!this.giphyHasKey) return;
+    this.showGifPicker = true;
+  }
+
+  onGifSelected(gif: GiphyResult | undefined) {
+    this.showGifPicker = false;
+    if (!gif) return;
+
+    fetch(gif.url)
+      .then(res => res.blob())
+      .then(blob => {
+        const file = new File([blob], `giphy_${gif.id}.gif`, { type: 'image/gif' });
+        this.selectedFiles = [file];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.previews = [e.target?.result as string];
+        };
+        reader.readAsDataURL(blob);
+        this.messageType = 'gif';
+        this.sendMessage();
+      });
+  }
 
   get currentTypeIcon(): string {
     return this.msgTypes.find(t => t.id === this.messageType)?.icon || 'Aa';
@@ -776,12 +836,18 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
   }
 
+  giphyHasKey = false;
+
   constructor(
     protected api: ApiService,
     private route: ActivatedRoute,
     protected router: Router,
     private crypto: CryptoService,
-  ) {}
+  ) {
+    this.api.getGiphyKey().subscribe({
+      next: (res) => this.giphyHasKey = res.has_key,
+    });
+  }
 
   private e2eeReady = false;
 
