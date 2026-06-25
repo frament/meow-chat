@@ -1834,3 +1834,29 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		}
 	}
 }
+
+func (h *Handler) GetGiphyKey(c *fiber.Ctx) error {
+	key, err := database.GetSetting("giphy_api_key")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to read setting"})
+	}
+	masked := ""
+	if len(key) > 4 {
+		masked = key[:4] + strings.Repeat("*", len(key)-4)
+	}
+	return c.JSON(models.GiphyKeyResponse{
+		Key:    masked,
+		HasKey: key != "",
+	})
+}
+
+func (h *Handler) UpdateGiphyKey(c *fiber.Ctx) error {
+	var req models.GiphyKeyUpdateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+	if err := database.SetSetting("giphy_api_key", req.Key); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save setting"})
+	}
+	return c.JSON(fiber.Map{"ok": true})
+}
