@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
 import { ApiService, User } from '../../services/api.service';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
@@ -30,7 +31,7 @@ interface BackupEntry {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [DatePipe, AdminFederationComponent],
+  imports: [DatePipe, AdminFederationComponent, FormsModule],
   template: `
     <!-- Desktop -->
     <div class="hidden sm:block max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
@@ -62,6 +63,11 @@ interface BackupEntry {
             [style.background]="activeTab === 'federation' ? 'var(--accent-light)' : 'transparent'"
             style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
             Федерация
+          </button>
+          <button (click)="activeTab = 'settings'"
+            [style.background]="activeTab === 'settings' ? 'var(--accent-light)' : 'transparent'"
+            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
+            Настройки
           </button>
         </div>
 
@@ -268,6 +274,32 @@ interface BackupEntry {
           <app-admin-federation />
         }
 
+        @if (activeTab === 'settings') {
+          <div class="mb-6">
+            <h3 class="text-base font-semibold mb-4" style="color:var(--text-primary);">Giphy API Key</h3>
+            <p class="text-sm mb-3" style="color:var(--text-secondary);">
+              API-ключ для поиска GIF через Giphy.
+            </p>
+            <div class="flex gap-2 items-start flex-wrap">
+              <input #giphyKeyInput type="text" [(ngModel)]="giphyKey"
+                [placeholder]="giphyHasKey ? 'Введите новый ключ...' : 'Введите Giphy API Key...'"
+                style="flex:1;min-width:200px;box-sizing:border-box;padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:var(--bg-surface);font-size:14px;color:var(--text-primary);outline:none;font-family:inherit;">
+              <button (click)="saveGiphyKey()" [disabled]="giphySaving"
+                style="padding:8px 16px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;font-family:inherit;">
+                {{ giphySaving ? '...' : 'Сохранить' }}
+              </button>
+            </div>
+            @if (giphyKeyMsg) {
+              <p class="mt-2 text-sm" [style.color]="giphyKeyOk ? '#27ae60' : '#e74c3c'">{{ giphyKeyMsg }}</p>
+            }
+            @if (giphyHasKey) {
+              <p class="mt-2 text-sm" style="color:var(--text-tertiary);">
+                Текущий ключ: <code style="font-size:12px;">{{ giphyMaskedKey }}</code>
+              </p>
+            }
+          </div>
+        }
+
         @if (activeTab === 'backups') {
           <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button (click)="createBackup()" [disabled]="backupLoading"
@@ -352,6 +384,7 @@ interface BackupEntry {
             <option value="chats">Чаты</option>
             <option value="backups">Бэкапы</option>
             <option value="federation">Федерация</option>
+            <option value="settings">Настройки</option>
           </select>
           <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-tertiary);font-size:10px;">▼</div>
         </div>
@@ -582,11 +615,37 @@ interface BackupEntry {
       @if (activeTab === 'federation') {
         <app-admin-federation />
       }
+
+      @if (activeTab === 'settings') {
+        <div class="mb-6">
+          <h3 class="text-base font-semibold mb-4" style="color:var(--text-primary);">Giphy API Key</h3>
+          <p class="text-sm mb-3" style="color:var(--text-secondary);">
+            API-ключ для поиска GIF через Giphy.
+          </p>
+          <div class="flex gap-2 items-start flex-wrap">
+            <input #giphyKeyInput type="text" [(ngModel)]="giphyKey"
+              [placeholder]="giphyHasKey ? 'Введите новый ключ...' : 'Введите Giphy API Key...'"
+              style="flex:1;min-width:200px;box-sizing:border-box;padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:var(--bg-surface);font-size:14px;color:var(--text-primary);outline:none;font-family:inherit;">
+            <button (click)="saveGiphyKey()" [disabled]="giphySaving"
+              style="padding:8px 16px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;font-family:inherit;">
+              {{ giphySaving ? '...' : 'Сохранить' }}
+            </button>
+          </div>
+          @if (giphyKeyMsg) {
+            <p class="mt-2 text-sm" [style.color]="giphyKeyOk ? '#27ae60' : '#e74c3c'">{{ giphyKeyMsg }}</p>
+          }
+          @if (giphyHasKey) {
+            <p class="mt-2 text-sm" style="color:var(--text-tertiary);">
+              Текущий ключ: <code style="font-size:12px;">{{ giphyMaskedKey }}</code>
+            </p>
+          }
+        </div>
+      }
     </div>
   `,
 })
 export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' = 'users';
+  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'settings' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -611,6 +670,13 @@ export class AdminComponent implements OnInit {
   backupMsg = '';
   backupOk = false;
 
+  giphyKey = '';
+  giphyMaskedKey = '';
+  giphyHasKey = false;
+  giphySaving = false;
+  giphyKeyMsg = '';
+  giphyKeyOk = false;
+
   constructor(public api: ApiService) {}
 
   loadFederation() {}
@@ -618,6 +684,7 @@ export class AdminComponent implements OnInit {
   ngOnInit() {
     this.loadUsers();
     this.loadFiles();
+    this.loadGiphyKey();
   }
 
   loadUsers() {
@@ -633,6 +700,37 @@ export class AdminComponent implements OnInit {
     this.api.getAdminFiles().subscribe({
       next: (res) => { this.files = res.files; this.diskInfo = res.disk; this.loadingFiles = false; },
       error: () => this.loadingFiles = false,
+    });
+  }
+
+  loadGiphyKey() {
+    this.api.getGiphyKey().subscribe({
+      next: (res) => {
+        this.giphyHasKey = res.has_key;
+        this.giphyMaskedKey = res.key;
+      },
+    });
+  }
+
+  saveGiphyKey() {
+    if (!this.giphyKey.trim()) return;
+    this.giphySaving = true;
+    this.giphyKeyMsg = '';
+    this.api.updateGiphyKey(this.giphyKey.trim()).subscribe({
+      next: () => {
+        this.giphySaving = false;
+        this.giphyKeyMsg = 'Ключ сохранён';
+        this.giphyKeyOk = true;
+        this.giphyHasKey = true;
+        this.giphyMaskedKey = this.giphyKey.trim().slice(0, 4) + '*'.repeat(Math.max(0, this.giphyKey.trim().length - 4));
+        this.giphyKey = '';
+        setTimeout(() => this.giphyKeyMsg = '', 3000);
+      },
+      error: () => {
+        this.giphySaving = false;
+        this.giphyKeyMsg = 'Ошибка сохранения ключа';
+        this.giphyKeyOk = false;
+      },
     });
   }
 
