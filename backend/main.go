@@ -266,6 +266,12 @@ func main() {
 	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
 	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
 	admin.Post("/federation/restore", h.AdminRestoreFederation)
+	admin.Get("/settings/giphy-key", h.GetGiphyKey)
+	admin.Put("/settings/giphy-key", h.UpdateGiphyKey)
+
+	giphy := api.Group("/giphy", handlers.AuthRequired)
+	giphy.Get("/search", h.SearchGiphy)
+	giphy.Get("/trending", h.TrendingGiphy)
 
 	bak := api.Group("/admin/backup", handlers.AdminRequired)
 	bak.Get("/settings", h.GetBackupSettings)
