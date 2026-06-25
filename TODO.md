@@ -46,10 +46,10 @@
 | `admin-federation.component.spec.ts` | 3 |
 | `add-friend.component.spec.ts` | 2 |
 | `join-group.component.spec.ts` | 2 |
-| `post-dialog.component.spec.ts` | 14 |
-| **Frontend total** | **102** |
+| `post-dialog.component.spec.ts` | 18 |
+| **Frontend total** | **106** |
 
-### Grand total: 291 tests, 0 failures ✅
+### Grand total: 295 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -73,3 +73,4 @@
 - [x] #9 В чате сделать видимым вариант «опрос» только в групповых чатах
 - [x] #10 В чатах реализовать тип сообщения «опрос»
 - [x] #11 В чатах сделать меню выбора типа сообщения посимпотичнее ✓
+- [ ] #14 Сделать поиск по пользователям с приглашением в друзья

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PostDialogComponent } from './post-dialog';
 import { ApiService } from '../../services/api.service';
 import { signal, computed } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 describe('PostDialogComponent', () => {
   let component: PostDialogComponent;
@@ -13,6 +13,7 @@ describe('PostDialogComponent', () => {
     getFeed: jasmine.createSpy().and.returnValue(of([])),
     createPost: jasmine.createSpy().and.returnValue(of({ id: 1, message: 'ok' })),
     createPostWithProgress: jasmine.createSpy().and.returnValue(of({})),
+    createPostError: jasmine.createSpy(),  // for error simulation
     wsMessages$: of(null),
     totalUnread: computed(() => 0),
   };
@@ -145,5 +146,59 @@ describe('PostDialogComponent', () => {
     const sheet = fixture.nativeElement.querySelector('[data-testid="dialog-sheet"]');
     expect(sheet).toBeTruthy();
     expect(sheet.classList.contains('sm:hidden')).toBeTrue();
+  });
+
+  it('resets form after successful post creation (text only)', () => {
+    component.newPostContent = 'Hello world';
+    component.isPublic = true;
+    component.open();
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll('button');
+    const btn = Array.prototype.find.call(buttons, (b: Element) => b.textContent?.includes('Опубликовать')) as HTMLElement | undefined;
+    btn!.click();
+    fixture.detectChanges();
+    expect(component.newPostContent).toBe('');
+    expect(component.isPublic).toBeFalse();
+  });
+
+  it('shows upload progress bar when uploading', () => {
+    component.uploading.set(true);
+    component.uploadProgress.set(55);
+    component.open();
+    fixture.detectChanges();
+    const container = fixture.nativeElement.querySelector('[data-testid="dialog-overlay"]');
+    expect(container).toBeTruthy();
+    // Progress bar renders as a div with inline style containing width percentage
+    const allDivs = container!.querySelectorAll('div');
+    const foundProgress = Array.prototype.find.call(allDivs, (d: Element) =>
+      d.hasAttribute('style') && d.getAttribute('style')!.includes('width:'))
+    expect(foundProgress).toBeTruthy();
+  });
+
+  it('calls createPostWithProgress when files are selected', () => {
+    component.newPostContent = 'Hello';
+    component.selectedFiles = [new File([''], 'photo.jpg')];
+    component.open();
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll('button');
+    const btn = Array.prototype.find.call(buttons, (b: Element) => b.textContent?.includes('Опубликовать')) as HTMLElement | undefined;
+    btn!.click();
+    fixture.detectChanges();
+    expect(mockApi.createPostWithProgress).toHaveBeenCalled();
+  });
+
+  it('stays open on API error', () => {
+    mockApi.createPost.and.returnValue(throwError(() => new Error('API error')));
+    component.newPostContent = 'Will fail';
+    component.open();
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll('button');
+    const btn = Array.prototype.find.call(buttons, (b: Element) => b.textContent?.includes('Опубликовать')) as HTMLElement | undefined;
+    btn!.click();
+    fixture.detectChanges();
+    // Dialog should remain open after error
+    expect(component.showDialog()).toBeTrue();
+    // Reset createPost mock back to success
+    mockApi.createPost.and.returnValue(of({ id: 1, message: 'ok' }));
   });
 });
