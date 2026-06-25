@@ -40,6 +40,7 @@ describe('ChatComponent', () => {
     sendGroupMessageWithProgress: jasmine.createSpy().and.returnValue(of({})),
     clearUnread: jasmine.createSpy(),
     clearUnreadBoundary: jasmine.createSpy(),
+    getGiphyKey: jasmine.createSpy().and.returnValue(of({ has_key: false, key: '' })),
   };
 
   const mockCrypto = {
