@@ -393,6 +393,10 @@ func migrate() {
 			recovery_phrase_iv       TEXT,
 			updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS server_settings (
+			key   TEXT PRIMARY KEY,
+			value TEXT NOT NULL DEFAULT ''
+		)`,
 	}
 
 	for _, q := range queries {
@@ -472,6 +476,20 @@ func migrate() {
 	}
 
 	log.Println("Database migrated successfully")
+}
+
+func GetSetting(key string) (string, error) {
+	var value string
+	err := DB.QueryRow("SELECT value FROM server_settings WHERE key = ?", key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+func SetSetting(key, value string) error {
+	_, err := DB.Exec("INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)", key, value)
+	return err
 }
 
 func GetWebAuthnCredentials(userID int64) ([]WebAuthnCredentialRow, error) {
