@@ -43,7 +43,7 @@ describe('AdminComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('renders all 5 tab buttons', () => {
+  it('renders all 5 tab buttons on desktop', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('button');
     const tabTexts = Array.from(buttons)
@@ -51,5 +51,26 @@ describe('AdminComponent', () => {
       .filter(t => t === 'Управление пользователями' || t === 'Управление файлами' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация');
     expect(tabTexts.length).toBe(5);
     expect(component.activeTab).toBe('users');
+  });
+
+  it('renders mobile select with 5 options', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const select = compiled.querySelector('select') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.options.length).toBe(5);
+    expect(select.options[0].value).toBe('users');
+    expect(select.options[1].value).toBe('files');
+    expect(select.options[2].value).toBe('chats');
+    expect(select.options[3].value).toBe('backups');
+    expect(select.options[4].value).toBe('federation');
+  });
+
+  it('changes activeTab via mobile select', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const select = compiled.querySelector('select') as HTMLSelectElement;
+    select.value = 'files';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.activeTab).toBe('files');
   });
 });
