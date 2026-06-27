@@ -6,6 +6,7 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
@@ -810,13 +811,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   messages: Message[] = [];
   messageContent = '';
   messageType: MsgType = 'text';
-  readonly msgTypes: { id: MsgType; icon: string; label: string }[] = [
-    { id: 'text', icon: 'Aa', label: 'Текст' },
-    { id: 'image', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', label: 'Фото' },
-    { id: 'sticker', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', label: 'Стикер' },
-    { id: 'gif', icon: '<span style="font-weight:800;font-size:11px;">GIF</span>', label: 'GIF' },
-    { id: 'poll', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', label: 'Опрос' },
-  ];
+  msgTypes: { id: MsgType; icon: SafeHtml; label: string }[] = [];
+
   pollOptions: string[] = ['', ''];
   pollMultiple = false;
   showTypeMenu = false;
@@ -859,8 +855,8 @@ export class ChatComponent implements OnInit, OnDestroy {
       });
   }
 
-  get currentTypeIcon(): string {
-    return this.msgTypes.find(t => t.id === this.messageType)?.icon || 'Aa';
+  get currentTypeIcon(): SafeHtml {
+    return this.msgTypes.find(t => t.id === this.messageType)?.icon || this.sanitizer.bypassSecurityTrustHtml('Aa');
   }
 
   get currentTypeLabel(): string {
@@ -888,7 +884,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.showTypeMenu = false;
   }
 
-  get visibleMsgTypes(): { id: MsgType; icon: string; label: string }[] {
+  get visibleMsgTypes(): { id: MsgType; icon: SafeHtml; label: string }[] {
     if (!this.selectedGroup) {
       return this.msgTypes.filter(t => t.id !== 'poll');
     }
@@ -954,10 +950,23 @@ export class ChatComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     protected router: Router,
     private crypto: CryptoService,
+    private sanitizer: DomSanitizer,
   ) {
+    this.msgTypes = this.buildMsgTypes();
     this.api.getGiphyKey().subscribe({
       next: (res) => this.giphyHasKey = res.has_key,
     });
+  }
+
+  private buildMsgTypes(): { id: MsgType; icon: SafeHtml; label: string }[] {
+    const raw: { id: MsgType; icon: string; label: string }[] = [
+      { id: 'text', icon: 'Aa', label: 'Текст' },
+      { id: 'image', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', label: 'Фото' },
+      { id: 'sticker', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>', label: 'Стикер' },
+      { id: 'gif', icon: '<span style="font-weight:800;font-size:11px;">GIF</span>', label: 'GIF' },
+      { id: 'poll', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', label: 'Опрос' },
+    ];
+    return raw.map(t => ({ ...t, icon: this.sanitizer.bypassSecurityTrustHtml(t.icon) }));
   }
 
   private e2eeReady = false;
