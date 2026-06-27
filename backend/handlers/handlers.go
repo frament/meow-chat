@@ -61,6 +61,7 @@ type wsMessage struct {
 	encryptedIV       string
 	pushPreview       string
 	pollData          fiber.Map
+	stickerURL        string
 }
 
 func NewHandler() *Handler {
@@ -161,10 +162,13 @@ func (h *Handler) runHub() {
 						payload["encrypted_content"] = msg.encryptedContent
 						payload["encrypted_iv"] = msg.encryptedIV
 					}
-					if msg.pollData != nil {
-						payload["poll"] = msg.pollData
-					}
-					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if msg.pollData != nil {
+					payload["poll"] = msg.pollData
+				}
+				if msg.stickerURL != "" {
+					payload["sticker_url"] = msg.stickerURL
+				}
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
@@ -242,6 +246,9 @@ func (h *Handler) runHub() {
 			}
 			if msg.pollData != nil {
 				payload["poll"] = msg.pollData
+			}
+			if msg.stickerURL != "" {
+				payload["sticker_url"] = msg.stickerURL
 			}
 
 			for _, memberID := range memberIDs {
@@ -786,7 +793,8 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	rows, err := database.DB.Query(`
 		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
 			COALESCE(u.username, fu.username) as from_username,
-			COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id
+			COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
+			COALESCE(m.sticker_url, '')
 		FROM messages m
 		LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
 		LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
@@ -804,7 +812,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	for rows.Next() {
 		var m models.Message
 		var serverID *int64
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -906,6 +914,14 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		}
 	}
 
+	stickerURL := ""
+	if msgType == "sticker" {
+		stickerID, parseErr := strconv.ParseInt(content, 10, 64)
+		if parseErr == nil {
+			database.DB.QueryRow("SELECT image_url FROM stickers WHERE id = ?", stickerID).Scan(&stickerURL)
+		}
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -918,8 +934,8 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
-		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
@@ -1000,6 +1016,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		encryptedIV:      encryptedIV,
 		pushPreview:      pushPreview,
 		pollData:         pollData,
+		stickerURL:       stickerURL,
 	}
 
 	// Forward to federated server if recipient is a remote user

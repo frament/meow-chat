@@ -40,7 +40,7 @@
 | `register.component.spec.ts` | 3 |
 | `layout.component.spec.ts` | 4 |
 | `feed.component.spec.ts` | 4 |
-| `chat.component.spec.ts` | 13 |
+| `chat.component.spec.ts` | 14 |
 | `settings.component.spec.ts` | 2 |
 | `admin.component.spec.ts` | 4 |
 | `device-auth.component.spec.ts` | 3 |
@@ -48,9 +48,9 @@
 | `add-friend.component.spec.ts` | 2 |
 | `join-group.component.spec.ts` | 2 |
 | `post-dialog.component.spec.ts` | 18 |
-| **Frontend total** | **106** |
+ | **Frontend total** | **108** |
 
-### Grand total: 301 tests, 0 failures ✅
+### Grand total: 303 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -75,5 +75,5 @@
 - [x] #10 В чатах реализовать тип сообщения «опрос»
 - [x] #11 В чатах сделать меню выбора типа сообщения посимпотичнее ✓
 - [x] #14 Сделать поиск по пользователям с приглашением в друзья ✓
-- [ ] #15 Реализовать сообщения-стикеры
+- [x] #15 Реализовать сообщения-стикеры ✓
 - [ ] #16 Пройтись по спецификациям из `docs/ws-requirements.md` (S5, S7, T1–T12, O1–O5, секции 2.4, 3.2–3.4)

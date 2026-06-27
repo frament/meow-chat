@@ -133,7 +133,7 @@ describe('ChatComponent', () => {
     expect(component.showTypeMenu).toBeFalse();
   }));
 
-  it('shows disabled sticker and gif items in popup', fakeAsync(() => {
+  it('shows disabled gif item in popup when giphy key missing', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     component.showTypeMenu = true;
     fixture.detectChanges();
@@ -141,8 +141,18 @@ describe('ChatComponent', () => {
     const container = compiled.querySelector('.type-menu-container') as HTMLElement;
     const disabledBtns = container?.querySelectorAll('button[disabled]') || [];
     const disabledTexts = Array.from(disabledBtns).map(b => b.textContent?.trim());
-    expect(disabledTexts.some(t => t?.includes('Стикер'))).toBeTrue();
     expect(disabledTexts.some(t => t?.includes('GIF'))).toBeTrue();
+  }));
+
+  it('shows sticker item in popup', fakeAsync(() => {
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
+    component.showTypeMenu = true;
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
+    const btns = container?.querySelectorAll('button') || [];
+    const texts = Array.from(btns).map(b => b.textContent?.trim());
+    expect(texts.some(t => t?.includes('Стикер'))).toBeTrue();
   }));
 
   it('renders send button after selecting a user', fakeAsync(() => {

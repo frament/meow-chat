@@ -372,7 +372,7 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, '')
+		SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), COALESCE(m.sticker_url, '')
 		FROM group_messages m
 		JOIN users u ON m.from_user_id = u.id
 		WHERE m.group_chat_id = ?
@@ -387,7 +387,7 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.Type, &m.Content, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.Type, &m.Content, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &m.StickerURL); err != nil {
 			continue
 		}
 		m.GroupChatID = &groupID
@@ -515,6 +515,14 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 		}
 	}
 
+	stickerURL := ""
+	if msgType == "sticker" {
+		stickerID, parseErr := strconv.ParseInt(content, 10, 64)
+		if parseErr == nil {
+			database.DB.QueryRow("SELECT image_url FROM stickers WHERE id = ?", stickerID).Scan(&stickerURL)
+		}
+	}
+
 	files := form.File["images"]
 	if len(files) > 10 {
 		return c.Status(400).JSON(fiber.Map{"error": "Maximum 10 images allowed"})
@@ -527,8 +535,8 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO group_messages (group_chat_id, from_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
-		groupID, fromUserID, content, msgType, encryptedContent, encryptedIV,
+		"INSERT INTO group_messages (group_chat_id, from_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		groupID, fromUserID, content, msgType, encryptedContent, encryptedIV, stickerURL,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
@@ -606,6 +614,7 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 		encryptedIV:      encryptedIV,
 		pushPreview:      pushPreview,
 		pollData:         pollData,
+		stickerURL:       stickerURL,
 	}
 
 	resp := fiber.Map{"id": messageID, "message": "Message sent"}

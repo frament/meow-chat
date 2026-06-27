@@ -160,8 +160,22 @@ export interface GiphySearchResponse {
 }
 
 export interface GiphyKeyResponse {
-  key: string;
-  has_key: boolean;
+	key: string;
+	has_key: boolean;
+}
+
+export interface StickerPack {
+	id: number;
+	name: string;
+	created_at: string;
+	stickers?: Sticker[];
+}
+
+export interface Sticker {
+	id: number;
+	pack_id: number;
+	image_url: string;
+	sort_order: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -526,6 +540,36 @@ export class ApiService {
 
   updateGiphyKey(key: string) {
     return this.http.put<{ ok: boolean }>(`${this.baseUrl}/admin/settings/giphy-key`, { key });
+  }
+
+  // ── Stickers ──
+
+  getStickerPacks() {
+    return this.http.get<StickerPack[]>(`${this.baseUrl}/sticker-packs`);
+  }
+
+  adminCreateStickerPack(name: string) {
+    return this.http.post<{ id: number; name: string }>(`${this.baseUrl}/admin/sticker-packs`, { name });
+  }
+
+  adminRenameStickerPack(id: number, name: string) {
+    return this.http.put<{ message: string }>(`${this.baseUrl}/admin/sticker-packs/${id}`, { name });
+  }
+
+  adminDeleteStickerPack(id: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/sticker-packs/${id}`);
+  }
+
+  adminUploadSticker(packId: number, file: File) {
+    const fd = new FormData();
+    fd.append('sticker', file);
+    return this.http.post<{ id: number; image_url: string }>(
+      `${this.baseUrl}/admin/sticker-packs/${packId}/stickers`, fd,
+    );
+  }
+
+  adminDeleteSticker(packId: number, stickerId: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/admin/sticker-packs/${packId}/stickers/${stickerId}`);
   }
 
   adminBlockUser(id: number) {

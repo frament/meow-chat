@@ -405,6 +405,18 @@ func migrate() {
 			key   TEXT PRIMARY KEY,
 			value TEXT NOT NULL DEFAULT ''
 		)`,
+		`CREATE TABLE IF NOT EXISTS sticker_packs (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			name       TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS stickers (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			pack_id    INTEGER NOT NULL REFERENCES sticker_packs(id) ON DELETE CASCADE,
+			image_url  TEXT NOT NULL,
+			sort_order INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, q := range queries {
@@ -469,6 +481,15 @@ func migrate() {
 		DB.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
 	}
 
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sticker_url'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN sticker_url TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='sticker_url'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE group_messages ADD COLUMN sticker_url TEXT DEFAULT ''")
+	}
+
 	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
 		log.Fatal("Failed to create uploads directory:", err)
 	}
@@ -477,6 +498,9 @@ func migrate() {
 	}
 	if err := os.MkdirAll("./uploads/messages", 0755); err != nil {
 		log.Fatal("Failed to create messages uploads directory:", err)
+	}
+	if err := os.MkdirAll("./uploads/stickers", 0755); err != nil {
+		log.Fatal("Failed to create stickers uploads directory:", err)
 	}
 
 	if err := InitSchemaVersion(); err != nil {

@@ -27,6 +27,7 @@ type Message struct {
 	EncryptedContent string      `json:"encrypted_content,omitempty"`
 	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
 	Poll             *Poll       `json:"poll,omitempty"`
+	StickerURL       string      `json:"sticker_url,omitempty"`
 }
 
 type GroupChat struct {
@@ -201,4 +202,22 @@ type GiphyKeyResponse struct {
 
 type GiphyKeyUpdateRequest struct {
 	Key string `json:"key"`
+}
+
+type StickerPack struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	Stickers  []Sticker `json:"stickers,omitempty"`
+}
+
+type Sticker struct {
+	ID        int64  `json:"id"`
+	PackID    int64  `json:"pack_id"`
+	ImageURL  string `json:"image_url"`
+	SortOrder int    `json:"sort_order"`
+}
+
+type CreateStickerPackRequest struct {
+	Name string `json:"name"`
 }

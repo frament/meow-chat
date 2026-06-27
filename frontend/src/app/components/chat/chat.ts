@@ -9,11 +9,12 @@ import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrollin
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
+import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule, ScrollingModule, GifPickerComponent],
+  imports: [DatePipe, FormsModule, ScrollingModule, GifPickerComponent, StickerPickerComponent],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -196,9 +197,8 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                         <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ $any(item).from_user }}</p>
                       }
                       @if (($any(item).msg_type || 'text') === 'sticker') {
-                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                          <span class="text-xs opacity-60">Sticker</span>
+                        <div class="px-2 py-1">
+                          <img [src]="$any(item).sticker_url" class="w-24 h-24 object-contain rounded-lg">
                         </div>
                        } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
@@ -279,11 +279,10 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                   <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
                       @if (t.id === 'sticker') {
-                        <button disabled
-                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                        <button (click)="openStickerPicker()"
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;color:var(--text-primary);">
                           <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
                           <span>{{ t.label }}</span>
-                          <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
                         </button>
                       } @else if (t.id === 'gif') {
                         @if (giphyHasKey) {
@@ -560,9 +559,8 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                         <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ $any(item).from_user }}</p>
                       }
                       @if (($any(item).msg_type || 'text') === 'sticker') {
-                        <div class="flex flex-col items-center gap-1 px-3 py-2 min-w-[80px]">
-                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                          <span class="text-xs opacity-60">Sticker</span>
+                        <div class="px-2 py-1">
+                          <img [src]="$any(item).sticker_url" class="w-24 h-24 object-contain rounded-lg">
                         </div>
                        } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
@@ -644,11 +642,10 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
                   <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
                       @if (t.id === 'sticker') {
-                        <button disabled
-                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;background:transparent;cursor:not-allowed;font-size:13px;font-weight:500;color:var(--text-primary);font-family:inherit;text-align:left;opacity:0.4;">
+                        <button (click)="openStickerPicker()"
+                          style="display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;transition:all 0.1s;color:var(--text-primary);">
                           <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" [innerHTML]="t.icon"></span>
                           <span>{{ t.label }}</span>
-                          <span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">скоро</span>
                         </button>
                       } @else if (t.id === 'gif') {
                         @if (giphyHasKey) {
@@ -822,6 +819,9 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
     @if (showGifPicker) {
       <app-gif-picker (gifSelected)="onGifSelected($event)" />
     }
+    @if (showStickerPicker) {
+      <app-sticker-picker (stickerSelected)="onStickerSelected($event)" />
+    }
   `,
 })
 export class ChatComponent implements OnInit, OnDestroy {
@@ -841,10 +841,23 @@ export class ChatComponent implements OnInit, OnDestroy {
   pollMultiple = false;
   showTypeMenu = false;
   showGifPicker = false;
+  showStickerPicker = false;
 
   openGifPicker() {
     if (!this.giphyHasKey) return;
     this.showGifPicker = true;
+  }
+
+  openStickerPicker() {
+    this.showStickerPicker = true;
+  }
+
+  onStickerSelected(sticker: { id: number; image_url: string } | undefined) {
+    this.showStickerPicker = false;
+    if (!sticker) return;
+    this.messageContent = String(sticker.id);
+    this.messageType = 'sticker';
+    this.sendMessage();
   }
 
   onGifSelected(gif: GiphyResult | undefined) {
@@ -1409,7 +1422,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
       }
     }
-    if (type === 'poll') {
+    if (type === 'poll' || type === 'sticker') {
       this.pollOptions = ['', ''];
       this.pollMultiple = false;
       this.messageType = 'text';

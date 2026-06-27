@@ -279,6 +279,14 @@ func main() {
 	admin.Get("/settings/giphy-key", h.GetGiphyKey)
 	admin.Put("/settings/giphy-key", h.UpdateGiphyKey)
 
+	api.Get("/sticker-packs", h.GetStickerPacks)
+
+	admin.Post("/sticker-packs", h.AdminCreateStickerPack)
+	admin.Put("/sticker-packs/:id", h.AdminRenameStickerPack)
+	admin.Delete("/sticker-packs/:id", h.AdminDeleteStickerPack)
+	admin.Post("/sticker-packs/:id/stickers", h.AdminUploadSticker)
+	admin.Delete("/sticker-packs/:id/stickers/:stickerId", h.AdminDeleteSticker)
+
 	giphy := api.Group("/giphy", handlers.AuthRequired)
 	giphy.Get("/search", h.SearchGiphy)
 	giphy.Get("/trending", h.TrendingGiphy)
