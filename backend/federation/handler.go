@@ -135,6 +135,47 @@ func (fh *FederationHandler) HandleJoinInvite(c *fiber.Ctx) error {
 				log.Printf("Federation: imported %d users from new peer", len(remoteUsers))
 			}
 		}
+
+		// Sync sticker packs from the new server
+		stickerResp, stickerErr := fh.transport.SendDirect(req.BaseURL+"/api/federation/v1/bulk/sticker-packs", "GET", newToken, nil, nil)
+		if stickerErr == nil && stickerResp.StatusCode == 200 {
+			var packs []models.BulkSyncStickerPack
+			if err := json.Unmarshal(stickerResp.Body, &packs); err == nil {
+				for _, pack := range packs {
+					insertResult, insErr := database.DB.Exec(
+						"INSERT INTO sticker_packs (name, server_id) VALUES (?, ?)",
+						pack.Name, serverID,
+					)
+					if insErr != nil {
+						continue
+					}
+					packID, _ := insertResult.LastInsertId()
+					for _, s := range pack.Stickers {
+						localURL := s.ImageURL
+						if strings.HasPrefix(s.ImageURL, "http") {
+							data, dlErr := fh.transport.DownloadFile(s.ImageURL)
+							if dlErr == nil {
+								ext := filepath.Ext(s.ImageURL)
+								if ext == "" {
+									ext = ".png"
+								}
+								localName := fmt.Sprintf("fed_pack_%d_%d%s", packID, s.SortOrder, ext)
+								localPath := filepath.Join(".", "uploads", "stickers", localName)
+								os.MkdirAll(filepath.Dir(localPath), 0755)
+								if writeErr := os.WriteFile(localPath, data, 0644); writeErr == nil {
+									localURL = "/uploads/stickers/" + localName
+								}
+							}
+						}
+						database.DB.Exec(
+							"INSERT INTO stickers (pack_id, image_url, sort_order) VALUES (?, ?, ?)",
+							packID, localURL, s.SortOrder,
+						)
+					}
+				}
+				log.Printf("Federation: imported %d sticker packs from new peer", len(packs))
+			}
+		}
 	}()
 
 	return c.Status(201).JSON(models.FederationJoinResponse{
@@ -425,6 +466,112 @@ func (fh *FederationHandler) HandleBulkPosts(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(posts)
+}
+
+func (fh *FederationHandler) HandleBulkStickerPacks(c *fiber.Ctx) error {
+	rows, err := database.DB.Query("SELECT id, name FROM sticker_packs WHERE server_id IS NULL ORDER BY created_at ASC")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch sticker packs"})
+	}
+	defer rows.Close()
+
+	type packRow struct {
+		ID   int64
+		Name string
+	}
+	packs := make([]packRow, 0)
+	for rows.Next() {
+		var p packRow
+		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+			continue
+		}
+		packs = append(packs, p)
+	}
+
+	result := make([]models.BulkSyncStickerPack, 0, len(packs))
+	for _, p := range packs {
+		sRows, err := database.DB.Query(
+			"SELECT image_url, sort_order FROM stickers WHERE pack_id = ? ORDER BY sort_order ASC",
+			p.ID,
+		)
+		if err != nil {
+			continue
+		}
+		stickers := make([]models.BulkSyncSticker, 0)
+		for sRows.Next() {
+			var s models.BulkSyncSticker
+			if err := sRows.Scan(&s.ImageURL, &s.SortOrder); err == nil {
+				stickers = append(stickers, s)
+			}
+		}
+		sRows.Close()
+		result = append(result, models.BulkSyncStickerPack{
+			Name:     p.Name,
+			Stickers: stickers,
+		})
+	}
+
+	return c.JSON(result)
+}
+
+func (fh *FederationHandler) HandleReceiveStickerPacks(c *fiber.Ctx) error {
+	var packs []models.BulkSyncStickerPack
+	if err := c.BodyParser(&packs); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	serverID := c.Locals("federationServerId").(int64)
+
+	for _, pack := range packs {
+		result, err := database.DB.Exec(
+			"INSERT INTO sticker_packs (name, server_id) VALUES (?, ?)",
+			pack.Name, serverID,
+		)
+		if err != nil {
+			log.Printf("Federation: failed to import sticker pack %q: %v", pack.Name, err)
+			continue
+		}
+		packID, _ := result.LastInsertId()
+
+		for _, s := range pack.Stickers {
+			localURL := s.ImageURL
+			if strings.HasPrefix(s.ImageURL, "http") {
+				localURL = fh.cacheStickerImage(packID, s.SortOrder, s.ImageURL)
+			}
+			database.DB.Exec(
+				"INSERT INTO stickers (pack_id, image_url, sort_order) VALUES (?, ?, ?)",
+				packID, localURL, s.SortOrder,
+			)
+		}
+	}
+
+	return c.JSON(fiber.Map{"message": "Sticker packs imported"})
+}
+
+func (fh *FederationHandler) cacheStickerImage(packID int64, order int, remoteURL string) string {
+	data, err := fh.transport.DownloadFile(remoteURL)
+	if err != nil {
+		log.Printf("Federation: failed to download sticker image %s: %v", remoteURL, err)
+		return remoteURL
+	}
+
+	ext := filepath.Ext(remoteURL)
+	if ext == "" {
+		ext = ".png"
+	}
+	localName := fmt.Sprintf("fed_pack_%d_%d%s", packID, order, ext)
+	localPath := filepath.Join(".", "uploads", "stickers", localName)
+
+	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+		log.Printf("Federation: failed to create stickers dir: %v", err)
+		return remoteURL
+	}
+	if err := os.WriteFile(localPath, data, 0644); err != nil {
+		log.Printf("Federation: failed to write sticker image %s: %v", localPath, err)
+		return remoteURL
+	}
+
+	return "/uploads/stickers/" + localName
 }
 
 func (fh *FederationHandler) HandleIntroduce(c *fiber.Ctx) error {

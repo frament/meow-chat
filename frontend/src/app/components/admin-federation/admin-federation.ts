@@ -75,6 +75,7 @@ import { FormsModule } from '@angular/forms';
                           <button (click)="unblock(s)" title="Разблокировать" style="padding:4px 8px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:#27ae60;transition:all 0.2s;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
                         }
                         <button (click)="clearCache(s)" title="Очистить кэш" style="padding:4px 8px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:var(--text-secondary);transition:all 0.2s;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                        <button (click)="syncStickers(s)" title="Синхронизировать стикеры" style="padding:4px 8px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:var(--text-secondary);transition:all 0.2s;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg></button>
                         <button (click)="disconnect(s)" title="Отключить" style="padding:4px 8px;border-radius:6px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:var(--text-secondary);transition:all 0.2s;">✕</button>
                       </div>
                     </td>
@@ -216,6 +217,16 @@ export class AdminFederationComponent implements OnInit {
     this.api.clearFederationCache(s.id).subscribe(() => {
       s.cache_bytes = 0;
       s.cache_count = 0;
+    });
+  }
+
+  syncStickers(s: any) {
+    this.api.syncFederationStickers(s.id).subscribe({
+      next: (res) => {
+        this.msg = res.message;
+        this.msgOk = true;
+        this.clearMsg();
+      },
     });
   }
 

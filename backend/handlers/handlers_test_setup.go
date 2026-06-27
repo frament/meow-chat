@@ -102,7 +102,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS polls (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE, group_message_id INTEGER REFERENCES group_messages(id) ON DELETE CASCADE, question TEXT NOT NULL, is_multiple_choice INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, CHECK ((message_id IS NOT NULL AND group_message_id IS NULL) OR (message_id IS NULL AND group_message_id IS NOT NULL)))`,
 		`CREATE TABLE IF NOT EXISTS poll_options (id INTEGER PRIMARY KEY AUTOINCREMENT, poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE, text TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS poll_votes (id INTEGER PRIMARY KEY AUTOINCREMENT, poll_option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(poll_option_id, user_id))`,
-		`CREATE TABLE IF NOT EXISTS sticker_packs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS sticker_packs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS stickers (id INTEGER PRIMARY KEY AUTOINCREMENT, pack_id INTEGER NOT NULL REFERENCES sticker_packs(id) ON DELETE CASCADE, image_url TEXT NOT NULL, sort_order INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 	}
 	for _, q := range execs {
@@ -198,6 +198,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Post("/federation/servers/:id/unblock", h.AdminUnblockFederationServer)
 	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
 	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
+	admin.Post("/federation/servers/:id/sync-stickers", h.AdminSyncStickerPacks)
 	admin.Get("/backup/settings", h.GetBackupSettings)
 	admin.Put("/backup/settings", h.UpdateBackupSettings)
 	admin.Get("/backups", h.AdminListBackups)

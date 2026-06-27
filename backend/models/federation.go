@@ -129,3 +129,13 @@ type FederationCacheStats struct {
 	UsagePercent float64 `json:"usage_percent"`
 	FileCount    int     `json:"file_count"`
 }
+
+type BulkSyncStickerPack struct {
+	Name     string                `json:"name"`
+	Stickers []BulkSyncSticker     `json:"stickers"`
+}
+
+type BulkSyncSticker struct {
+	ImageURL  string `json:"image_url"`
+	SortOrder int    `json:"sort_order"`
+}

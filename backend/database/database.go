@@ -475,6 +475,10 @@ func migrate() {
 	if count == 0 {
 		DB.Exec("ALTER TABLE posts ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('sticker_packs') WHERE name='server_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE sticker_packs ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+	}
 
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_key_shares') WHERE name='key_creator_id'").Scan(&count)
 	if count == 0 {

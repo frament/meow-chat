@@ -163,6 +163,8 @@ func main() {
 	fed.Get("/bulk/users", fedHandler.HandleBulkUsers)
 	fed.Get("/bulk/messages", fedHandler.HandleBulkMessages)
 	fed.Get("/bulk/posts", fedHandler.HandleBulkPosts)
+	fed.Get("/bulk/sticker-packs", fedHandler.HandleBulkStickerPacks)
+	fed.Post("/sticker-packs", fedHandler.HandleReceiveStickerPacks)
 	fed.Post("/introduce", fedHandler.HandleIntroduce)
 	fed.Post("/gossip/new-peer", fedHandler.HandleGossipNewPeer)
 	fed.Post("/recover-server", fedHandler.HandleRecoverServer)
@@ -276,6 +278,7 @@ func main() {
 	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
 	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
 	admin.Post("/federation/restore", h.AdminRestoreFederation)
+	admin.Post("/federation/servers/:id/sync-stickers", h.AdminSyncStickerPacks)
 	admin.Get("/settings/giphy-key", h.GetGiphyKey)
 	admin.Put("/settings/giphy-key", h.UpdateGiphyKey)
 

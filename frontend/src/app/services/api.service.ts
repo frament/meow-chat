@@ -987,6 +987,12 @@ export class ApiService {
     );
   }
 
+  syncFederationStickers(serverId: number) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/admin/federation/servers/${serverId}/sync-stickers`, {}
+    );
+  }
+
   // ── Updates ──
 
   getVersion() {
