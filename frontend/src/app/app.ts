@@ -401,6 +401,13 @@ export class App implements OnInit, OnDestroy {
           return;
         }
 
+        if (msg.type === 'device_approved') {
+          if (this.deviceAuth) {
+            this.deviceAuth.handleDeviceApproved(msg.device_id);
+          }
+          return;
+        }
+
         const isHidden = document.hidden;
         const isGroup = msg.type === 'group_message';
         const chatPath = isGroup ? `/chat/group/${msg.group_id}` : `/chat/${msg.from}`;

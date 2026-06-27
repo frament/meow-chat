@@ -25,7 +25,8 @@
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/federation/*_test.go` (6 files) | 54 |
 | `backend/handlers/polls_test.go` | 13 |
- | **Backend total** | **195** |
+ | `backend/handlers/ws_test.go` | 14 |
+ | **Backend total** | **197** |
 
 ### Frontend — 91 tests (17 files)
 | Component/Service | Tests |
@@ -76,5 +77,5 @@
 - [x] #11 В чатах сделать меню выбора типа сообщения посимпотичнее ✓
 - [x] #14 Сделать поиск по пользователям с приглашением в друзья ✓
 - [x] #15 Реализовать сообщения-стикеры ✓
-- [ ] #16 Пройтись по спецификациям из `docs/ws-requirements.md` (S5, S7, T1–T12, O1–O5, секции 2.4, 3.2–3.4)
+- [x] #16 Пройтись по спецификациям из `docs/ws-requirements.md` (S5, S7, T1–T12, O1–O5, секции 2.4, 3.2–3.4) — **частично**: device_approved (frontend) ✓, multi-tab history reload ✓, S7 rate limiting ✓, S9 friendship check ✓, S5 — НЕ реализован
 - [x] #17 Реализовать федерацию стикерпаков: выгрузка/загрузка/синхронизация между серверами ✓

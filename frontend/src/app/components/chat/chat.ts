@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, 
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom, fromEvent } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
@@ -1095,6 +1095,30 @@ export class ChatComponent implements OnInit, OnDestroy {
           if (groupId && !this.selectedGroup) {
             this.resolvePendingGroupChat(groupId);
           }
+        }
+      })
+    );
+
+    // Multi-tab: reload messages when tab becomes visible (catches up on messages
+    // sent from other tabs while this tab was in background)
+    this.subscriptions.push(
+      fromEvent(document, 'visibilitychange').subscribe(() => {
+        const user = this.selectedUser;
+        if (document.visibilityState === 'visible' && user && !this.selectedGroup) {
+          this.api.getMessages(this.currentUserId, user.id).subscribe(async (msgs: Message[]) => {
+            const existingIds = new Set(this.messages.map(m => m.id));
+            for (const msg of msgs) {
+              if (!existingIds.has(msg.id)) {
+                const decrypted = await this.decryptMsg(msg, user.id);
+                this.messages.push(decrypted);
+              }
+            }
+            if (msgs.length > 0) {
+              this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(this.messages));
+              this.scrollToBottom();
+            }
+          });
         }
       })
     );

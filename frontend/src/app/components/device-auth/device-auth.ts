@@ -144,6 +144,18 @@ export class DeviceAuthComponent {
     });
   }
 
+  handleDeviceApproved(deviceId: string) {
+    if (this.status() === 'waiting' && this.pollSub && deviceId === this.crypto.deviceId) {
+      this.api.getAuthRequest(this.authRequestId).subscribe(res => {
+        if (res.status === 'approved' && res.encrypted_key) {
+          this.status.set('approved');
+          this.pollSub?.unsubscribe();
+          this.processApprovedKey(res.encrypted_key, res.iv);
+        }
+      });
+    }
+  }
+
   private async processApprovedKey(encryptedB64: string, ivB64: string) {
     const deviceSPKI = await this.crypto.getDevicePublicKeySPKI();
     const jwk = await this.crypto.decryptIdentityKeyFromDevice(encryptedB64, ivB64, deviceSPKI);

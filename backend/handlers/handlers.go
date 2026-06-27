@@ -35,6 +35,7 @@ type Handler struct {
 	graceExpired    chan int64
 	onlineUsers     map[int64]bool
 	graceTimers     map[int64]*time.Timer
+	stop            chan struct{}
 }
 
 type wsClient struct {
@@ -76,9 +77,14 @@ func NewHandler() *Handler {
 		graceExpired:    make(chan int64),
 		onlineUsers:     make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
+		stop:            make(chan struct{}),
 	}
 	go h.runHub()
 	return h
+}
+
+func (h *Handler) Close() {
+	close(h.stop)
 }
 
 func (h *Handler) runHub() {
@@ -306,6 +312,9 @@ func (h *Handler) runHub() {
 					}
 				}
 			}
+
+		case <-h.stop:
+			return
 		}
 	}
 }
@@ -2030,6 +2039,8 @@ func (h *Handler) AdminDeleteFile(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "File deleted"})
 }
 
+const wsRateLimitMessagesPerSec = 10
+
 func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	v := c.Locals("userId")
 	if v == nil {
@@ -2079,11 +2090,30 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		h.unregister <- client
 	}()
 
+	var msgTimestamps []time.Time
+
 	for {
 		var msg map[string]interface{}
 		if err := c.ReadJSON(&msg); err != nil {
 			break
 		}
+
+		now := time.Now()
+		cutoff := now.Add(-time.Second)
+		j := 0
+		for _, t := range msgTimestamps {
+			if t.After(cutoff) {
+				msgTimestamps[j] = t
+				j++
+			}
+		}
+		msgTimestamps = msgTimestamps[:j]
+		if len(msgTimestamps) >= wsRateLimitMessagesPerSec {
+			log.Printf("WS rate limit exceeded for user %d, closing connection", uid)
+			c.Close()
+			break
+		}
+		msgTimestamps = append(msgTimestamps, now)
 
 		to, ok := msg["to"].(float64)
 		if !ok {
@@ -2092,6 +2122,19 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		content, ok := msg["content"].(string)
 		if !ok {
 			continue
+		}
+
+		toID := int64(to)
+		if uid != toID {
+			var isFriend bool
+			database.DB.QueryRow(
+				"SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+				uid, toID, toID, uid,
+			).Scan(&isFriend)
+			if !isFriend {
+				c.WriteJSON(fiber.Map{"type": "error", "message": "not friends"})
+				continue
+			}
 		}
 
 		msgType := "text"
