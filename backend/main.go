@@ -220,6 +220,12 @@ func main() {
 	api.Delete("/friends/:id", h.RemoveFriend)
 	api.Post("/friend-invite/:token/accept", h.AcceptFriendInvite)
 
+	api.Get("/users/search", h.SearchUsers)
+	api.Post("/friend-requests/:id", h.SendFriendRequest)
+	api.Get("/friend-requests", h.GetFriendRequests)
+	api.Post("/friend-requests/:id/accept", h.AcceptFriendRequest)
+	api.Delete("/friend-requests/:id", h.RejectFriendRequest)
+
 	api.Post("/posts", h.CreatePost)
 	api.Delete("/posts/:id", h.DeletePost)
 	api.Post("/posts/:id/react", h.ToggleReaction)

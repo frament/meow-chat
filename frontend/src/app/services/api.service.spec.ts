@@ -119,4 +119,70 @@ describe('ApiService', () => {
     expect(localStorage.getItem('refreshToken')).toBeNull();
     expect(localStorage.getItem('currentUser')).toBeNull();
   });
+
+  // ── Friend Request API ──
+
+  it('searchUsers() calls /api/users/search with query param', () => {
+    const query = 'alice';
+    service.searchUsers(query).subscribe();
+
+    const req = httpMock.expectOne('/api/users/search?q=alice');
+    expect(req.request.method).toBe('GET');
+    req.flush([]);
+  });
+
+  it('sendFriendRequest() calls POST /api/friend-requests/:id', () => {
+    const userId = 42;
+    service.sendFriendRequest(userId).subscribe();
+
+    const req = httpMock.expectOne('/api/friend-requests/42');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    req.flush({ message: 'Запрос в друзья отправлен' });
+  });
+
+  it('sendFriendRequest() returns auto_accepted when mutual', () => {
+    const userId = 42;
+    service.sendFriendRequest(userId).subscribe((res) => {
+      expect(res.auto_accepted).toBeTrue();
+      expect(res.message).toBe('Вы стали друзьями!');
+    });
+
+    const req = httpMock.expectOne('/api/friend-requests/42');
+    req.flush({ message: 'Вы стали друзьями!', auto_accepted: true });
+  });
+
+  it('getFriendRequests() calls GET /api/friend-requests', () => {
+    const mockRequests = [
+      { id: 1, from_user: 10, username: 'alice', avatar_url: '', status: 'pending', created_at: '2026-01-01' },
+    ];
+
+    service.getFriendRequests().subscribe((reqs) => {
+      expect(reqs.length).toBe(1);
+      expect(reqs[0].username).toBe('alice');
+    });
+
+    const req = httpMock.expectOne('/api/friend-requests');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRequests);
+  });
+
+  it('acceptFriendRequest() calls POST /api/friend-requests/:id/accept', () => {
+    const requestId = 5;
+    service.acceptFriendRequest(requestId).subscribe();
+
+    const req = httpMock.expectOne('/api/friend-requests/5/accept');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    req.flush({ message: 'Запрос принят' });
+  });
+
+  it('rejectFriendRequest() calls DELETE /api/friend-requests/:id', () => {
+    const requestId = 7;
+    service.rejectFriendRequest(requestId).subscribe();
+
+    const req = httpMock.expectOne('/api/friend-requests/7');
+    expect(req.request.method).toBe('DELETE');
+    req.flush({ message: 'Запрос отклонён' });
+  });
 });

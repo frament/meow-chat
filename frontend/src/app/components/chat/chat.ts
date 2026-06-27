@@ -19,6 +19,64 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
     <!-- Desktop -->
     <div class="hidden md:flex gap-4 h-[calc(100vh-6rem)]">
       <div class="w-72 card p-3 overflow-y-auto shrink-0">
+        <!-- Search -->
+        <div style="position:relative;margin-bottom:8px;">
+          <input type="text" [(ngModel)]="searchQuery" (input)="onSearchInput()" placeholder="Поиск пользователей..."
+            style="width:100%;box-sizing:border-box;height:34px;padding-left:30px;font-size:13px;">
+          <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-tertiary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          @if (searchQuery && searchResults) {
+            <button (click)="clearSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:12px;padding:2px;">✕</button>
+          }
+        </div>
+        @if (searchQuery && searchResults) {
+          <div style="margin-bottom:8px;">
+            @if (searchResults.length === 0) {
+              <p class="text-xs" style="color:var(--text-tertiary);padding:4px 0;">Ничего не найдено</p>
+            } @else {
+              <h3 class="section-label" style="margin-bottom:8px;">Результаты поиска</h3>
+              @for (user of searchResults; track user.id) {
+                <div class="flex items-center gap-2 p-2 rounded-lg" style="margin-bottom:4px;">
+                  @if (user.avatar_url) {
+                    <img [src]="user.avatar_url" class="w-8 h-8 rounded-full object-cover shrink-0">
+                  } @else {
+                    <div class="flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold shrink-0"
+                      style="background:var(--avatar-bg);color:var(--avatar-text);">{{ user.username[0] }}</div>
+                  }
+                  <span class="flex-1 text-sm truncate" style="color:var(--text-primary);">{{ user.username }}</span>
+                  <button (click)="sendFriendReq(user.id, $event)" [disabled]="sendingFriendReq === user.id"
+                    class="text-xs shrink-0" style="padding:4px 10px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-weight:500;">
+                    {{ sendingFriendReq === user.id ? '...' : 'В друзья' }}
+                  </button>
+                </div>
+              }
+            }
+          </div>
+          <div class="divider" style="margin:8px 0;"></div>
+        }
+        <!-- Incoming friend requests -->
+        @if (incomingRequests.length > 0) {
+          <div style="margin-bottom:8px;">
+            <h3 class="section-label" style="margin-bottom:8px;">Заявки в друзья</h3>
+            @for (req of incomingRequests; track req.id) {
+              <div class="flex items-center gap-2 p-2 rounded-lg" style="margin-bottom:4px;background:var(--accent-light);">
+                @if (req.avatar_url) {
+                  <img [src]="req.avatar_url" class="w-8 h-8 rounded-full object-cover shrink-0">
+                } @else {
+                  <div class="flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold shrink-0"
+                    style="background:var(--avatar-bg);color:var(--avatar-text);">{{ req.username[0] }}</div>
+                }
+                <span class="flex-1 text-sm truncate" style="color:var(--text-primary);">{{ req.username }}</span>
+                <button (click)="acceptFriendReq(req.id, $event)" class="text-xs shrink-0"
+                  style="padding:4px 8px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;">✓</button>
+                <button (click)="rejectFriendReq(req.id, $event)" class="text-xs shrink-0"
+                  style="padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+              </div>
+            }
+          </div>
+          <div class="divider" style="margin:8px 0;"></div>
+        }
         <div class="flex items-center justify-between" style="margin-bottom:8px;">
           <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
            <button (click)="showCreateGroup = true"
@@ -312,6 +370,68 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
     <div class="md:hidden">
       @if (!showMobileChat) {
         <div class="px-4 py-6 pb-20 space-y-2">
+          <!-- Mobile search -->
+          <div style="position:relative;margin-bottom:8px;">
+            <input type="text" [(ngModel)]="searchQuery" (input)="onSearchInput()" placeholder="Поиск пользователей..."
+              style="width:100%;box-sizing:border-box;height:38px;padding-left:34px;font-size:14px;border-radius:12px;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-tertiary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            @if (searchQuery && searchResults) {
+              <button (click)="clearSearch()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;padding:2px;">✕</button>
+            }
+          </div>
+          @if (searchQuery && searchResults) {
+            <div>
+              @if (searchResults.length === 0) {
+                <p class="text-xs" style="color:var(--text-tertiary);padding:8px 4px;">Ничего не найдено</p>
+              } @else {
+                <h3 class="section-label" style="margin-bottom:8px;">Результаты поиска</h3>
+                @for (user of searchResults; track user.id) {
+                  <div class="card flex items-center gap-3 p-3 rounded-lg" style="margin-bottom:6px;">
+                    <div class="shrink-0">
+                      @if (user.avatar_url) {
+                        <img [src]="user.avatar_url" class="w-10 h-10 rounded-full object-cover">
+                      } @else {
+                        <div class="flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold"
+                          style="background:var(--avatar-bg);color:var(--avatar-text);">{{ user.username[0] }}</div>
+                      }
+                    </div>
+                    <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ user.username }}</span>
+                    <button (click)="sendFriendReq(user.id, $event)" [disabled]="sendingFriendReq === user.id"
+                      class="text-xs shrink-0" style="padding:6px 14px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-weight:500;">
+                      {{ sendingFriendReq === user.id ? '...' : 'В друзья' }}
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+            <div class="divider"></div>
+          }
+          <!-- Mobile incoming requests -->
+          @if (incomingRequests.length > 0) {
+            <div>
+              <h3 class="section-label" style="margin-bottom:8px;">Заявки в друзья</h3>
+              @for (req of incomingRequests; track req.id) {
+                <div class="card flex items-center gap-3 p-3 rounded-lg" style="background:var(--accent-light);margin-bottom:6px;">
+                  <div class="shrink-0">
+                    @if (req.avatar_url) {
+                      <img [src]="req.avatar_url" class="w-10 h-10 rounded-full object-cover">
+                    } @else {
+                      <div class="flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold"
+                        style="background:var(--avatar-bg);color:var(--avatar-text);">{{ req.username[0] }}</div>
+                    }
+                  </div>
+                  <span class="flex-1 text-sm font-medium" style="color:var(--text-primary);">{{ req.username }}</span>
+                  <button (click)="acceptFriendReq(req.id, $event)" class="text-xs shrink-0"
+                    style="padding:6px 12px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;">✓</button>
+                  <button (click)="rejectFriendReq(req.id, $event)" class="text-xs shrink-0"
+                    style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                </div>
+              }
+            </div>
+            <div class="divider"></div>
+          }
           <div class="flex items-center justify-between" style="margin-bottom:8px;">
             <h3 class="section-label" style="margin:0;">Групповые чаты</h3>
             <button (click)="showCreateGroup = true"
@@ -781,6 +901,11 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectedFiles: File[] = [];
   previews: string[] = [];
   currentUserId = 0;
+  searchQuery = '';
+  searchResults: User[] | null = null;
+  incomingRequests: any[] = [];
+  sendingFriendReq: number | null = null;
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
   showMobileChat = false;
   pinnedIds: Set<number> = new Set();
   unreadDividerIdx = -1;
@@ -865,6 +990,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.loadFromCache();
     this.loadFromServer();
     this.loadGroupChats();
+    this.loadIncomingRequests();
     this.listenWsOnlineEvents();
 
     this.subscriptions.push(
@@ -932,6 +1058,13 @@ export class ChatComponent implements OnInit, OnDestroy {
             };
             this.messages = [...this.messages];
           }
+        }
+        if (data.type === 'friend_request') {
+          this.loadIncomingRequests();
+        }
+        if (data.type === 'friend_request_accepted') {
+          this.loadFromServer();
+          this.loadIncomingRequests();
         }
         if (data.type === 'group_joined') {
           this.loadGroupChats();
@@ -1075,6 +1208,72 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   getUnpinnedUsers(): User[] {
     return this.users.filter((u) => !this.pinnedIds.has(u.id));
+  }
+
+  onSearchInput() {
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+    const q = this.searchQuery.trim();
+    if (q.length < 1) {
+      this.searchResults = null;
+      return;
+    }
+    this.searchTimeout = setTimeout(() => {
+      this.api.searchUsers(q).subscribe({
+        next: (users) => this.searchResults = users,
+        error: () => this.searchResults = [],
+      });
+    }, 300);
+  }
+
+  clearSearch() {
+    this.searchQuery = '';
+    this.searchResults = null;
+  }
+
+  sendFriendReq(userId: number, event: MouseEvent) {
+    event.stopPropagation();
+    this.sendingFriendReq = userId;
+    this.api.sendFriendRequest(userId).subscribe({
+      next: (res) => {
+        this.sendingFriendReq = null;
+        if (res.auto_accepted) {
+          this.loadFromServer();
+        }
+        // Remove from search results
+        if (this.searchResults) {
+          this.searchResults = this.searchResults.filter(u => u.id !== userId);
+        }
+      },
+      error: () => {
+        this.sendingFriendReq = null;
+      },
+    });
+  }
+
+  loadIncomingRequests() {
+    this.api.getFriendRequests().subscribe({
+      next: (reqs) => this.incomingRequests = reqs,
+      error: () => {},
+    });
+  }
+
+  acceptFriendReq(requestId: number, event: MouseEvent) {
+    event.stopPropagation();
+    this.api.acceptFriendRequest(requestId).subscribe({
+      next: () => {
+        this.loadIncomingRequests();
+        this.loadFromServer();
+      },
+      error: () => {},
+    });
+  }
+
+  rejectFriendReq(requestId: number, event: MouseEvent) {
+    event.stopPropagation();
+    this.api.rejectFriendRequest(requestId).subscribe({
+      next: () => this.loadIncomingRequests(),
+      error: () => {},
+    });
   }
 
   async sendMessage() {

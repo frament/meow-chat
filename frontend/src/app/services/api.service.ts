@@ -636,6 +636,28 @@ export class ApiService {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/friends/${id}`);
   }
 
+  searchUsers(query: string) {
+    return this.http.get<User[]>(`${this.baseUrl}/users/search`, { params: { q: query } });
+  }
+
+  sendFriendRequest(userId: number) {
+    return this.http.post<{ message: string; auto_accepted?: boolean }>(`${this.baseUrl}/friend-requests/${userId}`, {});
+  }
+
+  getFriendRequests() {
+    return this.http.get<{ id: number; from_user: number; username: string; avatar_url: string; status: string; created_at: string }[]>(
+      `${this.baseUrl}/friend-requests`
+    );
+  }
+
+  acceptFriendRequest(requestId: number) {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/friend-requests/${requestId}/accept`, {});
+  }
+
+  rejectFriendRequest(requestId: number) {
+    return this.http.delete<{ message: string }>(`${this.baseUrl}/friend-requests/${requestId}`);
+  }
+
   deletePost(id: number) {
     return this.http.delete(`${this.baseUrl}/posts/${id}`);
   }

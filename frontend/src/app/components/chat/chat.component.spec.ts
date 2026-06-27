@@ -41,6 +41,11 @@ describe('ChatComponent', () => {
     clearUnread: jasmine.createSpy(),
     clearUnreadBoundary: jasmine.createSpy(),
     getGiphyKey: jasmine.createSpy().and.returnValue(of({ has_key: false, key: '' })),
+    searchUsers: jasmine.createSpy().and.returnValue(of([])),
+    sendFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    getFriendRequests: jasmine.createSpy().and.returnValue(of([])),
+    acceptFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    rejectFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
   };
 
   const mockCrypto = {

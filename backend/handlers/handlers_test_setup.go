@@ -48,6 +48,14 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS invite_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, created_by INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 1, use_count INTEGER DEFAULT 0, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS friends (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, friend_id INTEGER NOT NULL, server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (friend_id) REFERENCES users(id), UNIQUE(user_id, friend_id))`,
 		`CREATE TABLE IF NOT EXISTS friend_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token TEXT UNIQUE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS friend_requests (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			from_user   INTEGER NOT NULL REFERENCES users(id),
+			to_user     INTEGER NOT NULL REFERENCES users(id),
+			status      TEXT NOT NULL DEFAULT 'pending',
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(from_user, to_user)
+		)`,
 		`CREATE TABLE IF NOT EXISTS pinned_users (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pinned_user_id INTEGER NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (pinned_user_id) REFERENCES users(id), UNIQUE(user_id, pinned_user_id))`,
 		`CREATE TABLE IF NOT EXISTS push_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, credential_id BLOB NOT NULL UNIQUE, public_key BLOB NOT NULL, attestation_type TEXT, aaguid BLOB, sign_count INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
@@ -198,6 +206,12 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Post("/backups/:filename/restore", h.AdminRestoreBackup)
 
 	_ = adminID
+
+	app.Get("/users/search", AuthRequired, h.SearchUsers)
+	app.Post("/friend-requests/:id", AuthRequired, h.SendFriendRequest)
+	app.Get("/friend-requests", AuthRequired, h.GetFriendRequests)
+	app.Post("/friend-requests/:id/accept", AuthRequired, h.AcceptFriendRequest)
+	app.Delete("/friend-requests/:id", AuthRequired, h.RejectFriendRequest)
 
 	app.Post("/polls/:id/vote", AuthRequired, h.CastVote)
 

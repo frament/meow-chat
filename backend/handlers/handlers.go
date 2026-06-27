@@ -1451,6 +1451,251 @@ func (h *Handler) RemoveFriend(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Friend removed"})
 }
 
+func (h *Handler) SearchUsers(c *fiber.Ctx) error {
+	query := strings.TrimSpace(c.Query("q"))
+	if len(query) < 1 {
+		return c.Status(400).JSON(fiber.Map{"error": "Поисковый запрос должен содержать минимум 1 символ"})
+	}
+	userID := c.Locals("userId").(int64)
+
+	rows, err := database.DB.Query(`
+		SELECT id, username, email, avatar_url, created_at
+		FROM users
+		WHERE id != ?
+		  AND is_banned = 0
+		  AND username LIKE ?
+		  AND id NOT IN (
+			  SELECT friend_id FROM friends WHERE user_id = ?
+			  UNION
+			  SELECT user_id FROM friends WHERE friend_id = ?
+		  )
+		ORDER BY username
+		LIMIT 20
+	`, userID, "%"+query+"%", userID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Ошибка поиска"})
+	}
+	defer rows.Close()
+
+	users := make([]models.User, 0)
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
+			continue
+		}
+		u.IsOnline = h.onlineUsers[u.ID]
+		users = append(users, u)
+	}
+	return c.JSON(users)
+}
+
+func (h *Handler) SendFriendRequest(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	toUserID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Неверный ID пользователя"})
+	}
+	if userID == toUserID {
+		return c.Status(400).JSON(fiber.Map{"error": "Нельзя отправить запрос самому себе"})
+	}
+
+	// Check user exists and is not banned
+	var exists bool
+	database.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ? AND is_banned = 0)", toUserID).Scan(&exists)
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{"error": "Пользователь не найден"})
+	}
+
+	// Check not already friends
+	var alreadyFriends bool
+	database.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM friends WHERE
+			(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+		)
+	`, userID, toUserID, toUserID, userID).Scan(&alreadyFriends)
+	if alreadyFriends {
+		return c.Status(400).JSON(fiber.Map{"error": "Уже в друзьях"})
+	}
+
+	// Check existing pending request
+	var existingStatus string
+	err = database.DB.QueryRow(
+		"SELECT status FROM friend_requests WHERE from_user = ? AND to_user = ?",
+		userID, toUserID,
+	).Scan(&existingStatus)
+	if err == nil {
+		if existingStatus == "pending" {
+			return c.Status(400).JSON(fiber.Map{"error": "Запрос уже отправлен"})
+		}
+		if existingStatus == "accepted" {
+			return c.Status(400).JSON(fiber.Map{"error": "Уже в друзьях"})
+		}
+		// Rejected — allow re-send by replacing
+		database.DB.Exec("DELETE FROM friend_requests WHERE from_user = ? AND to_user = ?", userID, toUserID)
+	}
+
+	// Check reverse pending request (they sent you one — auto-accept)
+	var reverseID int64
+	err = database.DB.QueryRow(
+		"SELECT id FROM friend_requests WHERE from_user = ? AND to_user = ? AND status = 'pending'",
+		toUserID, userID,
+	).Scan(&reverseID)
+	if err == nil {
+		// Auto-accept: add friends, update request
+		friend1, friend2 := userID, toUserID
+		if friend1 > friend2 {
+			friend1, friend2 = friend2, friend1
+		}
+		tx, err := database.DB.Begin()
+		if err == nil {
+			tx.Exec("INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)", friend1, friend2)
+			tx.Exec("UPDATE friend_requests SET status = 'accepted' WHERE id = ?", reverseID)
+			tx.Commit()
+		}
+		// Notify both users
+		h.SendToUser(userID, fiber.Map{"type": "friend_request_accepted", "user_id": toUserID})
+		h.SendToUser(toUserID, fiber.Map{"type": "friend_request_accepted", "user_id": userID})
+		return c.JSON(fiber.Map{"message": "Вы стали друзьями!", "auto_accepted": true})
+	}
+
+	_, err = database.DB.Exec(
+		"INSERT INTO friend_requests (from_user, to_user) VALUES (?, ?)",
+		userID, toUserID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Не удалось отправить запрос"})
+	}
+
+	// Notify the recipient via WebSocket
+	var senderName string
+	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&senderName)
+	h.SendToUser(toUserID, fiber.Map{
+		"type":      "friend_request",
+		"from_user": userID,
+		"username":  senderName,
+	})
+
+	return c.JSON(fiber.Map{"message": "Запрос в друзья отправлен"})
+}
+
+func (h *Handler) GetFriendRequests(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	rows, err := database.DB.Query(`
+		SELECT fr.id, fr.from_user, fr.status, fr.created_at, u.username, u.avatar_url
+		FROM friend_requests fr
+		JOIN users u ON fr.from_user = u.id
+		WHERE fr.to_user = ? AND fr.status = 'pending'
+		ORDER BY fr.created_at DESC
+	`, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Ошибка загрузки запросов"})
+	}
+	defer rows.Close()
+
+	type IncomingRequest struct {
+		ID        int64     `json:"id"`
+		FromUser  int64     `json:"from_user"`
+		Username  string    `json:"username"`
+		AvatarURL string    `json:"avatar_url"`
+		Status    string    `json:"status"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	requests := make([]IncomingRequest, 0)
+	for rows.Next() {
+		var r IncomingRequest
+		if err := rows.Scan(&r.ID, &r.FromUser, &r.Status, &r.CreatedAt, &r.Username, &r.AvatarURL); err != nil {
+			continue
+		}
+		requests = append(requests, r)
+	}
+	return c.JSON(requests)
+}
+
+func (h *Handler) AcceptFriendRequest(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	requestID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Неверный ID запроса"})
+	}
+
+	var fromUser int64
+	var status string
+	err = database.DB.QueryRow(
+		"SELECT from_user, status FROM friend_requests WHERE id = ? AND to_user = ?",
+		requestID, userID,
+	).Scan(&fromUser, &status)
+	if err == sql.ErrNoRows {
+		return c.Status(404).JSON(fiber.Map{"error": "Запрос не найден"})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Ошибка сервера"})
+	}
+	if status != "pending" {
+		return c.Status(400).JSON(fiber.Map{"error": "Запрос уже обработан"})
+	}
+
+	friend1, friend2 := fromUser, userID
+	if friend1 > friend2 {
+		friend1, friend2 = friend2, friend1
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Ошибка сервера"})
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
+		"INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)",
+		friend1, friend2,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Не удалось добавить в друзья"})
+	}
+
+	_, err = tx.Exec(
+		"UPDATE friend_requests SET status = 'accepted' WHERE id = ?",
+		requestID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Не удалось обновить запрос"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Не удалось подтвердить запрос"})
+	}
+
+	// Notify the requester
+	h.SendToUser(fromUser, fiber.Map{"type": "friend_request_accepted", "user_id": userID})
+
+	return c.JSON(fiber.Map{"message": "Запрос принят"})
+}
+
+func (h *Handler) RejectFriendRequest(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	requestID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Неверный ID запроса"})
+	}
+
+	result, err := database.DB.Exec(
+		"UPDATE friend_requests SET status = 'rejected' WHERE id = ? AND to_user = ? AND status = 'pending'",
+		requestID, userID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Ошибка сервера"})
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Запрос не найден"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Запрос отклонён"})
+}
+
 func (h *Handler) AdminListGroupChats(c *fiber.Ctx) error {
 	rows, err := database.DB.Query(`
 		SELECT g.id, g.name, g.created_by, g.created_at, u.username,
@@ -1677,6 +1922,8 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM messages WHERE to_user_id = ?", []int64{targetID}},
 		{"DELETE FROM friends WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM friends WHERE friend_id = ?", []int64{targetID}},
+		{"DELETE FROM friend_requests WHERE from_user = ?", []int64{targetID}},
+		{"DELETE FROM friend_requests WHERE to_user = ?", []int64{targetID}},
 		{"DELETE FROM group_chat_members WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM group_messages WHERE from_user_id = ?", []int64{targetID}},
 		{"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},

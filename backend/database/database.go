@@ -196,6 +196,14 @@ func migrate() {
 			PRIMARY KEY (user_id, friend_id),
 			CHECK (user_id < friend_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS friend_requests (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			from_user   INTEGER NOT NULL REFERENCES users(id),
+			to_user     INTEGER NOT NULL REFERENCES users(id),
+			status      TEXT NOT NULL DEFAULT 'pending',
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(from_user, to_user)
+		)`,
 		`CREATE TABLE IF NOT EXISTS friend_invites (
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			created_by  INTEGER NOT NULL REFERENCES users(id),
