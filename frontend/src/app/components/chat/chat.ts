@@ -340,7 +340,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
@@ -693,7 +693,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
@@ -1456,6 +1456,31 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.messages.splice(idx, 1);
       if (this.selectedUser) {
         localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+      }
+    }
+  }
+
+  onPaste(event: ClipboardEvent) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    const remaining = 10 - this.selectedFiles.length;
+    let added = 0;
+    for (let i = 0; i < items.length && added < remaining; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        this.selectedFiles.push(file);
+        const reader = new FileReader();
+        reader.onload = (e) => this.previews.push(e.target!.result as string);
+        reader.readAsDataURL(file);
+        added++;
+      }
+    }
+    if (added > 0) {
+      event.preventDefault();
+      if (this.messageType !== 'image') {
+        this.messageType = 'image';
       }
     }
   }

@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { ApiService, User } from '../../services/api.service';
+import { ApiService, User, StickerPack } from '../../services/api.service';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
 interface FileEntry {
@@ -34,42 +34,51 @@ interface BackupEntry {
   imports: [DatePipe, AdminFederationComponent, FormsModule],
   template: `
     <!-- Desktop -->
-    <div class="hidden sm:block max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
-      <div class="card" style="padding:24px;">
-        <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Панель администратора</h1>
-
-        <div class="flex gap-1 mb-6" style="border-bottom:1px solid var(--divider);padding-bottom:1px;">
-          <button (click)="activeTab = 'users'"
-            [style.background]="activeTab === 'users' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Управление пользователями
-          </button>
-          <button (click)="activeTab = 'files'"
-            [style.background]="activeTab === 'files' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Управление файлами
-          </button>
-          <button (click)="activeTab = 'chats'; loadGroupChats()"
-            [style.background]="activeTab === 'chats' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Чаты
-          </button>
-          <button (click)="activeTab = 'backups'; loadBackups()"
-            [style.background]="activeTab === 'backups' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Бэкапы
-          </button>
-          <button (click)="activeTab = 'federation'; loadFederation()"
-            [style.background]="activeTab === 'federation' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Федерация
-          </button>
-          <button (click)="activeTab = 'settings'"
-            [style.background]="activeTab === 'settings' ? 'var(--accent-light)' : 'transparent'"
-            style="padding:8px 16px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);transition:all 0.2s;">
-            Настройки
-          </button>
+    <div class="hidden sm:block max-w-6xl mx-auto px-4 py-6 pb-20 sm:pb-6">
+      <div class="flex gap-6">
+        <!-- Sidebar -->
+        <div class="w-48 flex-shrink-0">
+          <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Панель администратора</h1>
+          <nav class="flex flex-col gap-1">
+            <button (click)="activeTab = 'users'"
+              [style.background]="activeTab === 'users' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Пользователи
+            </button>
+            <button (click)="activeTab = 'files'"
+              [style.background]="activeTab === 'files' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Файлы
+            </button>
+            <button (click)="activeTab = 'chats'; loadGroupChats()"
+              [style.background]="activeTab === 'chats' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Чаты
+            </button>
+            <button (click)="activeTab = 'backups'; loadBackups()"
+              [style.background]="activeTab === 'backups' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Бэкапы
+            </button>
+            <button (click)="activeTab = 'federation'; loadFederation()"
+              [style.background]="activeTab === 'federation' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Федерация
+            </button>
+            <button (click)="activeTab = 'stickers'; loadStickers()"
+              [style.background]="activeTab === 'stickers' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Стикеры
+            </button>
+            <button (click)="activeTab = 'settings'"
+              [style.background]="activeTab === 'settings' ? 'var(--accent-light)' : 'transparent'"
+              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              Настройки
+            </button>
+          </nav>
         </div>
+        <!-- Content -->
+        <div class="flex-1 min-w-0 card p-6">
 
         @if (activeTab === 'users') {
           @if (loadingUsers) {
@@ -274,6 +283,56 @@ interface BackupEntry {
           <app-admin-federation />
         }
 
+        @if (activeTab === 'stickers') {
+          <div>
+            <div class="flex items-center gap-3 mb-4">
+              <input #deskNewPack type="text" [(ngModel)]="newStickerPackName" placeholder="Название нового пака..."
+                style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border-default);font-size:14px;font-family:inherit;">
+              <button (click)="createStickerPack()" [disabled]="!newStickerPackName.trim()"
+                [style.background]="!newStickerPackName.trim() ? 'var(--accent-muted, #94a3b8)' : 'var(--accent-gradient)'"
+                [style.cursor]="!newStickerPackName.trim() ? 'not-allowed' : 'pointer'"
+                [style.opacity]="!newStickerPackName.trim() ? '0.5' : '1'"
+                style="padding:8px 16px;border-radius:8px;border:none;color:white;font-size:13px;font-weight:500;white-space:nowrap;">
+                Создать пак
+              </button>
+            </div>
+
+            @if (stickerLoading) {
+              <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+            } @else if (stickerPacks.length === 0) {
+              <p style="color:var(--text-tertiary);font-size:14px;">Нет стикерпаков. Создайте первый.</p>
+            } @else {
+              @for (pack of stickerPacks; track pack.id) {
+                <div style="margin-bottom:20px;padding:16px;border-radius:12px;border:1px solid var(--border-default);">
+                  <div class="flex items-center gap-3 mb-3">
+                    <span style="font-size:16px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
+                    <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить пак</button>
+                  </div>
+                  <div class="flex flex-wrap gap-3 mb-3">
+                    @for (sticker of pack.stickers; track sticker.id) {
+                      <div class="relative">
+                        <img [src]="sticker.image_url" class="w-16 h-16 rounded-lg object-cover" style="border:1px solid var(--border-default);">
+                        <button (click)="deleteSticker(pack, sticker)"
+                          class="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs rounded-full"
+                          style="background:#e74c3c;color:white;border:none;cursor:pointer;">✕</button>
+                      </div>
+                    }
+                  </div>
+                  <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm cursor-pointer"
+                    style="border:2px dashed var(--border-default);color:var(--text-secondary);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Добавить стикер
+                    <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
+                  </label>
+                </div>
+              }
+            }
+            @if (stickerMsg) {
+              <p class="text-sm mt-2" [style.color]="stickerMsgOk ? '#27ae60' : '#e74c3c'">{{ stickerMsg }}</p>
+            }
+          </div>
+        }
+
         @if (activeTab === 'settings') {
           <div class="mb-6">
             <h3 class="text-base font-semibold mb-4" style="color:var(--text-primary);">Giphy API Key</h3>
@@ -370,6 +429,7 @@ interface BackupEntry {
           }
         }
       </div>
+      </div>
     </div>
 
     <!-- Mobile -->
@@ -384,6 +444,7 @@ interface BackupEntry {
             <option value="chats">Чаты</option>
             <option value="backups">Бэкапы</option>
             <option value="federation">Федерация</option>
+            <option value="stickers">Стикеры</option>
             <option value="settings">Настройки</option>
           </select>
           <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-tertiary);font-size:10px;">▼</div>
@@ -616,6 +677,56 @@ interface BackupEntry {
         <app-admin-federation />
       }
 
+      @if (activeTab === 'stickers') {
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <input #mobileNewPack type="text" [(ngModel)]="newStickerPackName" placeholder="Название нового пака..."
+              style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border-default);font-size:14px;font-family:inherit;">
+            <button (click)="createStickerPack()" [disabled]="!newStickerPackName.trim()"
+              [style.background]="!newStickerPackName.trim() ? 'var(--accent-muted, #94a3b8)' : 'var(--accent-gradient)'"
+              [style.cursor]="!newStickerPackName.trim() ? 'not-allowed' : 'pointer'"
+              [style.opacity]="!newStickerPackName.trim() ? '0.5' : '1'"
+              style="padding:8px 16px;border-radius:8px;border:none;color:white;font-size:13px;font-weight:500;white-space:nowrap;">
+              Создать пак
+            </button>
+          </div>
+
+          @if (stickerLoading) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+          } @else if (stickerPacks.length === 0) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Нет стикерпаков. Создайте первый.</p>
+          } @else {
+            @for (pack of stickerPacks; track pack.id) {
+              <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid var(--border-default);">
+                <div class="flex items-center gap-3 mb-3">
+                  <span style="font-size:15px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
+                  <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить</button>
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3">
+                  @for (sticker of pack.stickers; track sticker.id) {
+                    <div class="relative">
+                      <img [src]="sticker.image_url" class="w-14 h-14 rounded-lg object-cover" style="border:1px solid var(--border-default);">
+                      <button (click)="deleteSticker(pack, sticker)"
+                        class="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs rounded-full"
+                        style="background:#e74c3c;color:white;border:none;cursor:pointer;">✕</button>
+                    </div>
+                  }
+                </div>
+                <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm cursor-pointer"
+                  style="border:2px dashed var(--border-default);color:var(--text-secondary);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Добавить стикер
+                  <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
+                </label>
+              </div>
+            }
+          }
+          @if (stickerMsg) {
+            <p class="text-sm mt-2" [style.color]="stickerMsgOk ? '#27ae60' : '#e74c3c'">{{ stickerMsg }}</p>
+          }
+        </div>
+      }
+
       @if (activeTab === 'settings') {
         <div class="mb-6">
           <h3 class="text-base font-semibold mb-4" style="color:var(--text-primary);">Giphy API Key</h3>
@@ -645,7 +756,7 @@ interface BackupEntry {
   `,
 })
 export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'settings' = 'users';
+  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'stickers' | 'settings' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -676,6 +787,12 @@ export class AdminComponent implements OnInit {
   giphySaving = false;
   giphyKeyMsg = '';
   giphyKeyOk = false;
+
+  stickerPacks: StickerPack[] = [];
+  stickerLoading = false;
+  newStickerPackName = '';
+  stickerMsg = '';
+  stickerMsgOk = false;
 
   constructor(public api: ApiService) {}
 
@@ -709,6 +826,77 @@ export class AdminComponent implements OnInit {
         this.giphyHasKey = res.has_key;
         this.giphyMaskedKey = res.key;
       },
+    });
+  }
+
+  loadStickers() {
+    this.stickerLoading = true;
+    this.stickerMsg = '';
+    this.api.getStickerPacks().subscribe({
+      next: (packs) => { this.stickerPacks = packs; this.stickerLoading = false; },
+      error: () => { this.stickerMsg = 'Ошибка загрузки стикерпаков'; this.stickerMsgOk = false; this.stickerLoading = false; },
+    });
+  }
+
+  createStickerPack() {
+    const name = this.newStickerPackName.trim();
+    if (!name) return;
+    this.newStickerPackName = '';
+    this.stickerMsg = '';
+    this.api.adminCreateStickerPack(name).subscribe({
+      next: () => {
+        this.loadStickers();
+        this.stickerMsg = 'Пак создан';
+        this.stickerMsgOk = true;
+        setTimeout(() => this.stickerMsg = '', 3000);
+      },
+      error: (err: unknown) => {
+        console.error('createStickerPack error', err);
+        const msg = err instanceof Error ? err.message : typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+        this.stickerMsg = 'Ошибка: ' + msg;
+        this.stickerMsgOk = false;
+      },
+    });
+  }
+
+  deleteStickerPack(pack: StickerPack) {
+    if (!confirm(`Удалить ${pack.name}?`)) return;
+    this.api.adminDeleteStickerPack(pack.id).subscribe({
+      next: () => {
+        this.loadStickers();
+        this.stickerMsg = 'Пак удалён';
+        this.stickerMsgOk = true;
+        setTimeout(() => this.stickerMsg = '', 3000);
+      },
+      error: () => { this.stickerMsg = 'Ошибка удаления пака'; this.stickerMsgOk = false; },
+    });
+  }
+
+  uploadSticker(pack: StickerPack, event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    const file = input.files[0];
+    input.value = '';
+    this.api.adminUploadSticker(pack.id, file).subscribe({
+      next: () => {
+        this.loadStickers();
+        this.stickerMsg = 'Стикер добавлен';
+        this.stickerMsgOk = true;
+        setTimeout(() => this.stickerMsg = '', 3000);
+      },
+      error: () => { this.stickerMsg = 'Ошибка загрузки стикера'; this.stickerMsgOk = false; },
+    });
+  }
+
+  deleteSticker(pack: StickerPack, sticker: { id: number }) {
+    this.api.adminDeleteSticker(pack.id, sticker.id).subscribe({
+      next: () => {
+        this.loadStickers();
+        this.stickerMsg = 'Стикер удалён';
+        this.stickerMsgOk = true;
+        setTimeout(() => this.stickerMsg = '', 3000);
+      },
+      error: () => { this.stickerMsg = 'Ошибка удаления стикера'; this.stickerMsgOk = false; },
     });
   }
 
