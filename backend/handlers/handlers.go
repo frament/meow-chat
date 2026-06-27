@@ -2115,6 +2115,12 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		}
 		msgTimestamps = append(msgTimestamps, now)
 
+		// S5: Verify msg.from matches JWT userId (if provided by client)
+		if from, ok := msg["from"].(float64); ok && int64(from) != uid {
+			c.WriteJSON(fiber.Map{"type": "error", "message": "invalid sender"})
+			continue
+		}
+
 		to, ok := msg["to"].(float64)
 		if !ok {
 			continue
