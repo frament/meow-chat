@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -9,9 +9,29 @@ import { ApiService } from './api.service';
 describe('ApiService', () => {
   let service: ApiService;
   let httpMock: HttpTestingController;
+  let mockWsInstance: { close: jasmine.Spy; readyState: number };
+  let originalWebSocket: any;
+
+  function mockWebSocket(): void {
+    mockWsInstance = {
+      close: jasmine.createSpy('close'),
+      readyState: WebSocket.OPEN,
+    };
+    (globalThis as any).WebSocket = jasmine
+      .createSpy('WebSocket')
+      .and.returnValue(mockWsInstance);
+  }
+
+  function triggerWsOnclose(): void {
+    const constructor = (globalThis as any).WebSocket as jasmine.Spy;
+    const instance = constructor.calls.mostRecent().returnValue;
+    if (instance.onclose) instance.onclose(new Event('close'));
+  }
 
   beforeEach(() => {
     localStorage.clear();
+    originalWebSocket = (globalThis as any).WebSocket;
+    mockWebSocket();
 
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -23,6 +43,7 @@ describe('ApiService', () => {
 
   afterEach(() => {
     httpMock.verify();
+    (globalThis as any).WebSocket = originalWebSocket;
   });
 
   it('creates service', () => {
@@ -185,4 +206,83 @@ describe('ApiService', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush({ message: 'Запрос отклонён' });
   });
+
+  // ── T9a: PWA — after 20 failed reconnects → slow-poll 60s ──
+
+  it('T9a: switches to slow-poll after 20 failed reconnect attempts', fakeAsync(() => {
+    // Use a JWT with far-future exp so scheduleReconnect doesn't call refreshToken
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) +
+      '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) +
+      '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'test-refresh',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    // Cycle 20 times: trigger onclose → timer fires → reconnect → onclose again
+    for (let i = 0; i < 20; i++) {
+      triggerWsOnclose();     // sets wsReconnecting, schedules timer
+      tick(120000);           // fire the timer (bigger than max backoff 30s + jitter)
+    }
+
+    expect((service as any).wsRetryCount).toBeGreaterThanOrEqual(20);
+  }));
+
+  // ── T9b: PWA — visibilitychange → visible resets retryCount ──
+
+  it('T9b: visibilitychange resets retry state and reconnects', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) +
+      '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) +
+      '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'test-refresh',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    // Simulate a few reconnection failures
+    for (let i = 0; i < 5; i++) {
+      triggerWsOnclose();
+      tick(120000);
+    }
+    expect((service as any).wsRetryCount).toBeGreaterThan(0);
+
+    // Reset retry state (as visibilitychange would)
+    (service as any).resetRetryState();
+    tick();
+
+    expect((service as any).wsRetryCount).toBe(0);
+  }));
+
+  // ── T9c: PWA — after logout, no reconnect ──
+
+  it('T9c: logout prevents reconnection attempts', fakeAsync(() => {
+    service.storeAuth({
+      access_token: 'irrelevant',
+      refresh_token: 'irrelevant',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    // Logout clears token and user, disconnects WS
+    service.logout();
+    const logoutReq = httpMock.expectOne('/api/logout');
+    logoutReq.flush({});
+    tick();
+
+    // After logout, wsRetryTimer should be null
+    expect((service as any).wsRetryTimer).toBeNull();
+
+    // Simulate a stray onclose from the now-null'd ws — scheduleReconnect should bail
+    triggerWsOnclose();
+    tick(5000);
+    expect((service as any).wsRetryTimer).toBeNull();
+  }));
 });

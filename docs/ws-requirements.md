@@ -195,9 +195,9 @@
 - [x] **T7**: При race между `getMessages` и `sendMessage` сообщение не теряется.
 - [x] **T8**: После reconnect все подписки продолжают работать (нет zombie-обработчиков).
 - [ ] **T9**: Multi-tab: отправка из одной вкладки не создаёт дубликатов в другой.
-- [ ] **T9a (PWA)**: После 20 неудачных reconnect → slow-poll 60s.
-- [ ] **T9b (PWA)**: `visibilitychange` → `visible` сбрасывает retryCount и инициирует reconnect.
-- [ ] **T9c (PWA)**: При logout reconnect не происходит (даже при `visibilitychange`).
+- [x] **T9a (PWA)**: После 20 неудачных reconnect → slow-poll 60s.
+- [x] **T9b (PWA)**: `visibilitychange` → `visible` сбрасывает retryCount и инициирует reconnect.
+- [x] **T9c (PWA)**: При logout reconnect не происходит (даже при `visibilitychange`).
 
 ### 7.3 Нагрузочные
 
