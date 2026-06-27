@@ -532,6 +532,91 @@ func TestWS_100ConcurrentConnections(t *testing.T) {
 	}
 }
 
+// T7: Race between GetMessages (REST) and SendMessage (WS) - no messages lost
+func TestWS_GetMessagesRace(t *testing.T) {
+	_, userID, baseURL := setupWSTest(t)
+	_ = userID
+
+	sender := wsDialDrain(t, baseURL, 1, false)
+
+	const numMessages = 10
+
+	// Concurrently read messages table while sending
+	var wg sync.WaitGroup
+	readDone := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 10; i++ {
+			var count int
+			database.DB.QueryRow("SELECT COUNT(*) FROM messages WHERE (from_user_id=1 AND to_user_id=2) OR (from_user_id=2 AND to_user_id=1)").Scan(&count)
+			time.Sleep(5 * time.Millisecond)
+		}
+		close(readDone)
+	}()
+
+	for i := 0; i < numMessages; i++ {
+		msg := map[string]interface{}{"to": 2, "content": fmt.Sprintf("race msg %d", i)}
+		wsWrite(t, sender, msg)
+		time.Sleep(150 * time.Millisecond)
+	}
+
+	// Drain all echoes so we don't block broadcast channel
+	for i := 0; i < numMessages; i++ {
+		wsRead(t, sender)
+	}
+
+	wg.Wait()
+	<-readDone
+
+	var total int
+	database.DB.QueryRow("SELECT COUNT(*) FROM messages WHERE (from_user_id=1 AND to_user_id=2) OR (from_user_id=2 AND to_user_id=1)").Scan(&total)
+	if total != numMessages {
+		t.Fatalf("expected %d messages, got %d", numMessages, total)
+	}
+}
+
+// T8: After reconnect, messages still arrive (no zombie handlers)
+func TestWS_Reconnect_Subscriptions(t *testing.T) {
+	_, _, baseURL := setupWSTest(t)
+
+	// Connect sender first so its registration doesn't broadcast to recipient2
+	sender := wsDialDrain(t, baseURL, 1, false)
+
+	// Connect recipient, drain user_online broadcast that went to sender
+	recipient := wsDialDrain(t, baseURL, 3, false)
+	sender.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_, _, _ = sender.ReadMessage()
+	sender.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+	// Close recipient — starts grace period
+	recipient.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	// Reconnect recipient — cancels grace timer, registers new conn
+	recipient2 := wsDial(t, baseURL, 3, false)
+
+	// Send message from user1 to user2
+	msg := map[string]interface{}{"to": 3, "content": "post-reconnect msg"}
+	wsWrite(t, sender, msg)
+
+	// Sender should get echo
+	echo := wsRead(t, sender)
+	if echo["content"] != "post-reconnect msg" {
+		t.Fatalf("expected 'post-reconnect msg', got %v", echo["content"])
+	}
+
+	// Reconnected recipient should also receive the message
+	delivered := wsRead(t, recipient2)
+	if delivered["type"] != "message" {
+		t.Fatalf("expected 'message' type for reconnected recipient, got %v", delivered["type"])
+	}
+	if delivered["content"] != "post-reconnect msg" {
+		t.Fatalf("expected 'post-reconnect msg', got %v", delivered["content"])
+	}
+}
+
 // S9: Friendship check - non-friend message is rejected
 func TestWS_Friendship_Required(t *testing.T) {
 	_, _, baseURL := setupWSTest(t)
