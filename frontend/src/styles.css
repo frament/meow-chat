@@ -634,3 +634,7 @@ img {
   .viewer-nav-next { right: 8px; }
   .viewer-close { top: 8px; right: 8px; width: 36px; height: 36px; font-size: 18px; }
 }
+
+body.keyboard-open .bottom-nav {
+  display: none;
+}

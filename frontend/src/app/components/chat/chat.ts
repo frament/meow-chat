@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -340,7 +340,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
@@ -502,7 +502,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
       }
 
       @if (showMobileChat && (selectedUser || selectedGroup)) {
-        <div class="flex flex-col" style="height:calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));">
+        <div class="flex flex-col" [style.height]="mobileChatHeight()">
           <div class="flex items-center gap-3 px-4 py-3 shrink-0"
             style="border-bottom:1px solid var(--border-default);background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);">
             <button (click)="router.navigate(['/chat'])" class="p-1 -ml-1" style="color:var(--text-secondary);">
@@ -693,7 +693,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (click)="sendMessage()" title="Отправить"
@@ -818,6 +818,24 @@ export class ChatComponent implements OnInit, OnDestroy {
   showTypeMenu = false;
   showGifPicker = false;
   showStickerPicker = false;
+  keyboardOpen = signal(false);
+
+  mobileChatHeight = computed(() => {
+    if (this.keyboardOpen()) {
+      return 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
+    }
+    return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
+  });
+
+  onInputFocus() {
+    this.keyboardOpen.set(true);
+    document.body.classList.add('keyboard-open');
+  }
+
+  onInputBlur() {
+    this.keyboardOpen.set(false);
+    document.body.classList.remove('keyboard-open');
+  }
 
   openGifPicker() {
     if (!this.giphyHasKey) return;
