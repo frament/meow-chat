@@ -266,17 +266,44 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
               }
             </div>
             }
-            <div class="flex gap-1 px-4 py-1.5 items-center" style="border-top:1px solid var(--divider);">
+            @if (messageType === 'poll') {
+            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
+                style="height:36px;box-sizing:border-box;">
+              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
+              <div class="flex items-center gap-2">
+                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
+                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
+                @if (pollOptions.length > 2) {
+                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                }
+              </div>
+              }
+              <div class="flex items-center gap-2">
+                <button (click)="addPollOption()" class="text-xs"
+                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
+                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
+                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
+                  Несколько вариантов
+                </label>
+              </div>
+            </div>
+            } @else {
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (uploading()) {
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
+                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
+              </div>
+              }
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
                   [title]="currentTypeLabel"
-                  style="height:30px;display:flex;align-items:center;gap:4px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);font-family:inherit;transition:all 0.15s;">
+                  style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);font-family:inherit;">
                   <span [innerHTML]="currentTypeIcon"></span>
-                  <span>{{ currentTypeLabel }}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 @if (showTypeMenu) {
-                  <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
+                  <div style="position:absolute;bottom:calc(100% + 8px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
                       @if (t.id === 'sticker') {
                         <button (click)="openStickerPicker()"
@@ -312,43 +339,6 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-            </div>
-            @if (messageType === 'poll') {
-            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
-              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
-                style="height:36px;box-sizing:border-box;">
-              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
-              <div class="flex items-center gap-2">
-                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
-                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
-                @if (pollOptions.length > 2) {
-                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
-                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
-                }
-              </div>
-              }
-              <div class="flex items-center gap-2">
-                <button (click)="addPollOption()" class="text-xs"
-                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
-                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
-                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
-                  Несколько вариантов
-                </label>
-              </div>
-            </div>
-            } @else {
-            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
-              @if (uploading()) {
-              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
-                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
-              </div>
-              }
-              <button (click)="triggerFileInput()" title="Прикрепить изображение"
-              style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
-              <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              </button>
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
@@ -629,17 +619,44 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
               }
             </div>
             }
-            <div class="flex gap-1 px-4 py-1.5 items-center" style="border-top:1px solid var(--divider);">
+            @if (messageType === 'poll') {
+            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
+                style="height:36px;box-sizing:border-box;">
+              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
+              <div class="flex items-center gap-2">
+                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
+                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
+                @if (pollOptions.length > 2) {
+                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                }
+              </div>
+              }
+              <div class="flex items-center gap-2">
+                <button (click)="addPollOption()" class="text-xs"
+                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
+                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
+                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
+                  Несколько вариантов
+                </label>
+              </div>
+            </div>
+            } @else {
+            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (uploading()) {
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
+                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
+              </div>
+              }
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
                   [title]="currentTypeLabel"
-                  style="height:30px;display:flex;align-items:center;gap:4px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);font-family:inherit;transition:all 0.15s;">
+                  style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);font-family:inherit;">
                   <span [innerHTML]="currentTypeIcon"></span>
-                  <span>{{ currentTypeLabel }}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 @if (showTypeMenu) {
-                  <div style="position:absolute;bottom:calc(100% + 4px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
+                  <div style="position:absolute;bottom:calc(100% + 8px);left:0;z-index:50;min-width:180px;padding:6px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border-default);box-shadow:var(--shadow-lg);">
                     @for (t of visibleMsgTypes; track t.id) {
                       @if (t.id === 'sticker') {
                         <button (click)="openStickerPicker()"
@@ -675,43 +692,6 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-            </div>
-            @if (messageType === 'poll') {
-            <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
-              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
-                style="height:36px;box-sizing:border-box;">
-              @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
-              <div class="flex items-center gap-2">
-                <input type="text" [(ngModel)]="pollOptions[i]" [placeholder]="'Вариант ' + (i+1)"
-                  style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
-                @if (pollOptions.length > 2) {
-                <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
-                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
-                }
-              </div>
-              }
-              <div class="flex items-center gap-2">
-                <button (click)="addPollOption()" class="text-xs"
-                  style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
-                <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
-                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
-                  Несколько вариантов
-                </label>
-              </div>
-            </div>
-            } @else {
-            <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
-              @if (uploading()) {
-              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
-                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
-              </div>
-              }
-              <button (click)="triggerFileInput()" title="Прикрепить изображение"
-              style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">
-              <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              </button>
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
@@ -890,6 +870,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectType(id: MsgType) {
     this.messageType = id;
     this.showTypeMenu = false;
+    if (id === 'image') {
+      this.triggerFileInput();
+    }
   }
 
   @HostListener('document:click', ['$event'])
