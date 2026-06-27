@@ -37,13 +37,13 @@ import { ApiService, StickerPack } from '../../../services/api.service';
           </div>
 
           <div class="overflow-y-auto" style="max-height:50vh;">
-            @if (currentStickers().length === 0) {
+            @if (currentStickers.length === 0) {
               <div class="flex justify-center py-8">
                 <span class="text-sm" style="color:var(--text-tertiary);">В этом пака нет стикеров</span>
               </div>
             } @else {
               <div class="grid p-3 gap-2" style="grid-template-columns:repeat(3, 1fr);">
-                @for (s of currentStickers(); track s.id) {
+                @for (s of currentStickers; track s.id) {
                   <div class="aspect-square rounded-xl overflow-hidden cursor-pointer bg-cover bg-center hover:scale-105 transition-transform"
                     [style.backgroundImage]="'url(' + s.image_url + ')'"
                     (click)="selectSticker(s)"

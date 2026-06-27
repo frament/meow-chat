@@ -76,40 +76,42 @@ import { ApiService } from '../../services/api.service';
         <!-- Mobile: bottom sheet -->
         <div data-testid="dialog-sheet"
           (click)="$event.stopPropagation()"
-          class="sm:hidden fixed bottom-0 left-0 right-0 rounded-t-[20px] p-5 pb-6"
-          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85%;overflow-y:auto;">
+          class="sm:hidden fixed bottom-0 left-0 right-0 rounded-t-[20px] flex flex-col"
+          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85dvh;">
 
-          <div class="w-10 h-1 rounded-full mx-auto mb-4" style="background:#ddd;"></div>
+          <div class="w-10 h-1 rounded-full mx-auto mt-3 mb-2 shrink-0" style="background:#ddd;"></div>
 
-          <h3 class="text-lg font-bold mb-4" style="color:var(--text-primary);">Новый пост</h3>
+          <h3 class="text-lg font-bold px-5 mb-3 shrink-0" style="color:var(--text-primary);">Новый пост</h3>
 
-          <textarea [(ngModel)]="newPostContent" rows="3"
-            placeholder="Что у вас нового?"
-            class="w-full rounded-xl p-3 text-sm resize-y outline-none transition-colors mb-3"
-            style="border:2px solid var(--border-default);background:var(--bg-card);color:var(--text-primary);min-height:90px;"></textarea>
+          <div class="flex-1 overflow-y-auto px-5">
+            <textarea [(ngModel)]="newPostContent" rows="3"
+              placeholder="Что у вас нового?"
+              class="w-full rounded-xl p-3 text-sm resize-none outline-none transition-colors mb-3"
+              style="border:2px solid var(--border-default);background:var(--bg-card);color:var(--text-primary);min-height:90px;"></textarea>
 
-          @if (previews.length > 0) {
-            <div class="flex flex-wrap gap-2 mb-3">
-              @for (preview of previews; track $index) {
-                <div class="relative w-16 h-16">
-                  <img [src]="preview" class="w-full h-full object-cover rounded-lg" style="border:1px solid var(--border-default);">
-                  <button (click)="removeFile($index)"
-                    class="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center hover:opacity-90"
-                    style="background:#e74c3c;color:white;border:none;cursor:pointer;">
-                    ✕
-                  </button>
-                </div>
-              }
-            </div>
-          }
+            @if (previews.length > 0) {
+              <div class="flex flex-wrap gap-2 mb-3">
+                @for (preview of previews; track $index) {
+                  <div class="relative w-16 h-16">
+                    <img [src]="preview" class="w-full h-full object-cover rounded-lg" style="border:1px solid var(--border-default);">
+                    <button (click)="removeFile($index)"
+                      class="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center hover:opacity-90"
+                      style="background:#e74c3c;color:white;border:none;cursor:pointer;">
+                      ✕
+                    </button>
+                  </div>
+                }
+              </div>
+            }
 
-          @if (uploading()) {
-            <div style="width:100%;height:3px;background:var(--divider);border-radius:2px;margin-bottom:4px;">
-              <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:2px;transition:width 0.2s;"></div>
-            </div>
-          }
+            @if (uploading()) {
+              <div style="width:100%;height:3px;background:var(--divider);border-radius:2px;margin-bottom:4px;">
+                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:2px;transition:width 0.2s;"></div>
+              </div>
+            }
+          </div>
 
-          <div class="flex items-center gap-2 pt-3" style="border-top:1px solid var(--divider);">
+          <div class="flex items-center gap-2 shrink-0 px-5 pt-3 pb-5" style="background:var(--bg-body);border-top:1px solid var(--divider);padding-bottom:env(safe-area-inset-bottom, 1.25rem);">
             <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm cursor-pointer"
               style="background:var(--bg-card-hover);color:var(--text-secondary);">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
