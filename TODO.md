@@ -18,13 +18,14 @@
 | `backend/handlers/devices_test.go` | 16 |
 | `backend/handlers/backup_test.go` | 4 |
 | `backend/handlers/admin_federation_test.go` | 9 |
+| `backend/handlers/update_test.go` | 6 |
 | `backend/backup/config_test.go` | 6 |
 | `backend/backup/backup_test.go` | 5 |
 | `backend/backup/process_test.go` | 5 |
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/federation/*_test.go` (6 files) | 54 |
 | `backend/handlers/polls_test.go` | 13 |
-| **Backend total** | **189** |
+ | **Backend total** | **195** |
 
 ### Frontend — 91 tests (17 files)
 | Component/Service | Tests |
@@ -49,7 +50,7 @@
 | `post-dialog.component.spec.ts` | 18 |
 | **Frontend total** | **106** |
 
-### Grand total: 295 tests, 0 failures ✅
+### Grand total: 301 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -61,7 +62,7 @@
 
 ## New TODOs (2026-06-25)
 - [x] #12 Вынести публикацию поста в отдельный dialog/page ✓
-- [ ] #13 Создать систему обнаружения новых версий из GitHub
+- [x] #13 Создать систему обнаружения новых версий из GitHub ✓
 - [x] #1 Автоматически добавлять пользователя в друзья к тому кто дал приглашение на сервер
 - [x] #2 Проверить проблему обновления чата при добавлении нового пользователя: пользователь создает приглашение (через PWA) → другой принимает → оба заходят в новый чат → пользователь из PWA отправляет сообщение → второй не получает ✓
 - [x] #3 Исправить внешний вид админки для mobile ✓
@@ -73,6 +74,6 @@
 - [x] #9 В чате сделать видимым вариант «опрос» только в групповых чатах
 - [x] #10 В чатах реализовать тип сообщения «опрос»
 - [x] #11 В чатах сделать меню выбора типа сообщения посимпотичнее ✓
-- [ ] #14 Сделать поиск по пользователям с приглашением в друзья
+- [x] #14 Сделать поиск по пользователям с приглашением в друзья ✓
 - [ ] #15 Реализовать сообщения-стикеры
 - [ ] #16 Пройтись по спецификациям из `docs/ws-requirements.md` (S5, S7, T1–T12, O1–O5, секции 2.4, 3.2–3.4)

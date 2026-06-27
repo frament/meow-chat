@@ -274,9 +274,42 @@ import * as QRCode from 'qrcode';
 
         <div>
           <div class="section-label">Обновления</div>
+
+          <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <span style="color:var(--text-secondary);">Текущая версия</span>
+              <span style="color:var(--text-primary);font-weight:600;">{{ currentVersion }}</span>
+            </div>
+            @if (versionCheckDone) {
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-secondary);">Последний релиз</span>
+                <span style="color:var(--text-primary);font-weight:600;">{{ latestVersion || '—' }}</span>
+              </div>
+            }
+          </div>
+
+          @if (gitHubUpdateAvailable) {
+            <div style="padding:10px;border-radius:8px;border:1px solid #e67e22;background:rgba(230,126,34,0.08);margin-bottom:12px;">
+              <p style="color:#e67e22;font-weight:600;font-size:13px;margin-bottom:6px;">Доступна новая версия {{ latestVersion }}</p>
+              <a [href]="downloadUrl" target="_blank" rel="noopener noreferrer"
+                class="btn-primary" style="display:inline-block;padding:8px 16px;font-size:13px;text-decoration:none;text-align:center;">
+                Скачать
+              </a>
+            </div>
+          }
+
+          @if (gitHubCheckError) {
+            <p class="text-sm mb-2" style="color:#e74c3c;">{{ gitHubCheckError }}</p>
+          }
+
+          <button type="button" (click)="checkGitHubUpdates()" [disabled]="gitHubChecking"
+            class="btn-secondary" style="width:100%;padding:12px 20px;margin-bottom:8px;">
+            {{ gitHubChecking ? 'Проверка...' : 'Проверить новые версии на GitHub' }}
+          </button>
+
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
-            {{ updateChecking ? 'Проверка...' : 'Проверить обновления' }}
+            {{ updateChecking ? 'Проверка...' : 'Проверить обновление PWA' }}
           </button>
           @if (updateStatus) {
             <p class="mt-2 text-sm text-center" [style.color]="updateStatusColor">{{ updateStatus }}</p>
@@ -303,6 +336,13 @@ export class SettingsComponent implements OnInit {
   updateChecking = false;
   updateStatus = '';
   updateStatusColor = '';
+  currentVersion = '—';
+  latestVersion = '';
+  downloadUrl = '';
+  gitHubUpdateAvailable = false;
+  gitHubChecking = false;
+  gitHubCheckError = '';
+  versionCheckDone = false;
 
   invites: InviteToken[] = [];
   creatingInvite = false;
@@ -385,6 +425,36 @@ export class SettingsComponent implements OnInit {
     this.loadFriends();
     this.loadBioCreds();
     this.initE2EE();
+    this.loadVersion();
+  }
+
+  loadVersion() {
+    this.api.getVersion().subscribe({
+      next: (res) => {
+        this.currentVersion = res.version;
+      },
+    });
+  }
+
+  checkGitHubUpdates() {
+    this.gitHubChecking = true;
+    this.gitHubCheckError = '';
+    this.api.checkUpdate().subscribe({
+      next: (res) => {
+        this.gitHubChecking = false;
+        this.versionCheckDone = true;
+        this.latestVersion = res.latest_version || '—';
+        this.downloadUrl = res.download_url || '';
+        this.gitHubUpdateAvailable = res.update_available;
+        if (res.error) {
+          this.gitHubCheckError = res.error;
+        }
+      },
+      error: () => {
+        this.gitHubChecking = false;
+        this.gitHubCheckError = 'Ошибка проверки обновлений';
+      },
+    });
   }
 
   async initE2EE() {

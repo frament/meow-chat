@@ -123,6 +123,7 @@ func main() {
 	api.Post("/login", h.Login)
 	api.Post("/refresh", h.Refresh)
 	api.Get("/version", h.GetVersion)
+	api.Get("/check-update", h.CheckUpdate)
 	api.Get("/push/vapid-public-key", h.VAPIDPublicKey)
 	api.Get("/invite/:token", h.CheckInvite)
 	api.Get("/friend-invite/:token", h.CheckFriendInvite)

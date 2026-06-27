@@ -28,6 +28,8 @@ describe('SettingsComponent', () => {
     webauthnRemoveCredential: jasmine.createSpy().and.returnValue(of({})),
     webauthnBeginRegistration: jasmine.createSpy().and.returnValue(of({ session_id: 's1', options: {} })),
     logout: jasmine.createSpy(),
+    getVersion: jasmine.createSpy().and.returnValue(of({ version: '0.1.0-dev' })),
+    checkUpdate: jasmine.createSpy().and.returnValue(of({ update_available: false, current_version: '0.1.0-dev', latest_version: '', download_url: '', release_notes_url: '' })),
   };
 
   const mockTheme = {

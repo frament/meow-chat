@@ -13,6 +13,13 @@ import { DeviceAuthComponent } from './components/device-auth/device-auth';
   standalone: true,
   imports: [RouterOutlet, DeviceAuthComponent],
   template: `
+    @if (gitHubUpdateAvailable()) {
+      <div class="update-banner" style="background:var(--accent-gradient);">
+        <span>Доступна новая версия {{ gitHubLatestVersion() }}</span>
+        <a [href]="gitHubDownloadUrl()" target="_blank" rel="noopener noreferrer" style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:4px 12px;font-weight:600;cursor:pointer;text-decoration:none;font-size:14px;">Скачать</a>
+        <button (click)="dismissGitHubUpdate()" style="background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+      </div>
+    }
     @if (updateAvailable()) {
       <div class="update-banner">
         <span>Доступна новая версия</span>
@@ -272,6 +279,9 @@ export class App implements OnInit, OnDestroy {
   readonly maintenanceMode = signal(false);
   readonly pullDistance = signal(0);
   readonly pullReady = signal(false);
+  readonly gitHubUpdateAvailable = signal(false);
+  readonly gitHubLatestVersion = signal('');
+  readonly gitHubDownloadUrl = signal('');
   #maintenanceSub: Subscription | null = null;
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   #badgeCount = 0;
@@ -280,6 +290,7 @@ export class App implements OnInit, OnDestroy {
   #pullStartY = 0;
   #pulling = false;
   #offlineDismissed = false;
+  #gitHubDismissed = false;
   @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
@@ -324,6 +335,41 @@ export class App implements OnInit, OnDestroy {
           .subscribe()
       );
     }
+
+    // Periodic GitHub update check (only for logged-in users, once per 6 hours)
+    this.#sub.add(
+      interval(6 * 60 * 60 * 1000).pipe(
+        filter(() => this.#api.currentUser() !== null)
+      ).subscribe(() => this.checkGitHubUpdate())
+    );
+
+    // Check on focus as well
+    this.#sub.add(
+      fromEvent(window, 'focus').pipe(
+        filter(() => this.#api.currentUser() !== null)
+      ).subscribe(() => this.checkGitHubUpdate())
+    );
+  }
+
+  private checkedGitHubUpdate = false;
+
+  private checkGitHubUpdate() {
+    if (this.#gitHubDismissed) return;
+    this.#api.checkUpdate().subscribe({
+      next: (res) => {
+        if (res.update_available && !this.checkedGitHubUpdate) {
+          this.checkedGitHubUpdate = true;
+          this.gitHubUpdateAvailable.set(true);
+          this.gitHubLatestVersion.set(res.latest_version || '');
+          this.gitHubDownloadUrl.set(res.download_url || '');
+        }
+      },
+    });
+  }
+
+  dismissGitHubUpdate() {
+    this.gitHubUpdateAvailable.set(false);
+    this.#gitHubDismissed = true;
   }
 
   ngOnInit() {

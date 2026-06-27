@@ -35,12 +35,13 @@ describe('App', () => {
     mockApi = jasmine.createSpyObj('ApiService', [
       'connectWebSocket', 'incrementUnread', 'clearUnread',
       'checkHealth', 'getVapidPublicKey', 'pushSubscribe',
-      'registerDevice', 'logout',
+      'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
     ], {
       currentUser: signal(null),
       totalUnread: computed(() => 0),
       wsMessages$: wsMessages$,
       accessToken: signal(''),
+      wsConnected: signal(false),
     });
 
     mockNotif = jasmine.createSpyObj('NotificationService', [

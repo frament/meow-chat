@@ -943,6 +943,23 @@ export class ApiService {
     );
   }
 
+  // ── Updates ──
+
+  getVersion() {
+    return this.http.get<{ version: string }>(`${this.baseUrl}/version`);
+  }
+
+  checkUpdate() {
+    return this.http.get<{
+      update_available: boolean;
+      current_version: string;
+      latest_version: string;
+      download_url: string;
+      release_notes_url: string;
+      error?: string;
+    }>(`${this.baseUrl}/check-update`);
+  }
+
   // ── Device Management ──
 
   registerDevice(name: string, publicKey: string, deviceId: string) {
