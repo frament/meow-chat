@@ -87,10 +87,13 @@ func main() {
 	fedHealth := federation.NewHealthChecker(fedTransport, fedQueue)
 	fedHandler := federation.NewFederationHandler(fedTransport, fedQueue, fedHealth)
 	fedHandler.OnIncomingMessage = func(fromUserID, toUserID int64, content, msgType string, createdAt string, images []string) {
+		var senderName string
+		database.DB.QueryRow("SELECT username FROM federation_users WHERE remote_id = ?", fromUserID).Scan(&senderName)
 		h.SendToUser(toUserID, fiber.Map{
 			"type":       "message",
 			"from":       fromUserID,
 			"to":         toUserID,
+			"from_name":  senderName,
 			"content":    content,
 			"msg_type":   msgType,
 			"images":     images,

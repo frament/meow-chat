@@ -65,8 +65,7 @@ export interface GroupWsMessage {
   encrypted_iv?: string;
 }
 
-export type AnyWsMessage = WsMessage | GroupWsMessage;
-export type WsMessageType = WsMessage['type'] | GroupWsMessage['type'];
+export type WsMessageType = string;
 
 export interface PollOption {
   id: number;
@@ -173,10 +172,17 @@ export class ApiService {
   readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
   readonly unreadBoundaries = signal<Record<number, string>>({});
   readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
-  readonly wsMessages$ = new Subject<AnyWsMessage>();
+  readonly wsMessages$ = new Subject<any>();
+  readonly wsConnected = signal(false);
   private ws: WebSocket | null = null;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private wsReconnecting = false;
+  private wsRetryCount = 0;
+  private wsConnecting = false;
+  private readonly WS_MAX_RETRY_DELAY = 30000;
+  private readonly WS_INITIAL_RETRY_DELAY = 1000;
+  private readonly WS_MAX_RETRIES = 20;
+  private readonly WS_SLOW_POLL_DELAY = 60000;
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -191,6 +197,30 @@ export class ApiService {
         }
       } catch {}
     }
+
+    // PWA/Standalone: when user returns to the app, reset retry state and reconnect
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.currentUser()) {
+        this.resetRetryState();
+      }
+    });
+  }
+
+  retryConnection(): void {
+    this.wsRetryCount = 0;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (this.wsRetryTimer) {
+        clearTimeout(this.wsRetryTimer);
+        this.wsRetryTimer = null;
+      }
+      this.wsReconnecting = false;
+      this.wsConnecting = false;
+      this.connectWebSocket();
+    }
+  }
+
+  private resetRetryState(): void {
+    this.retryConnection();
   }
 
   register(username: string, email: string, password: string, inviteToken: string) {
@@ -636,6 +666,7 @@ export class ApiService {
   }
 
   connectWebSocket(): void {
+    if (this.wsConnecting) return;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     if (this.ws) this.ws.close();
     if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
@@ -644,7 +675,15 @@ export class ApiService {
     const token = this.accessToken();
     if (!token) return;
 
+    this.wsConnecting = true;
+
     this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+
+    this.ws.onopen = () => {
+      this.wsConnecting = false;
+      this.wsConnected.set(true);
+      this.wsRetryCount = 0;
+    };
 
     this.ws.onmessage = (event) => {
       let data: any;
@@ -654,14 +693,10 @@ export class ApiService {
         return;
       }
 
-      if (data.type === 'message') {
-        this.wsMessages$.next(data as WsMessage);
-      }
+      // Route ALL message types through wsMessages$ for component consumption
+      this.wsMessages$.next(data);
 
-      if (data.type === 'group_message') {
-        this.wsMessages$.next(data as GroupWsMessage);
-      }
-
+      // Also route online/offline events through dedicated subject for convenience
       if (data.type === 'user_online' || data.type === 'user_offline') {
         this.wsOnlineEvent.next(data);
       }
@@ -669,6 +704,8 @@ export class ApiService {
 
     this.ws.onclose = () => {
       this.ws = null;
+      this.wsConnecting = false;
+      this.wsConnected.set(false);
       this.scheduleReconnect();
     };
 
@@ -691,11 +728,21 @@ export class ApiService {
     if (!this.accessToken()) return;
 
     this.wsReconnecting = true;
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+    // After WS_MAX_RETRIES attempts, switch to slow-poll (60s) for PWA support
+    const delay = this.wsRetryCount < this.WS_MAX_RETRIES
+      ? Math.min(this.WS_INITIAL_RETRY_DELAY * Math.pow(2, this.wsRetryCount), this.WS_MAX_RETRY_DELAY)
+      : this.WS_SLOW_POLL_DELAY;
+    const jitter = Math.random() * 1000;
+
+    this.wsRetryCount++;
     this.wsRetryTimer = setTimeout(() => {
       this.wsRetryTimer = null;
+      this.wsReconnecting = false;
 
       const token = this.accessToken();
-      if (!token) { this.wsReconnecting = false; return; }
+      if (!token) return;
 
       if (this.isJwtExpired(token)) {
         this.refreshToken().subscribe({
@@ -703,19 +750,16 @@ export class ApiService {
             this.accessToken.set(res.access_token);
             localStorage.setItem('accessToken', res.access_token);
             localStorage.setItem('refreshToken', res.refresh_token);
-            this.wsReconnecting = false;
             this.connectWebSocket();
           },
           error: () => {
-            this.wsReconnecting = false;
             this.logout();
           },
         });
       } else {
-        this.wsReconnecting = false;
         this.connectWebSocket();
       }
-    }, 3000);
+    }, delay + jitter);
   }
 
   incrementUnread(userId: number, createdAt?: string): void {
@@ -977,6 +1021,7 @@ export class ApiService {
     if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
     this.wsRetryTimer = null;
     this.wsReconnecting = false;
+    this.wsConnected.set(false);
     this.ws?.close();
     this.ws = null;
   }

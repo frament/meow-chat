@@ -68,10 +68,10 @@ func NewHandler() *Handler {
 		clients:         make(map[*websocket.Conn]int64),
 		register:        make(chan *wsClient),
 		unregister:      make(chan *wsClient),
-		broadcast:       make(chan wsMessage),
-		broadcastGroup:  make(chan wsMessage),
-		broadcastAll:    make(chan fiber.Map),
-		broadcastToUser: make(chan userMessage, 10),
+		broadcast:       make(chan wsMessage, 64),
+		broadcastGroup:  make(chan wsMessage, 64),
+		broadcastAll:    make(chan fiber.Map, 16),
+		broadcastToUser: make(chan userMessage, 64),
 		graceExpired:    make(chan int64),
 		onlineUsers:     make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
@@ -93,7 +93,11 @@ func (h *Handler) runHub() {
 			if !h.onlineUsers[client.uid] {
 				h.onlineUsers[client.uid] = true
 				for conn := range h.clients {
-					conn.WriteJSON(fiber.Map{"type": "user_online", "user_id": client.uid})
+					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					if err := conn.WriteJSON(fiber.Map{"type": "user_online", "user_id": client.uid}); err != nil {
+						conn.Close()
+						delete(h.clients, conn)
+					}
 				}
 			}
 
@@ -128,17 +132,23 @@ func (h *Handler) runHub() {
 			if stillOffline && h.onlineUsers[uid] {
 				h.onlineUsers[uid] = false
 				for conn := range h.clients {
-					conn.WriteJSON(fiber.Map{"type": "user_offline", "user_id": uid})
+					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					if err := conn.WriteJSON(fiber.Map{"type": "user_offline", "user_id": uid}); err != nil {
+						conn.Close()
+						delete(h.clients, conn)
+					}
 				}
 			}
 
 		case msg := <-h.broadcast:
 			delivered := false
 			for conn, uid := range h.clients {
-				if uid == msg.to {
+				if uid == msg.to || uid == msg.from {
 					payload := fiber.Map{
 						"type":       "message",
+						"id":         msg.messageID,
 						"from":       msg.from,
+						"to":         msg.to,
 						"from_name":  msg.fromName,
 						"content":    msg.content,
 						"msg_type":   msg.msgType,
@@ -154,14 +164,14 @@ func (h *Handler) runHub() {
 					if msg.pollData != nil {
 						payload["poll"] = msg.pollData
 					}
+					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
 						conn.Close()
 						delete(h.clients, conn)
-					} else {
+					} else if uid == msg.to {
 						delivered = true
-						// Delete any push copies for this message on delivery
 						if msg.messageID > 0 {
 							database.DB.Exec("DELETE FROM push_copies WHERE message_id = ?", msg.messageID)
 						}
@@ -215,6 +225,7 @@ func (h *Handler) runHub() {
 
 			payload := fiber.Map{
 				"type":       "group_message",
+				"id":         msg.messageID,
 				"group_id":   msg.groupID,
 				"from":       msg.from,
 				"from_name":  msg.fromName,
@@ -234,12 +245,10 @@ func (h *Handler) runHub() {
 			}
 
 			for _, memberID := range memberIDs {
-				if memberID == msg.from {
-					continue
-				}
 				delivered := false
 				for conn, uid := range h.clients {
 					if uid == memberID {
+						conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 						if err := conn.WriteJSON(payload); err != nil {
 							log.Println("WebSocket group write error:", err)
 							conn.Close()
@@ -272,6 +281,7 @@ func (h *Handler) runHub() {
 
 		case msg := <-h.broadcastAll:
 			for conn := range h.clients {
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteJSON(msg); err != nil {
 					log.Println("WebSocket broadcastAll write error:", err)
 					conn.Close()
@@ -282,6 +292,7 @@ func (h *Handler) runHub() {
 		case m := <-h.broadcastToUser:
 			for conn, uid := range h.clients {
 				if uid == m.userID {
+					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(m.data); err != nil {
 						conn.Close()
 						delete(h.clients, conn)
@@ -1767,8 +1778,38 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		return
 	}
 
+	// Limit incoming message size
+	c.SetReadLimit(65536)
+
+	// Ping/pong health check
+	c.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.SetPongHandler(func(string) error {
+		c.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	client := &wsClient{conn: c, uid: uid}
 	h.register <- client
+
+	stopPing := make(chan struct{})
+	defer close(stopPing)
+
+	go func() {
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				if err := c.WriteMessage(websocket.PingMessage, nil); err != nil {
+					c.Close()
+					return
+				}
+			case <-stopPing:
+				return
+			}
+		}
+	}()
 
 	defer func() {
 		h.unregister <- client

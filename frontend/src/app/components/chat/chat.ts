@@ -869,16 +869,20 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.subscriptions.push(
       this.api.wsMessages$.subscribe(async (data: any) => {
-        if (data.type === 'message' && this.selectedUser && data.from === this.selectedUser.id) {
+        if (data.type === 'message' && this.selectedUser && (data.from === this.selectedUser.id || data.from === this.currentUserId)) {
+          // Skip if this message already exists (e.g., finalized from optimistic send in another tab)
+          if (data.id && this.messages.some(m => m.id === data.id)) {
+            return;
+          }
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
             const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
             if (decrypted !== null) content = decrypted;
           }
           const msg: Message = {
-            id: Date.now(),
+            id: data.id || Date.now(),
             from_user_id: data.from,
-            to_user_id: this.currentUserId,
+            to_user_id: data.to || this.currentUserId,
             content: content,
             msg_type: data.msg_type || 'text',
             created_at: data.created_at || new Date().toISOString(),
@@ -891,13 +895,17 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.scrollToBottom();
         }
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
+          // Skip if this message already exists (e.g., finalized from optimistic send)
+          if (data.id && this.messages.some(m => m.id === data.id)) {
+            return;
+          }
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
             const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
             if (decrypted !== null) content = decrypted;
           }
           const msg: Message = {
-            id: Date.now(),
+            id: data.id || Date.now(),
             from_user_id: data.from,
             to_user_id: 0,
             group_chat_id: data.group_id,
@@ -1019,8 +1027,15 @@ export class ChatComponent implements OnInit, OnDestroy {
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptMsg(msgs[i], user.id);
       }
-      this.messages = msgs;
-      localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(msgs));
+      // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
+      const existingIds = new Set(this.messages.map(m => m.id));
+      for (const msg of msgs) {
+        if (!existingIds.has(msg.id)) {
+          this.messages.push(msg);
+        }
+      }
+      this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(this.messages));
       if (boundary) {
         const idx = msgs.findIndex(m => new Date(m.created_at) >= new Date(boundary));
         this.unreadDividerIdx = idx >= 0 ? idx : -1;

@@ -42,6 +42,25 @@ import { DeviceAuthComponent } from './components/device-auth/device-auth';
         <p style="font-size:14px;color:var(--text-secondary);">Это может занять несколько минут</p>
       </div>
     }
+    @if (!#api.wsConnected() && #api.currentUser() && !offlineDismissed) {
+      <div class="offline-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        <span>Нет соединения</span>
+        <button class="reconnect-btn" (click)="#api.retryConnection()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></polyline></svg>
+          Подключиться
+        </button>
+        <button class="offline-dismiss" (click)="dismissOffline()">✕</button>
+      </div>
+    }
+    @if (pullDistance() > 0) {
+      <div class="pull-indicator" [style.top.px]="pullDistance() / 2 - 60">
+        <div class="pull-spinner" [class.pull-ready]="pullReady()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></polyline></svg>
+        </div>
+        <span>{{ pullReady() ? 'Отпустите для подключения' : 'Потяните для подключения' }}</span>
+      </div>
+    }
     <app-device-auth #deviceAuth />
     <router-outlet />
   `,
@@ -162,6 +181,80 @@ import { DeviceAuthComponent } from './components/device-auth/device-auth';
       from { transform: translateY(-20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
+    .offline-banner {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 9997;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-default);
+      font-size: 13px;
+      color: var(--text-secondary);
+      animation: slideUp 0.3s ease;
+    }
+    .offline-banner button.reconnect-btn {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .offline-banner .offline-dismiss {
+      background: transparent;
+      border: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .pull-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: calc(20px + env(safe-area-inset-top, 0px)) 0 12px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      font-size: 12px;
+      transition: none;
+    }
+    .pull-spinner {
+      width: 32px; height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--bg-body);
+      border: 2px solid var(--border-default);
+      color: var(--text-tertiary);
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .pull-spinner.pull-ready {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
   `],
 })
 export class App implements OnInit, OnDestroy {
@@ -177,11 +270,16 @@ export class App implements OnInit, OnDestroy {
   readonly canInstall = signal(false);
   readonly #sub = new Subscription();
   readonly maintenanceMode = signal(false);
+  readonly pullDistance = signal(0);
+  readonly pullReady = signal(false);
   #maintenanceSub: Subscription | null = null;
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   #badgeCount = 0;
   #deviceAuthInitDone = false;
   #installPrompt: any = null;
+  #pullStartY = 0;
+  #pulling = false;
+  #offlineDismissed = false;
   @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
@@ -329,6 +427,17 @@ export class App implements OnInit, OnDestroy {
       });
 
     this.tryReSubscribePush();
+
+    // Pull-to-refresh for reconnection
+    this.#sub.add(
+      fromEvent<TouchEvent>(document, 'touchstart').subscribe(e => this.#onTouchStart(e))
+    );
+    this.#sub.add(
+      fromEvent<TouchEvent>(document, 'touchmove', { passive: false }).subscribe(e => this.#onTouchMove(e))
+    );
+    this.#sub.add(
+      fromEvent<TouchEvent>(document, 'touchend').subscribe(() => this.#onTouchEnd())
+    );
   }
 
   private async tryReSubscribePush(): Promise<void> {
@@ -421,6 +530,40 @@ export class App implements OnInit, OnDestroy {
       // Start auth request flow
       this.deviceAuth.startNewDeviceFlow();
     }
+  }
+
+  dismissOffline() {
+    this.#offlineDismissed = true;
+  }
+
+  #onTouchStart(e: TouchEvent): void {
+    if (this.#api.wsConnected() || !this.#api.currentUser() || this.#offlineDismissed) return;
+    if (window.scrollY > 0) return;
+    this.#pullStartY = e.touches[0].clientY;
+    this.#pulling = true;
+  }
+
+  #onTouchMove(e: TouchEvent): void {
+    if (!this.#pulling) return;
+    const dy = e.touches[0].clientY - this.#pullStartY;
+    if (dy < 0) { this.#endPull(); return; }
+    e.preventDefault();
+    this.pullDistance.set(dy);
+    this.pullReady.set(dy >= 80);
+  }
+
+  #onTouchEnd(): void {
+    if (!this.#pulling) return;
+    if (this.pullReady()) {
+      this.#api.retryConnection();
+    }
+    this.#endPull();
+  }
+
+  #endPull(): void {
+    this.#pulling = false;
+    this.pullDistance.set(0);
+    this.pullReady.set(false);
   }
 
   applyUpdate() {
