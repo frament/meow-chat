@@ -25,8 +25,8 @@
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/federation/*_test.go` (6 files) | 54 |
 | `backend/handlers/polls_test.go` | 13 |
- | `backend/handlers/ws_test.go` | 14 |
- | **Backend total** | **197** |
+ | `backend/handlers/ws_test.go` | 17 |
+ | **Backend total** | **200** |
 
 ### Frontend — 91 tests (17 files)
 | Component/Service | Tests |
@@ -51,7 +51,7 @@
 | `post-dialog.component.spec.ts` | 18 |
  | **Frontend total** | **108** |
 
-### Grand total: 303 tests, 0 failures ✅
+### Grand total: 308 tests, 0 failures ✅
 
 ## Done
 - [x] Chat list virtualization with `@angular/cdk`
@@ -79,17 +79,17 @@
 - [x] #15 Реализовать сообщения-стикеры ✓
 - [x] #16 Пройтись по спецификациям из `docs/ws-requirements.md` (S5, S7, T1–T12, O1–O5, секции 2.4, 3.2–3.4) — S5 ✓, S7 ✓, S9 ✓, T1–T12 ✓, T9a–T9c ✓, O1–O5 ✓
 - [x] #17 Реализовать федерацию стикерпаков: выгрузка/загрузка/синхронизация между серверами ✓
-- [ ] #18 WS-Hub: исправить утечки и потенциальный panic (small scale, ~10 users)
-      - **P1** — `Handler.Close()` не останавливает `graceTimers` → `AfterFunc` шлёт в закрытый канал → panic/goroutine leak
-      - **P1** — `graceExpired` unbuffered + `AfterFunc` → блокировка при медленном hub → утекающая горутина
-      - **P2** — `h.broadcast <- msg` (буфер 64) блокирует HandleWebSocket при полном канале
-      - **P2** — No `sync.WaitGroup` → `Close()` не дожидается завершения hub
-      - **P3** — `c.WriteJSON` в S5/S9: ошибки не проверяются
-      - **P3** — Подготовленные запросы (`db.Prepare`) для `INSERT INTO messages` и `SELECT 1 FROM friends`
-- [ ] #19 WS-Frontend: исправить баги и улучшить типизацию (small scale)
-      - **P1** — `atob` не умеет base64url → JWT с `-`/`_` кидает `InvalidCharacterError`, каждый reconnect дёргает refresh
-      - **P2** — `Subject` без `asObservable()` → любой может вызвать `.next()` и подделать WS-сообщение
-      - **P2** — `new WebSocket(url)` без try-catch → крэш при невалидном URL
-      - **P3** — `onerror` → `ws.close()` избыточен (onclose придёт сам)
-      - **P3** — `Subject<any>` → потеря типизации сообщений
-      - **P3** — `setAppBadge` без проверки наличия API
+- [x] #18 WS-Hub: исправить утечки и потенциальный panic (small scale, ~10 users)
+      - **P1** — `Handler.Close()` не останавливает `graceTimers` → `AfterFunc` шлёт в закрытый канал → panic/goroutine leak ✓
+      - **P1** — `graceExpired` unbuffered + `AfterFunc` → блокировка при медленном hub → утекающая горутина ✓
+      - **P2** — `h.broadcast <- msg` (буфер 64) блокирует HandleWebSocket при полном канале ✓
+      - **P2** — No `sync.WaitGroup` → `Close()` не дожидается завершения hub ✓
+      - **P3** — `c.WriteJSON` в S5/S9: ошибки не проверяются ✓
+      - **P3** — Подготовленные запросы (`db.Prepare`) для `INSERT INTO messages` и `SELECT 1 FROM friends` ✓
+- [x] #19 WS-Frontend: исправить баги и улучшить типизацию (small scale)
+      - **P1** — `atob` не умеет base64url → JWT с `-`/`_` кидает `InvalidCharacterError`, каждый reconnect дёргает refresh ✓
+      - **P2** — `Subject` без `asObservable()` → любой может вызвать `.next()` и подделать WS-сообщение ✓
+      - **P2** — `new WebSocket(url)` без try-catch → крэш при невалидном URL ✓
+      - **P3** — `onerror` → `ws.close()` избыточен (onclose придёт сам) ✓
+      - **P3** — `Subject<any>` → потеря типизации сообщений ✓
+      - **P3** — `setAppBadge` без проверки наличия API — уже было сделано ✓

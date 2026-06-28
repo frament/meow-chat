@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,11 +38,17 @@ type Handler struct {
 	onlineUsers     map[int64]bool
 	graceTimers     map[int64]*time.Timer
 	stop            chan struct{}
+	wg              sync.WaitGroup
 
 	// O1–O3: Metrics counters (atomic for lock-free reads from health handler)
 	wsConnectionsTotal   atomic.Int64
 	wsMessagesSentTotal  atomic.Int64
 	wsWriteErrorsTotal   atomic.Int64
+
+	// Prepared statements for hot WS paths
+	stmtInsertMessage *sql.Stmt
+	stmtCheckFriend   *sql.Stmt
+	stmtGetSenderName *sql.Stmt
 }
 
 type wsClient struct {
@@ -76,24 +83,41 @@ func NewHandler() *Handler {
 		clients:         make(map[*websocket.Conn]int64),
 		register:        make(chan *wsClient),
 		unregister:      make(chan *wsClient),
-		broadcast:       make(chan wsMessage, 64),
-		broadcastGroup:  make(chan wsMessage, 64),
-		broadcastAll:    make(chan fiber.Map, 16),
-		broadcastToUser: make(chan userMessage, 64),
-		graceExpired:    make(chan int64),
+		broadcast:       make(chan wsMessage, 1024),
+		broadcastGroup:  make(chan wsMessage, 1024),
+		broadcastAll:    make(chan fiber.Map, 256),
+		broadcastToUser: make(chan userMessage, 1024),
+		graceExpired:    make(chan int64, 1024),
 		onlineUsers:     make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
 		stop:            make(chan struct{}),
 	}
+	if database.DB != nil {
+		h.stmtInsertMessage, _ = database.DB.Prepare(
+			"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
+		)
+		h.stmtCheckFriend, _ = database.DB.Prepare(
+			"SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+		)
+		h.stmtGetSenderName, _ = database.DB.Prepare(
+			"SELECT username FROM users WHERE id = ?",
+		)
+	}
+	h.wg.Add(1)
 	go h.runHub()
 	return h
 }
 
 func (h *Handler) Close() {
+	for _, t := range h.graceTimers {
+		t.Stop()
+	}
 	close(h.stop)
+	h.wg.Wait()
 }
 
 func (h *Handler) runHub() {
+	defer h.wg.Done()
 	for {
 		select {
 		case client := <-h.register:
@@ -131,8 +155,12 @@ func (h *Handler) runHub() {
 				}
 			}
 			if !hasOthers && h.onlineUsers[client.uid] {
-				h.graceTimers[client.uid] = time.AfterFunc(30*time.Second, func() {
-					h.graceExpired <- client.uid
+				uid := client.uid
+				h.graceTimers[uid] = time.AfterFunc(30*time.Second, func() {
+					select {
+					case h.graceExpired <- uid:
+					default:
+					}
 				})
 			}
 
@@ -2141,7 +2169,9 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 
 		// S5: Verify msg.from matches JWT userId (if provided by client)
 		if from, ok := msg["from"].(float64); ok && int64(from) != uid {
-			c.WriteJSON(fiber.Map{"type": "error", "message": "invalid sender"})
+			if err := c.WriteJSON(fiber.Map{"type": "error", "message": "invalid sender"}); err != nil {
+				log.Printf("WS write error on sender check: %v", err)
+			}
 			continue
 		}
 
@@ -2157,12 +2187,18 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		toID := int64(to)
 		if uid != toID {
 			var isFriend bool
-			database.DB.QueryRow(
-				"SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
-				uid, toID, toID, uid,
-			).Scan(&isFriend)
+			if h.stmtCheckFriend != nil {
+				h.stmtCheckFriend.QueryRow(uid, toID, toID, uid).Scan(&isFriend)
+			} else {
+				database.DB.QueryRow(
+					"SELECT 1 FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+					uid, toID, toID, uid,
+				).Scan(&isFriend)
+			}
 			if !isFriend {
-				c.WriteJSON(fiber.Map{"type": "error", "message": "not friends"})
+				if err := c.WriteJSON(fiber.Map{"type": "error", "message": "not friends"}); err != nil {
+					log.Printf("WS write error on friendship check: %v", err)
+				}
 				continue
 			}
 		}
@@ -2185,10 +2221,16 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 			pushPreview = pp
 		}
 
-		result, err := database.DB.Exec(
-			"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
-			uid, int64(to), content, msgType, encryptedContent, encryptedIV,
-		)
+		var result sql.Result
+		var err error
+		if h.stmtInsertMessage != nil {
+			result, err = h.stmtInsertMessage.Exec(uid, int64(to), content, msgType, encryptedContent, encryptedIV)
+		} else {
+			result, err = database.DB.Exec(
+				"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv) VALUES (?, ?, ?, ?, ?, ?)",
+				uid, int64(to), content, msgType, encryptedContent, encryptedIV,
+			)
+		}
 		if err != nil {
 			log.Println("Failed to save message:", err)
 			continue
@@ -2196,7 +2238,11 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 		msgID, _ := result.LastInsertId()
 
 		var senderName string
-		database.DB.QueryRow("SELECT username FROM users WHERE id = ?", uid).Scan(&senderName)
+		if h.stmtGetSenderName != nil {
+			h.stmtGetSenderName.QueryRow(uid).Scan(&senderName)
+		} else {
+			database.DB.QueryRow("SELECT username FROM users WHERE id = ?", uid).Scan(&senderName)
+		}
 
 		h.broadcast <- wsMessage{
 			messageID:        msgID,

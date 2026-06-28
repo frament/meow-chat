@@ -1,6 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
-import { Subject } from 'rxjs';
+import { Subject, Observable } from 'rxjs';
 
 export interface User {
   id: number;
@@ -74,6 +74,19 @@ export interface PollOption {
   vote_count: number;
   voted: boolean;
 }
+
+export type WsServerMessage =
+  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; poll?: Poll }
+  | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string }
+  | { type: 'user_online'; user_id: number }
+  | { type: 'user_offline'; user_id: number }
+  | { type: 'device_auth_request'; from_device_id: string; device_name?: string }
+  | { type: 'device_approved'; device_id: string }
+  | { type: 'poll_update'; poll_id: number; message_id?: number; group_message_id?: number; options: PollOption[]; total_votes: number; multiple?: boolean }
+  | { type: 'friend_request'; from_user: number; username: string }
+  | { type: 'friend_request_accepted'; user_id: number }
+  | { type: 'group_joined'; group_chat_id: number; group_name: string }
+  | { type: 'error'; message: string };
 
 export interface Poll {
   id: number;
@@ -185,8 +198,10 @@ export class ApiService {
   readonly unreadCounts = signal<Record<number, number>>({});
   readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
   readonly unreadBoundaries = signal<Record<number, string>>({});
-  readonly wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
-  readonly wsMessages$ = new Subject<any>();
+  private readonly wsOnlineEventSubject = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
+  readonly wsOnlineEvent = this.wsOnlineEventSubject.asObservable();
+  private readonly wsMessagesSubject = new Subject<WsServerMessage>();
+  readonly wsMessages$ = this.wsMessagesSubject.asObservable();
   readonly wsConnected = signal(false);
   private ws: WebSocket | null = null;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -743,7 +758,13 @@ export class ApiService {
 
     this.wsConnecting = true;
 
-    this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+    try {
+      this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+    } catch {
+      this.wsConnecting = false;
+      this.scheduleReconnect();
+      return;
+    }
 
     this.ws.onopen = () => {
       this.wsConnecting = false;
@@ -760,11 +781,11 @@ export class ApiService {
       }
 
       // Route ALL message types through wsMessages$ for component consumption
-      this.wsMessages$.next(data);
+      this.wsMessagesSubject.next(data);
 
       // Also route online/offline events through dedicated subject for convenience
       if (data.type === 'user_online' || data.type === 'user_offline') {
-        this.wsOnlineEvent.next(data);
+        this.wsOnlineEventSubject.next(data);
       }
     };
 
@@ -775,14 +796,13 @@ export class ApiService {
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = () => {
-      this.ws?.close();
-    };
+    this.ws.onerror = () => {};
   }
 
   private isJwtExpired(token: string): boolean {
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
       return Date.now() >= payload.exp * 1000;
     } catch {
       return true;
