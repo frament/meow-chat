@@ -823,7 +823,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.keyboardOpen()) {
       return 'calc(100dvh - 3.5rem)';
     }
-    return 'calc(100dvh - 7rem)';
+    return 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))';
   });
 
   onInputFocus() {
