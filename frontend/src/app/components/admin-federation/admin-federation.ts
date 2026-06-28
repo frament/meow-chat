@@ -9,12 +9,12 @@ import { FormsModule } from '@angular/forms';
   template: `
     <div class="max-w-4xl mx-auto px-4 py-6 pb-20 sm:pb-6">
       <div class="card" style="padding:24px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
           <h1 class="text-xl font-bold" style="color:var(--text-primary);">Федеративная сеть</h1>
-          <div style="display:flex;gap:8px;">
-            <button (click)="showConnect = true" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;">Подключиться</button>
-            <button (click)="showInvite = true" style="padding:8px 16px;border-radius:8px;border:none;background:#27ae60;color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;">Создать инвайт</button>
-            <button (click)="showRestore = true" style="padding:8px 16px;border-radius:8px;border:none;background:#8e44ad;color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;">Восстановить</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button (click)="showConnect = true" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;white-space:nowrap;">Подключиться</button>
+            <button (click)="showInvite = true" style="padding:8px 16px;border-radius:8px;border:none;background:#27ae60;color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;white-space:nowrap;">Создать инвайт</button>
+            <button (click)="showRestore = true" style="padding:8px 16px;border-radius:8px;border:none;background:#8e44ad;color:white;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s;white-space:nowrap;">Восстановить</button>
           </div>
         </div>
 

@@ -5,7 +5,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom, fromEvent } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
-import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
@@ -15,7 +14,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule, ScrollingModule, GifPickerComponent, StickerPickerComponent],
+  imports: [DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -185,9 +184,9 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
           </div>
           }
 
-          <cdk-virtual-scroll-viewport #scrollViewportDesktop itemSize="80" class="flex-1" style="min-height:0;">
+          <div #scrollContainerDesktop class="flex-1 overflow-y-auto" style="min-height:0;">
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
-              <ng-template cdkVirtualFor [cdkVirtualForOf]="displayMessages" let-item let-i="index">
+              @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
                 } @else {
@@ -250,9 +249,9 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                     </div>
                   </div>
                 }
-              </ng-template>
+              }
             </div>
-          </cdk-virtual-scroll-viewport>
+          </div>
           <!-- Desktop chat input -->
           <div>
             @if (previews.length > 0) {
@@ -537,9 +536,9 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
             </div>
           </div>
 
-          <cdk-virtual-scroll-viewport #scrollViewportMobile itemSize="80" class="flex-1" style="min-height:0;">
+          <div #scrollContainerMobile class="flex-1 overflow-y-auto" style="min-height:0;">
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
-              <ng-template cdkVirtualFor [cdkVirtualForOf]="displayMessages" let-item let-i="index">
+              @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
                 } @else {
@@ -602,9 +601,9 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                     </div>
                   </div>
                 }
-              </ng-template>
+              }
             </div>
-          </cdk-virtual-scroll-viewport>
+          </div>
 
           <!-- Mobile chat input -->
           <div>
@@ -934,8 +933,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   uploading = signal(false);
   uploadProgress = signal(0);
 
-  @ViewChild('scrollViewportDesktop') scrollViewportDesktop?: CdkVirtualScrollViewport;
-  @ViewChild('scrollViewportMobile') scrollViewportMobile?: CdkVirtualScrollViewport;
+  @ViewChild('scrollContainerDesktop', { read: ElementRef }) scrollContainerDesktop?: ElementRef<HTMLElement>;
+  @ViewChild('scrollContainerMobile', { read: ElementRef }) scrollContainerMobile?: ElementRef<HTMLElement>;
 
   get displayMessages(): (Message | { _divider: true })[] {
     if (this.unreadDividerIdx < 0) return this.messages;
@@ -952,11 +951,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const len = this.displayMessages.length;
-        if (len > 0) {
-          this.scrollViewportDesktop?.scrollToIndex(len - 1, 'auto');
-          this.scrollViewportMobile?.scrollToIndex(len - 1, 'auto');
-        }
+        this.scrollContainerDesktop?.nativeElement.scrollTo({ top: this.scrollContainerDesktop.nativeElement.scrollHeight, behavior: 'auto' });
+        this.scrollContainerMobile?.nativeElement.scrollTo({ top: this.scrollContainerMobile.nativeElement.scrollHeight, behavior: 'auto' });
       });
     });
   }
@@ -1040,6 +1036,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             poll: data.poll || undefined,
           };
           this.messages.push(msg);
+          this.messages = [...this.messages];
           localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
           this.scrollToBottom();
         }
@@ -1066,6 +1063,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             poll: data.poll || undefined,
           };
           this.messages.push(msg);
+          this.messages = [...this.messages];
           this.scrollToBottom();
         }
         if (data.type === 'poll_update') {
@@ -1353,20 +1351,20 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (this.selectedGroup) {
-      if (this.e2eeReady && rawContent) {
-        const result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent);
-        if (result) {
-          encryptedContent = result.encrypted;
-          encryptedIV = result.iv;
-          pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
-          content = rawContent;
+      if (this.selectedGroup) {
+        if (this.e2eeReady && rawContent) {
+          const result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent);
+          if (result) {
+            encryptedContent = result.encrypted;
+            encryptedIV = result.iv;
+            pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
+            content = rawContent;
+          }
         }
-      }
 
-      // Optimistic: add message immediately
-      const tempId = Date.now();
-      const optimisticMsg: Message = {
+        // Optimistic: add message immediately
+        const tempId = Date.now();
+        const optimisticMsg: Message = {
         id: tempId,
         from_user_id: this.currentUserId,
         to_user_id: 0,
@@ -1378,6 +1376,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         pending: true,
       };
       this.messages.push(optimisticMsg);
+      this.messages = [...this.messages];
       this.messageContent = '';
       this.clearFiles();
       this.scrollToBottom();
@@ -1423,6 +1422,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         pending: true,
       };
       this.messages.push(optimisticMsg);
+      this.messages = [...this.messages];
       localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
       this.messageContent = '';
       this.clearFiles();
@@ -1611,11 +1611,20 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
     }
 
+    this.messages = [];
     this.api.getGroupMessages(group.id).subscribe(async (msgs: Message[]) => {
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
       }
-      this.messages = msgs;
+      // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
+      const existingIds = new Set(this.messages.map(m => m.id));
+      for (const msg of msgs) {
+        if (!existingIds.has(msg.id)) {
+          this.messages.push(msg);
+        }
+      }
+      this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      this.messages = [...this.messages];
       this.scrollToBottom();
     });
   }
