@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener, NgZone, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -818,13 +818,22 @@ export class ChatComponent implements OnInit, OnDestroy {
   showGifPicker = false;
   showStickerPicker = false;
   keyboardOpen = signal(false);
+  private zone = inject(NgZone);
+  private vh = signal(0);
 
   mobileChatHeight = computed(() => {
     if (this.keyboardOpen()) {
-      return 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
+      const v = this.vh();
+      return v ? `${v - 56}px` : 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
     }
     return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
   });
+
+  private onViewportResize = () => {
+    this.zone.run(() => {
+      this.vh.set(window.visualViewport?.height ?? 0);
+    });
+  };
 
   onInputFocus() {
     this.keyboardOpen.set(true);
@@ -986,6 +995,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   private e2eeReady = false;
 
   ngOnInit() {
+    this.vh.set(window.visualViewport?.height ?? 0);
+    window.visualViewport?.addEventListener('resize', this.onViewportResize);
     this.currentUserId = this.api.currentUser()?.id ?? 0;
 
     this.crypto.init().then(() => {
@@ -1172,6 +1183,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    window.visualViewport?.removeEventListener('resize', this.onViewportResize);
     for (const sub of this.subscriptions) sub.unsubscribe();
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
