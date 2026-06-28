@@ -77,7 +77,7 @@ import { ApiService } from '../../services/api.service';
         <div data-testid="dialog-sheet"
           (click)="$event.stopPropagation()"
           class="sm:hidden fixed bottom-0 left-0 right-0 rounded-t-[20px] flex flex-col"
-          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85dvh;">
+          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85dvh;padding-bottom:calc(3.5rem + env(safe-area-inset-bottom, 0px));">
 
           <div class="w-10 h-1 rounded-full mx-auto mt-3 mb-2 shrink-0" style="background:#ddd;"></div>
 
@@ -111,7 +111,7 @@ import { ApiService } from '../../services/api.service';
             }
           </div>
 
-          <div class="flex items-center gap-2 shrink-0 px-5 pt-3 pb-5" style="background:var(--bg-body);border-top:1px solid var(--divider);padding-bottom:env(safe-area-inset-bottom, 1.25rem);">
+          <div class="flex items-center gap-2 shrink-0 px-5 pt-3 pb-5" style="background:var(--bg-body);border-top:1px solid var(--divider);">
             <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm cursor-pointer"
               style="background:var(--bg-card-hover);color:var(--text-secondary);">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>

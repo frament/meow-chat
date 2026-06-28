@@ -40,7 +40,7 @@ import { PostDialogComponent } from '../post-dialog/post-dialog';
               <p class="post-time">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>
             </div>
             @if (api.currentUser()?.id === post.user_id || api.currentUser()?.is_admin) {
-              <button (click)="deletePost(post)" class="text-xs px-2 pb-2 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
+              <button (click)="deletePost(post)" class="text-xs sm:text-xs text-sm p-2 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
             }
           </div>
           <p class="post-content">{{ post.content }}</p>

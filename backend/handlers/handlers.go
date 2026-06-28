@@ -1984,7 +1984,27 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 	}
 
 	var avatarURL string
+	var postImages, msgImages []string
 	database.DB.QueryRow("SELECT avatar_url FROM users WHERE id = ?", targetID).Scan(&avatarURL)
+
+	rows, _ := database.DB.Query("SELECT image_url FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", targetID)
+	if rows != nil {
+		for rows.Next() {
+			var url string
+			rows.Scan(&url)
+			postImages = append(postImages, url)
+		}
+		rows.Close()
+	}
+	rows, _ = database.DB.Query("SELECT image_url FROM message_images WHERE message_id IN (SELECT id FROM messages WHERE from_user_id = ?)", targetID)
+	if rows != nil {
+		for rows.Next() {
+			var url string
+			rows.Scan(&url)
+			msgImages = append(msgImages, url)
+		}
+		rows.Close()
+	}
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -2002,10 +2022,13 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM friends WHERE friend_id = ?", []int64{targetID}},
 		{"DELETE FROM friend_requests WHERE from_user = ?", []int64{targetID}},
 		{"DELETE FROM friend_requests WHERE to_user = ?", []int64{targetID}},
+		{"DELETE FROM friend_invites WHERE created_by = ?", []int64{targetID}},
+		{"DELETE FROM friend_invites WHERE used_by = ?", []int64{targetID}},
 		{"DELETE FROM group_chat_members WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM group_messages WHERE from_user_id = ?", []int64{targetID}},
 		{"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
 		{"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
+		{"DELETE FROM post_reactions WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM posts WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM group_message_images WHERE group_message_id IN (SELECT id FROM group_messages WHERE from_user_id = ?)", []int64{targetID}},
 		{"DELETE FROM pinned_users WHERE user_id = ?", []int64{targetID}},
@@ -2015,10 +2038,12 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM group_key_shares WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM group_key_shares WHERE key_creator_id = ?", []int64{targetID}},
 		{"DELETE FROM push_subscriptions WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM push_copies WHERE for_user_id = ?", []int64{targetID}},
 		{"DELETE FROM user_devices WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM device_auth_requests WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM invite_tokens WHERE created_by = ?", []int64{targetID}},
 		{"DELETE FROM message_images WHERE message_id IN (SELECT id FROM messages WHERE from_user_id = ?)", []int64{targetID}},
+		{"DELETE FROM poll_votes WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM user_keys_backup WHERE user_id = ?", []int64{targetID}},
 	}
 
@@ -2036,8 +2061,8 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete user"})
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
 		return c.Status(404).JSON(fiber.Map{"error": "User not found"})
 	}
 
@@ -2045,9 +2070,15 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to commit"})
 	}
 
+	// Clean up files
 	if avatarURL != "" {
-		avatarPath := "." + avatarURL
-		os.Remove(avatarPath)
+		os.Remove("." + avatarURL)
+	}
+	for _, url := range postImages {
+		os.Remove("." + url)
+	}
+	for _, url := range msgImages {
+		os.Remove("." + url)
 	}
 
 	return c.JSON(fiber.Map{"message": "User deleted"})

@@ -342,7 +342,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
-              <button (click)="sendMessage()" title="Отправить"
+              <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
@@ -695,7 +695,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
               <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
-              <button (click)="sendMessage()" title="Отправить"
+              <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
@@ -818,13 +818,21 @@ export class ChatComponent implements OnInit, OnDestroy {
   showGifPicker = false;
   showStickerPicker = false;
   keyboardOpen = signal(false);
+  private viewportHeight = signal(window.visualViewport?.height ?? window.innerHeight);
 
   mobileChatHeight = computed(() => {
+    const vh = this.viewportHeight();
     if (this.keyboardOpen()) {
-      return 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
+      return `${vh - 56}px`; // 3.5rem top nav only (bottom nav hidden)
     }
-    return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
+    return `${vh - 112}px`;  // 7rem for top + bottom nav
   });
+
+  private onViewportResize = () => {
+    if (window.visualViewport) {
+      this.viewportHeight.set(window.visualViewport.height);
+    }
+  };
 
   onInputFocus() {
     this.keyboardOpen.set(true);
@@ -986,6 +994,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   private e2eeReady = false;
 
   ngOnInit() {
+    window.visualViewport?.addEventListener('resize', this.onViewportResize);
     this.currentUserId = this.api.currentUser()?.id ?? 0;
 
     this.crypto.init().then(() => {
@@ -1172,6 +1181,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    window.visualViewport?.removeEventListener('resize', this.onViewportResize);
     for (const sub of this.subscriptions) sub.unsubscribe();
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
@@ -1321,14 +1331,19 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
   }
 
+  private sending = false;
+
   async sendMessage() {
+    if (this.sending) return;
     if (!this.selectedUser && !this.selectedGroup) return;
     if (!this.messageContent.trim() && this.selectedFiles.length === 0) return;
+    this.sending = true;
     const type = this.messageType;
 
     if (type === 'poll') {
       const validOptions = this.pollOptions.filter(o => o.trim());
       if (validOptions.length < 2) {
+        this.sending = false;
         return;
       }
     }
@@ -1464,6 +1479,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private finalizeOptimistic(tempId: number, serverId?: number) {
+    this.sending = false;
     const idx = this.messages.findIndex(m => m.id === tempId);
     if (idx !== -1) {
       this.messages[idx].pending = false;
@@ -1475,6 +1491,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private rollbackOptimistic(tempId: number) {
+    this.sending = false;
     const idx = this.messages.findIndex(m => m.id === tempId);
     if (idx !== -1) {
       this.messages.splice(idx, 1);
