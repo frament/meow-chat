@@ -821,11 +821,11 @@ export class ChatComponent implements OnInit, OnDestroy {
   private viewportHeight = signal(window.visualViewport?.height ?? window.innerHeight);
 
   mobileChatHeight = computed(() => {
-    const vh = this.viewportHeight();
     if (this.keyboardOpen()) {
+      const vh = this.viewportHeight();
       return `${vh - 56}px`; // 3.5rem top nav only (bottom nav hidden)
     }
-    return `${vh - 112}px`;  // 7rem for top + bottom nav
+    return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
   });
 
   private onViewportResize = () => {
