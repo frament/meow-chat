@@ -638,3 +638,6 @@ img {
 body.keyboard-open .bottom-nav {
   display: none;
 }
+body.keyboard-open {
+  overflow: hidden;
+}

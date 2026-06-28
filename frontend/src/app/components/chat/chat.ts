@@ -835,14 +835,26 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
   };
 
+  private scrollY = 0;
+
   onInputFocus() {
     this.keyboardOpen.set(true);
+    this.scrollY = window.scrollY;
     document.body.classList.add('keyboard-open');
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${this.scrollY}px`;
+    document.body.style.width = '100%';
   }
 
   onInputBlur() {
     this.keyboardOpen.set(false);
     document.body.classList.remove('keyboard-open');
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    window.scrollTo(0, this.scrollY);
   }
 
   openGifPicker() {
