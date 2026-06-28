@@ -209,11 +209,11 @@
 
 ## 8. Мониторинг (Observability)
 
-- [ ] **O1**: Метрика `ws_connections_total` — количество активных соединений.
-- [ ] **O2**: Метрика `ws_messages_sent_total` по типу (message, group_message, poll_update...).
-- [ ] **O3**: Метрика `ws_write_errors_total` — количество ошибок записи.
-- [ ] **O4**: Лог при: подключении, отключении, ошибке записи, создании push-copy, превышении лимитов.
-- [ ] **O5**: `GET /health` НЕ проверяет WS — healthcheck должен быть отдельным (`GET /api/ws-health` или prometheus endpoint).
+- [x] **O1**: Метрика `ws_connections_total` — количество активных соединений.
+- [x] **O2**: Метрика `ws_messages_sent_total` по типу (message, group_message, poll_update...).
+- [x] **O3**: Метрика `ws_write_errors_total` — количество ошибок записи.
+- [x] **O4**: Лог при: подключении, отключении, ошибке записи, создании push-copy, превышении лимитов.
+- [x] **O5**: `GET /health` НЕ проверяет WS — healthcheck WS отдельный (`GET /api/ws-health`).
 
 ---
 

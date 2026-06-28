@@ -180,6 +180,8 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
+	api.Get("/ws-health", h.WSHealth)
+
 	api.Use(handlers.AuthRequired)
 
 	dev := api.Group("/devices")

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"my-chat-backend/auth"
@@ -36,6 +37,11 @@ type Handler struct {
 	onlineUsers     map[int64]bool
 	graceTimers     map[int64]*time.Timer
 	stop            chan struct{}
+
+	// O1–O3: Metrics counters (atomic for lock-free reads from health handler)
+	wsConnectionsTotal   atomic.Int64
+	wsMessagesSentTotal  atomic.Int64
+	wsWriteErrorsTotal   atomic.Int64
 }
 
 type wsClient struct {
@@ -92,6 +98,8 @@ func (h *Handler) runHub() {
 		select {
 		case client := <-h.register:
 			h.clients[client.conn] = client.uid
+			h.wsConnectionsTotal.Add(1)
+			log.Printf("WS connect: user %d connected (%d active)", client.uid, h.wsConnectionsTotal.Load())
 			// Cancel any existing grace timer (reconnect within grace period)
 			if t, ok := h.graceTimers[client.uid]; ok {
 				t.Stop()
@@ -113,6 +121,8 @@ func (h *Handler) runHub() {
 				delete(h.clients, client.conn)
 				client.conn.Close()
 			}
+			h.wsConnectionsTotal.Add(-1)
+			log.Printf("WS disconnect: user %d disconnected (%d active)", client.uid, h.wsConnectionsTotal.Load())
 			hasOthers := false
 			for _, uid := range h.clients {
 				if uid == client.uid {
@@ -148,6 +158,7 @@ func (h *Handler) runHub() {
 			}
 
 		case msg := <-h.broadcast:
+			h.wsMessagesSentTotal.Add(1)
 			delivered := false
 			for conn, uid := range h.clients {
 				if uid == msg.to || uid == msg.from {
@@ -178,6 +189,7 @@ func (h *Handler) runHub() {
 					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
+						h.wsWriteErrorsTotal.Add(1)
 						conn.Close()
 						delete(h.clients, conn)
 					} else if uid == msg.to {
@@ -207,6 +219,7 @@ func (h *Handler) runHub() {
 							"INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (?, ?, ?, ?)",
 							msg.messageID, msg.to, encrypted, expiresAt,
 						)
+						log.Printf("Push-copy created for user %d (message %d)", msg.to, msg.messageID)
 					}
 				}
 				h.sendPushNotification(msg.to,
@@ -264,6 +277,7 @@ func (h *Handler) runHub() {
 						conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 						if err := conn.WriteJSON(payload); err != nil {
 							log.Println("WebSocket group write error:", err)
+							h.wsWriteErrorsTotal.Add(1)
 							conn.Close()
 							delete(h.clients, conn)
 						} else {
@@ -297,6 +311,7 @@ func (h *Handler) runHub() {
 				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteJSON(msg); err != nil {
 					log.Println("WebSocket broadcastAll write error:", err)
+					h.wsWriteErrorsTotal.Add(1)
 					conn.Close()
 					delete(h.clients, conn)
 				}
@@ -307,6 +322,7 @@ func (h *Handler) runHub() {
 				if uid == m.userID {
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(m.data); err != nil {
+						h.wsWriteErrorsTotal.Add(1)
 						conn.Close()
 						delete(h.clients, conn)
 					}
@@ -317,6 +333,14 @@ func (h *Handler) runHub() {
 			return
 		}
 	}
+}
+
+func (h *Handler) WSHealth(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"connections":     h.wsConnectionsTotal.Load(),
+		"messages_sent":   h.wsMessagesSentTotal.Load(),
+		"write_errors":    h.wsWriteErrorsTotal.Load(),
+	})
 }
 
 func (h *Handler) SendToUser(userID int64, data fiber.Map) {
