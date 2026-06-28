@@ -606,7 +606,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
           </div>
 
           <!-- Mobile chat input -->
-          <div>
+          <div class="shrink-0">
             @if (previews.length > 0) {
             <div class="flex gap-2 px-4 py-2 overflow-x-auto" style="border-top:1px solid var(--divider);">
               @for (preview of previews; track $index) {
@@ -818,21 +818,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   showGifPicker = false;
   showStickerPicker = false;
   keyboardOpen = signal(false);
-  private viewportHeight = signal(window.visualViewport?.height ?? window.innerHeight);
 
   mobileChatHeight = computed(() => {
     if (this.keyboardOpen()) {
-      const vh = this.viewportHeight();
-      return `${vh - 56}px`; // 3.5rem top nav only (bottom nav hidden)
+      return 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
     }
     return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
   });
-
-  private onViewportResize = () => {
-    if (window.visualViewport) {
-      this.viewportHeight.set(window.visualViewport.height);
-    }
-  };
 
   onInputFocus() {
     this.keyboardOpen.set(true);
@@ -994,7 +986,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   private e2eeReady = false;
 
   ngOnInit() {
-    window.visualViewport?.addEventListener('resize', this.onViewportResize);
     this.currentUserId = this.api.currentUser()?.id ?? 0;
 
     this.crypto.init().then(() => {
@@ -1181,7 +1172,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    window.visualViewport?.removeEventListener('resize', this.onViewportResize);
     for (const sub of this.subscriptions) sub.unsubscribe();
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
