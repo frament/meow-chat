@@ -837,7 +837,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   onGifSelected(gif: GiphyResult | undefined) {
     this.showGifPicker = false;
     if (!gif) return;
-    this.messageContent = gif.preview_url;
+    this.messageContent = gif.url;
     this.messageType = 'gif';
     this.sendMessage();
   }
