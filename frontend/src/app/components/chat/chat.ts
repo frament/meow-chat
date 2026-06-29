@@ -986,7 +986,9 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.subscriptions.push(
       this.api.wsMessages$.subscribe(async (data: any) => {
         if (data.type === 'message' && this.selectedUser && (data.from === this.selectedUser.id || data.from === this.currentUserId)) {
-          // Skip if this message already exists (e.g., finalized from optimistic send in another tab)
+          // Skip own messages (already handled via optimistic send + API response)
+          if (data.from === this.currentUserId) return;
+          // Skip if this message already exists
           if (data.id && this.messages.some(m => m.id === data.id)) {
             return;
           }
@@ -1013,7 +1015,9 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.scrollToBottom();
         }
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
-          // Skip if this message already exists (e.g., finalized from optimistic send)
+          // Skip own messages (already handled via optimistic send + API response)
+          if (data.from === this.currentUserId) return;
+          // Skip if this message already exists
           if (data.id && this.messages.some(m => m.id === data.id)) {
             return;
           }
