@@ -24,19 +24,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         !req.url.includes('/refresh') &&
         !req.url.includes('/logout')
       ) {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          api.logout();
-          router.navigate(['/login']);
-          return throwError(() => error);
-        }
-
-          return api.refreshToken().pipe(
+        return api.refreshAccessToken().pipe(
           switchMap((res) => {
-            localStorage.setItem('accessToken', res.access_token);
-            localStorage.setItem('refreshToken', res.refresh_token);
-            api.accessToken.set(res.access_token);
-
             const newReq = req.clone({
               setHeaders: { Authorization: `Bearer ${res.access_token}` },
             });

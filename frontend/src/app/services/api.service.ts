@@ -1,6 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, ReplaySubject, throwError } from 'rxjs';
 
 export interface User {
   id: number;
@@ -265,6 +265,45 @@ export class ApiService {
       `${this.baseUrl}/login`,
       { username, password }
     );
+  }
+
+  private refreshInProgress = false;
+  private refreshSub: ReplaySubject<{ access_token: string; refresh_token: string }> | null = null;
+
+  refreshAccessToken(): Observable<{ access_token: string; refresh_token: string }> {
+    if (this.refreshInProgress && this.refreshSub) {
+      return this.refreshSub.asObservable();
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      return throwError(() => new Error('No refresh token'));
+    }
+
+    this.refreshInProgress = true;
+    this.refreshSub = new ReplaySubject<{ access_token: string; refresh_token: string }>(1);
+
+    this.http.post<{ access_token: string; refresh_token: string }>(
+      `${this.baseUrl}/refresh`,
+      { refresh_token: refreshToken }
+    ).subscribe({
+      next: (res) => {
+        this.accessToken.set(res.access_token);
+        localStorage.setItem('accessToken', res.access_token);
+        localStorage.setItem('refreshToken', res.refresh_token);
+        this.refreshSub!.next(res);
+        this.refreshSub!.complete();
+        this.refreshInProgress = false;
+        this.refreshSub = null;
+      },
+      error: (err) => {
+        this.refreshSub!.error(err);
+        this.refreshInProgress = false;
+        this.refreshSub = null;
+      },
+    });
+
+    return this.refreshSub.asObservable();
   }
 
   refreshToken() {
@@ -832,11 +871,8 @@ export class ApiService {
       if (!token) return;
 
       if (this.isJwtExpired(token)) {
-        this.refreshToken().subscribe({
-          next: (res) => {
-            this.accessToken.set(res.access_token);
-            localStorage.setItem('accessToken', res.access_token);
-            localStorage.setItem('refreshToken', res.refresh_token);
+        this.refreshAccessToken().subscribe({
+          next: () => {
             this.connectWebSocket();
           },
           error: () => {
