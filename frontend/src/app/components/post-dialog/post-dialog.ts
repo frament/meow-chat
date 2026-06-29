@@ -158,7 +158,7 @@ export class PostDialogComponent {
   private keyboardService = inject(KeyboardService);
   sheetPadding = computed(() => {
     if (this.keyboardService.isKeyboardOpen()) {
-      return 'env(safe-area-inset-bottom, 0px)';
+      return '0';
     }
     return 'calc(3.5rem + env(safe-area-inset-bottom, 0px))';
   });
