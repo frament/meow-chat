@@ -244,7 +244,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
-                      <p class="text-[10px] mt-1 opacity-70">
+                      <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
@@ -563,7 +563,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
-                      <p class="text-[10px] mt-1 opacity-70">
+                      <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
