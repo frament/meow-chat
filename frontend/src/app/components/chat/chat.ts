@@ -233,7 +233,6 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
-                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;opacity:0.6;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Зашифрованное сообщение</p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -243,7 +242,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
-                      <p class="text-xs mt-1 opacity-70">
+                      <p class="text-[10px] mt-1 opacity-70">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
@@ -551,7 +550,6 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                       } @else {
                         @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
-                        @if (!$any(item).content && $any(item).encrypted_content) { <p style="opacity:0.5;font-style:italic;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:2px;opacity:0.6;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Зашифрованное сообщение</p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -561,7 +559,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
-                      <p class="text-xs mt-1 opacity-70">
+                      <p class="text-[10px] mt-1 opacity-70">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
                       </p>
