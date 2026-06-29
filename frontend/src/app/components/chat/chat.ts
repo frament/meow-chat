@@ -244,6 +244,11 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
+                      @if ($any(item).pending && uploading()) {
+                      <div style="height:3px;background:var(--divider);border-radius:2px;margin-top:6px;overflow:hidden;">
+                        <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);transition:width 0.2s;"></div>
+                      </div>
+                      }
                       <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
@@ -293,11 +298,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
             </div>
             } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
-              @if (uploading()) {
-              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
-                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
-              </div>
-              }
+
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
                   [title]="currentTypeLabel"
@@ -563,6 +564,11 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         </div>
                         }
                       }
+                      @if ($any(item).pending && uploading()) {
+                      <div style="height:3px;background:var(--divider);border-radius:2px;margin-top:6px;overflow:hidden;">
+                        <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);transition:width 0.2s;"></div>
+                      </div>
+                      }
                       <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
                         @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
@@ -613,11 +619,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
             </div>
             } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
-              @if (uploading()) {
-              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--divider);border-radius:0 0 2px 2px;">
-                <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);border-radius:0 0 2px 2px;transition:width 0.2s;"></div>
-              </div>
-              }
+
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
                   [title]="currentTypeLabel"
