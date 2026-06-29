@@ -793,10 +793,12 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   openGifPicker() {
     if (!this.giphyHasKey) return;
+    this.showTypeMenu = false;
     this.showGifPicker = true;
   }
 
   openStickerPicker() {
+    this.showTypeMenu = false;
     this.showStickerPicker = true;
   }
 
