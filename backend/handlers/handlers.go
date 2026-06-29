@@ -2031,7 +2031,7 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
 		{"DELETE FROM post_reactions WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM posts WHERE user_id = ?", []int64{targetID}},
-		{"DELETE FROM group_message_images WHERE group_message_id IN (SELECT id FROM group_messages WHERE from_user_id = ?)", []int64{targetID}},
+		{"DELETE FROM group_message_images WHERE message_id IN (SELECT id FROM group_messages WHERE from_user_id = ?)", []int64{targetID}},
 		{"DELETE FROM pinned_users WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM pinned_users WHERE pinned_user_id = ?", []int64{targetID}},
 		{"DELETE FROM webauthn_credentials WHERE user_id = ?", []int64{targetID}},
