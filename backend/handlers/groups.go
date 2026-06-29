@@ -583,7 +583,7 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 		}
 		imageURL := "/uploads/messages/" + filename
 		images = append(images, imageURL)
-		tx.Exec("INSERT INTO group_message_images (group_message_id, image_url) VALUES (?, ?)", messageID, imageURL)
+		tx.Exec("INSERT INTO group_message_images (message_id, image_url) VALUES (?, ?)", messageID, imageURL)
 	}
 
 	if err := tx.Commit(); err != nil {
