@@ -815,13 +815,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     fetch(gif.url)
       .then(res => res.blob())
       .then(blob => {
-        const file = new File([blob], `giphy_${gif.id}.gif`, { type: 'image/gif' });
-        this.selectedFiles = [file];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.previews = [e.target?.result as string];
-        };
-        reader.readAsDataURL(blob);
+        this.selectedFiles = [new File([blob], `giphy_${gif.id}.gif`, { type: 'image/gif' })];
         this.messageType = 'gif';
         this.sendMessage();
       });
