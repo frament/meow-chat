@@ -1,8 +1,9 @@
-import { Component, Output, EventEmitter, signal, HostListener } from '@angular/core';
+import { Component, Output, EventEmitter, signal, HostListener, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
+import { KeyboardService } from '../../services/keyboard.service';
 
 @Component({
   selector: 'app-post-dialog',
@@ -77,7 +78,8 @@ import { ApiService } from '../../services/api.service';
         <div data-testid="dialog-sheet"
           (click)="$event.stopPropagation()"
           class="sm:hidden fixed bottom-0 left-0 right-0 rounded-t-[20px] flex flex-col"
-          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85dvh;padding-bottom:calc(3.5rem + env(safe-area-inset-bottom, 0px));">
+          style="background:var(--bg-body);animation:slideUp 0.25s ease;max-height:85dvh;"
+          [style.padding-bottom]="sheetPadding()">
 
           <div class="w-10 h-1 rounded-full mx-auto mt-3 mb-2 shrink-0" style="background:#ddd;"></div>
 
@@ -152,6 +154,14 @@ export class PostDialogComponent {
   isPublic = false;
   uploading = signal(false);
   uploadProgress = signal(0);
+
+  private keyboardService = inject(KeyboardService);
+  sheetPadding = computed(() => {
+    if (this.keyboardService.isKeyboardOpen()) {
+      return 'env(safe-area-inset-bottom, 0px)';
+    }
+    return 'calc(3.5rem + env(safe-area-inset-bottom, 0px))';
+  });
 
   constructor(private api: ApiService) {}
 
