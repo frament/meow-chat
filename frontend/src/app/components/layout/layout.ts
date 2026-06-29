@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -12,7 +12,36 @@ import { ApiService } from '../../services/api.service';
         <div class="max-w-4xl mx-auto px-4">
           <div class="flex items-center justify-between h-14">
             <div class="flex items-center gap-6">
-              <a routerLink="/feed" class="flex items-center gap-2">
+              @if (api.chatHeaderInfo(); as header) {
+                <div class="sm:hidden flex items-center gap-2">
+                  <button (click)="router.navigate(['/chat'])" class="p-1 -ml-1" style="color:var(--text-secondary);">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  @if (header.type === 'user') {
+                    <div style="position:relative;display:inline-flex;">
+                      @if (header.avatar_url) {
+                        <img [src]="header.avatar_url" class="w-7 h-7 rounded-full object-cover">
+                      } @else {
+                        <div class="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
+                          style="background:var(--avatar-bg);color:var(--avatar-text);">
+                          {{ header.name[0] }}
+                        </div>
+                      }
+                      @if (header.is_admin) {
+                        <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                        </div>
+                      }
+                    </div>
+                    <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ header.name }}</h3>
+                  } @else {
+                    <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ header.name }}</h3>
+                  }
+                </div>
+              }
+              <a routerLink="/feed" class="sm:flex items-center gap-2" [class.hidden]="api.chatHeaderInfo()">
                 <img src="favicon.png" class="w-7 h-7" style="background:transparent;">
                 <span class="font-bold text-lg" style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MeowChat</span>
               </a>
@@ -93,5 +122,6 @@ import { ApiService } from '../../services/api.service';
   `,
 })
 export class LayoutComponent {
+  readonly router = inject(Router);
   constructor(protected api: ApiService) {}
 }

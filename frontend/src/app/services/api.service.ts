@@ -198,6 +198,7 @@ export class ApiService {
   readonly unreadCounts = signal<Record<number, number>>({});
   readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
   readonly unreadBoundaries = signal<Record<number, string>>({});
+  readonly chatHeaderInfo = signal<{ type: 'user' | 'group'; id: number; name: string; avatar_url?: string; is_admin?: boolean } | null>(null);
   private readonly wsOnlineEventSubject = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
   readonly wsOnlineEvent = this.wsOnlineEventSubject.asObservable();
   private readonly wsMessagesSubject = new Subject<WsServerMessage>();

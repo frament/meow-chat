@@ -502,40 +502,6 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 
       @if (showMobileChat && (selectedUser || selectedGroup)) {
         <div class="flex flex-col fixed inset-x-0 top-14 z-30" [style.height]="mobileChatHeight()">
-          <div class="flex items-center gap-3 px-4 py-3 shrink-0"
-            style="border-bottom:1px solid var(--border-default);background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);">
-            <button (click)="router.navigate(['/chat'])" class="p-1 -ml-1" style="color:var(--text-secondary);">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div class="flex items-center gap-2">
-              @if (selectedUser) {
-              <div style="position:relative;display:inline-flex;">
-                @if (selectedUser.avatar_url) {
-                  <img [src]="selectedUser.avatar_url" class="w-7 h-7 rounded-full object-cover">
-                } @else {
-                  <div class="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
-                    style="background:var(--avatar-bg);color:var(--avatar-text);">
-                    {{ selectedUser.username[0] }}
-                  </div>
-                }
-                @if (selectedUser.is_admin) {
-                  <div style="position:absolute;bottom:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent-gradient);border:2px solid var(--bg-body);display:flex;align-items:center;justify-content:center;">
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-                  </div>
-                }
-              </div>
-              <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ selectedUser.username }}</h3>
-              } @else {
-              <div class="flex items-center gap-2">
-                <h3 class="font-medium text-sm" style="color:var(--text-primary);">{{ selectedGroup?.name }}</h3>
-                <button (click)="loadGroupInfo()" class="text-xs" style="color:var(--text-tertiary);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
-              </div>
-              }
-            </div>
-          </div>
-
           <div #scrollContainerMobile class="flex-1 overflow-y-auto" style="min-height:0;">
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
@@ -1172,6 +1138,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.api.chatHeaderInfo.set(null);
     for (const sub of this.subscriptions) sub.unsubscribe();
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
@@ -1194,6 +1161,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectUser(user: User) {
     this.selectedUser = user;
     this.selectedGroup = null;
+    this.api.chatHeaderInfo.set({ type: 'user', id: user.id, name: user.username, avatar_url: user.avatar_url, is_admin: user.is_admin });
 
     const boundary = this.api.unreadBoundaries()[user.id] ?? null;
     this.api.clearUnread(user.id);
@@ -1608,6 +1576,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.selectedGroup = group;
     this.selectedUser = null;
     this.showMobileChat = true;
+    this.api.chatHeaderInfo.set({ type: 'group', id: group.id, name: group.name });
     this.router.navigate(['/chat', 'group', group.id]);
 
     // Ensure we have the group key and distribute to members without shares
@@ -1735,6 +1704,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: () => {
         this.showGroupInfo = false;
         this.selectedGroup = null;
+        this.api.chatHeaderInfo.set(null);
         this.messages = [];
         this.groupChats = this.groupChats.filter(g => g.id !== group.id);
         this.router.navigate(['/chat']);
