@@ -8,7 +8,7 @@ import { PostDialogComponent } from '../post-dialog/post-dialog';
   standalone: true,
   imports: [DatePipe, PostDialogComponent],
   template: `
-    <div class="px-4 py-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
+    <div class="px-4 pt-0 sm:pt-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
       <button (click)="postDialog.open()"
         class="w-full flex items-center gap-2 px-4 py-3 rounded-xl text-sm cursor-pointer transition-colors"
         style="border:2px dashed var(--border-default);color:var(--text-secondary);background:transparent;">
@@ -40,7 +40,7 @@ import { PostDialogComponent } from '../post-dialog/post-dialog';
               <p class="post-time">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>
             </div>
             @if (api.currentUser()?.id === post.user_id || api.currentUser()?.is_admin) {
-              <button (click)="deletePost(post)" class="text-xs sm:text-xs text-sm p-2 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
+              <button (click)="deletePost(post)" class="text-base p-3 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
             }
           </div>
           <p class="post-content">{{ post.content }}</p>
