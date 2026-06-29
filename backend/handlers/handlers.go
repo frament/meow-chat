@@ -2025,6 +2025,7 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM friend_invites WHERE created_by = ?", []int64{targetID}},
 		{"DELETE FROM friend_invites WHERE used_by = ?", []int64{targetID}},
 		{"DELETE FROM group_chat_members WHERE user_id = ?", []int64{targetID}},
+		{"DELETE FROM group_chats WHERE created_by = ?", []int64{targetID}},
 		{"DELETE FROM group_messages WHERE from_user_id = ?", []int64{targetID}},
 		{"DELETE FROM post_images WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
 		{"DELETE FROM post_reactions WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)", []int64{targetID}},
@@ -2053,6 +2054,7 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 			args[i] = a
 		}
 		if _, err := tx.Exec(t.query, args...); err != nil {
+			log.Printf("AdminDeleteUser: DELETE failed: query=%q args=%v err=%v", t.query, t.args, err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to clean user data"})
 		}
 	}

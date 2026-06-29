@@ -303,12 +303,13 @@ func migrate() {
 			UNIQUE(poll_option_id, user_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS group_key_shares (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
-			user_id       INTEGER NOT NULL REFERENCES users(id),
-			encrypted_key TEXT NOT NULL,
-			iv            TEXT NOT NULL,
-			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id   INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			user_id         INTEGER NOT NULL REFERENCES users(id),
+			encrypted_key   TEXT NOT NULL,
+			iv              TEXT NOT NULL,
+			key_creator_id  INTEGER DEFAULT NULL REFERENCES users(id),
+			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(group_chat_id, user_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS federation_servers (
