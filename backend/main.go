@@ -238,6 +238,7 @@ func main() {
 
 	api.Get("/messages", h.GetMessages)
 	api.Post("/messages", h.SendMessage)
+	api.Post("/messages/read", h.MarkMessagesRead)
 
 	api.Post("/group-chats", h.CreateGroupChat)
 	api.Get("/group-chats", h.GetGroupChats)

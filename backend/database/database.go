@@ -486,6 +486,11 @@ func migrate() {
 		DB.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
 	}
 
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='is_read'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0")
+	}
+
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sticker_url'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE messages ADD COLUMN sticker_url TEXT DEFAULT ''")

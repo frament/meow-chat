@@ -111,6 +111,7 @@ export interface Message {
   encrypted_content?: string;
   encrypted_iv?: string;
   pending?: boolean;
+  is_read?: boolean;
   poll?: Poll;
 }
 
@@ -371,6 +372,13 @@ export class ApiService {
   getMessages(user1: number, user2: number) {
     return this.http.get<Message[]>(
       `${this.baseUrl}/messages?user1=${user1}&user2=${user2}`
+    );
+  }
+
+  markMessagesRead(messageIds: number[], userId: number) {
+    return this.http.post(
+      `${this.baseUrl}/messages/read`,
+      { message_ids: messageIds, user_id: userId }
     );
   }
 

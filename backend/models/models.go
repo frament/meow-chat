@@ -28,6 +28,7 @@ type Message struct {
 	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
 	Poll             *Poll       `json:"poll,omitempty"`
 	StickerURL       string      `json:"sticker_url,omitempty"`
+	IsRead           bool        `json:"is_read"`
 }
 
 type GroupChat struct {

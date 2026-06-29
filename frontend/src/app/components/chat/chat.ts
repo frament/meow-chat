@@ -251,7 +251,17 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                       }
                       <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
-                        @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
+                        @if ($any(item).pending) {
+                          <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                        } @else if ($any(item).from_user_id === currentUserId) {
+                          <span style="margin-left:4px;color:var(--text-tertiary);">
+                            @if ($any(item).is_read) {
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
+                            } @else {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            }
+                          </span>
+                        }
                       </p>
                     </div>
                   </div>
@@ -571,7 +581,17 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                       }
                       <p class="text-[10px] mt-1 opacity-70" [class.text-right]="item.from_user_id === currentUserId">
                         {{ $any(item).created_at | date:'HH:mm' }}
-                        @if ($any(item).pending) { <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> }
+                        @if ($any(item).pending) {
+                          <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                        } @else if ($any(item).from_user_id === currentUserId) {
+                          <span style="margin-left:4px;color:var(--text-tertiary);">
+                            @if ($any(item).is_read) {
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
+                            } @else {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            }
+                          </span>
+                        }
                       </p>
                     </div>
                   </div>
@@ -981,6 +1001,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             to_user_id: data.to || this.currentUserId,
             content: content,
             msg_type: data.msg_type || 'text',
+            is_read: data.is_read,
             created_at: data.created_at || new Date().toISOString(),
             from_user: data.from_name || this.selectedUser.username,
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
@@ -1179,6 +1200,15 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.unreadDividerIdx = -1;
       }
       this.scrollToBottom();
+      // Mark received messages as read
+      const unreadIds = msgs.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
+      if (unreadIds.length > 0) {
+        this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
+          for (const m of this.messages) {
+            if (unreadIds.includes(m.id)) m.is_read = true;
+          }
+        });
+      }
     });
   }
 

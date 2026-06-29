@@ -199,6 +199,7 @@ func (h *Handler) runHub() {
 						"content":    msg.content,
 						"msg_type":   msg.msgType,
 						"created_at": msg.createdAt,
+						"is_read":    0,
 					}
 					if len(msg.images) > 0 {
 						payload["images"] = msg.images
@@ -855,7 +856,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
 			COALESCE(u.username, fu.username) as from_username,
 			COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
-			COALESCE(m.sticker_url, '')
+			COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0)
 		FROM messages m
 		LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
 		LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
@@ -873,7 +874,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	for rows.Next() {
 		var m models.Message
 		var serverID *int64
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -1113,6 +1114,36 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		resp["poll"] = pollData
 	}
 	return c.Status(201).JSON(resp)
+}
+
+func (h *Handler) MarkMessagesRead(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	var req struct {
+		MessageIDs []int64 `json:"message_ids"`
+		UserID     int64   `json:"user_id"`
+	}
+	if err := c.BodyParser(&req); err != nil || len(req.MessageIDs) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// Only mark messages WHERE to_user_id = current user (received messages)
+	placeholders := make([]string, len(req.MessageIDs))
+	args := make([]interface{}, 0, len(req.MessageIDs)+1)
+	args = append(args, userID)
+	for i, mid := range req.MessageIDs {
+		placeholders[i] = "?"
+		args = append(args, mid)
+	}
+
+	_, err := database.DB.Exec(
+		"UPDATE messages SET is_read = 1 WHERE to_user_id = ? AND id IN ("+strings.Join(placeholders, ",")+") AND is_read = 0",
+		args...,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to mark messages as read"})
+	}
+
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
