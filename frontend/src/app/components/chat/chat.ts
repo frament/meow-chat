@@ -249,12 +249,12 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);transition:width 0.2s;"></div>
                       </div>
                       }
-                      <p class="text-[10px] mt-1 opacity-70 whitespace-nowrap" [class.text-right]="$any(item).from_user_id === currentUserId">
-                        {{ $any(item).created_at | date:'HH:mm' }}
+                      <div class="flex items-center gap-0.5 text-[10px] mt-1 opacity-70" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                        <span>{{ $any(item).created_at | date:'HH:mm' }}</span>
                         @if ($any(item).pending) {
-                          <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                          <span style="display:inline-flex;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                         } @else if ($any(item).from_user_id === currentUserId) {
-                          <span style="margin-left:4px;">
+                          <span style="display:inline-flex;">
                             @if ($any(item).is_read) {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
                             } @else {
@@ -262,7 +262,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                             }
                           </span>
                         }
-                      </p>
+                      </div>
                     </div>
                   </div>
                 }
@@ -579,12 +579,12 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         <div style="height:100%;width:{{uploadProgress()}}%;background:var(--accent-gradient);transition:width 0.2s;"></div>
                       </div>
                       }
-                      <p class="text-[10px] mt-1 opacity-70 whitespace-nowrap" [class.text-right]="$any(item).from_user_id === currentUserId">
-                        {{ $any(item).created_at | date:'HH:mm' }}
+                       <div class="flex items-center gap-0.5 text-[10px] mt-1 opacity-70" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                        <span>{{ $any(item).created_at | date:'HH:mm' }}</span>
                         @if ($any(item).pending) {
-                          <span style="margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                          <span style="display:inline-flex;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
                         } @else if ($any(item).from_user_id === currentUserId) {
-                          <span style="margin-left:4px;">
+                          <span style="display:inline-flex;">
                             @if ($any(item).is_read) {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
                             } @else {
@@ -592,7 +592,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                             }
                           </span>
                         }
-                      </p>
+                      </div>
                     </div>
                   </div>
                 }
