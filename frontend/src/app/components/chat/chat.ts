@@ -8,6 +8,7 @@ import { filter } from 'rxjs/operators';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
+import { KeyboardService } from '../../services/keyboard.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 
@@ -339,7 +340,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
@@ -658,7 +659,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (focus)="onInputFocus()" (blur)="onInputBlur()" (paste)="onPaste($event)"
+              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (paste)="onPaste($event)"
               style="flex:1;height:36px;box-sizing:border-box;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
               <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
@@ -783,24 +784,12 @@ export class ChatComponent implements OnInit, OnDestroy {
   showTypeMenu = false;
   showGifPicker = false;
   showStickerPicker = false;
-  keyboardOpen = signal(false);
-
   mobileChatHeight = computed(() => {
-    if (this.keyboardOpen()) {
+    if (this.keyboardService.isKeyboardOpen()) {
       return 'calc(100dvh - 3.5rem)';
     }
     return 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))';
   });
-
-  onInputFocus() {
-    this.keyboardOpen.set(true);
-    document.body.classList.add('keyboard-open');
-  }
-
-  onInputBlur() {
-    this.keyboardOpen.set(false);
-    document.body.classList.remove('keyboard-open');
-  }
 
   openGifPicker() {
     if (!this.giphyHasKey) return;
@@ -931,6 +920,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     protected router: Router,
     private crypto: CryptoService,
     private sanitizer: DomSanitizer,
+    private keyboardService: KeyboardService,
   ) {
     this.msgTypes = this.buildMsgTypes();
     this.api.getGiphyKey().subscribe({
