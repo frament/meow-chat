@@ -201,6 +201,8 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         <div class="px-2 py-1">
                           <img [src]="$any(item).sticker_url" class="w-24 h-24 object-contain rounded-lg">
                         </div>
+                       } @else if (($any(item).msg_type || 'text') === 'gif') {
+                        <img [src]="$any(item).content" class="max-w-[200px] max-h-[200px] rounded-lg object-cover">
                        } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
@@ -518,6 +520,8 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                         <div class="px-2 py-1">
                           <img [src]="$any(item).sticker_url" class="w-24 h-24 object-contain rounded-lg">
                         </div>
+                       } @else if (($any(item).msg_type || 'text') === 'gif') {
+                        <img [src]="$any(item).content" class="max-w-[200px] max-h-[200px] rounded-lg object-cover">
                        } @else if (($any(item).msg_type || 'text') === 'poll') {
                         @let poll = $any(item).poll;
                         <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
@@ -811,14 +815,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   onGifSelected(gif: GiphyResult | undefined) {
     this.showGifPicker = false;
     if (!gif) return;
-
-    fetch(gif.url)
-      .then(res => res.blob())
-      .then(blob => {
-        this.selectedFiles = [new File([blob], `giphy_${gif.id}.gif`, { type: 'image/gif' })];
-        this.messageType = 'gif';
-        this.sendMessage();
-      });
+    this.messageContent = gif.url;
+    this.messageType = 'gif';
+    this.sendMessage();
   }
 
   get currentTypeIcon(): SafeHtml {
