@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { KeyboardService } from '../../services/keyboard.service';
 
 @Component({
   selector: 'app-layout',
@@ -123,5 +124,6 @@ import { ApiService } from '../../services/api.service';
 })
 export class LayoutComponent {
   readonly router = inject(Router);
+  private keyboardService = inject(KeyboardService);
   constructor(protected api: ApiService) {}
 }
