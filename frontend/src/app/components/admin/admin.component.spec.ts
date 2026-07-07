@@ -26,6 +26,8 @@ describe('AdminComponent', () => {
     downloadBackupUrl: jasmine.createSpy().and.returnValue('/api/admin/backup/backups/b.zip'),
     getGiphyKey: jasmine.createSpy().and.returnValue(of({ has_key: false, key: '' })),
     updateGiphyKey: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    getVersion: jasmine.createSpy().and.returnValue(of({ version: '1.0.0' })),
+    checkUpdate: jasmine.createSpy().and.returnValue(of({ has_update: false, latest: '', current: '' })),
   };
 
   beforeEach(async () => {
@@ -45,27 +47,28 @@ describe('AdminComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('renders all 6 tab buttons on desktop', () => {
+  it('renders all 7 tab buttons on desktop', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    const buttons = compiled.querySelectorAll('button');
+    const buttons = compiled.querySelectorAll('nav button');
     const tabTexts = Array.from(buttons)
       .map(b => b.textContent?.trim())
-      .filter(t => t === 'Управление пользователями' || t === 'Управление файлами' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Настройки');
-    expect(tabTexts.length).toBe(6);
+      .filter(t => t === 'Пользователи' || t === 'Файлы' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Стикеры' || t === 'Настройки');
+    expect(tabTexts.length).toBe(7);
     expect(component.activeTab).toBe('users');
   });
 
-  it('renders mobile select with 6 options', () => {
+  it('renders mobile select with 7 options', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const select = compiled.querySelector('select') as HTMLSelectElement;
     expect(select).toBeTruthy();
-    expect(select.options.length).toBe(6);
+    expect(select.options.length).toBe(7);
     expect(select.options[0].value).toBe('users');
     expect(select.options[1].value).toBe('files');
     expect(select.options[2].value).toBe('chats');
     expect(select.options[3].value).toBe('backups');
     expect(select.options[4].value).toBe('federation');
-    expect(select.options[5].value).toBe('settings');
+    expect(select.options[5].value).toBe('stickers');
+    expect(select.options[6].value).toBe('settings');
   });
 
   it('changes activeTab via mobile select', () => {

@@ -14,7 +14,10 @@ export class MdPipe implements PipeTransform {
 
   transform(text: string): SafeHtml {
     if (!text) return '';
-    const html = marked.parse(text, { async: false }) as string;
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;');
+    const html = marked.parse(escaped, { async: false }) as string;
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 }

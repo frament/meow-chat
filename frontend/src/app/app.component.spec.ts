@@ -50,6 +50,9 @@ describe('App', () => {
 
     mockTheme = {} as jasmine.SpyObj<ThemeService>;
 
+    (mockApi.checkUpdate as jasmine.Spy).and.returnValue(of({ update_available: false }));
+    (mockApi.checkHealth as jasmine.Spy).and.returnValue(of({ status: 'ok' }));
+
     mockCrypto = jasmine.createSpyObj('CryptoService', [
       'init', 'syncPublicKey', 'hasIdentityKey',
       'ensureDeviceKeyPair', 'getDevicePublicKeySPKI',

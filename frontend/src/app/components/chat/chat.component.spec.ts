@@ -15,6 +15,7 @@ describe('ChatComponent', () => {
 
   const mockApi = {
     currentUser: signal({ id: 1, username: 'test', avatar_url: '' }),
+    chatHeaderInfo: signal(null),
     cachedUsers: signal([]),
     cachedPins: signal([]),
     unreadCounts: signal<Record<number, number>>({}),
@@ -102,7 +103,7 @@ describe('ChatComponent', () => {
     expect(container).toBeTruthy();
     const toggleBtn = container?.querySelector('button') as HTMLButtonElement;
     expect(toggleBtn).toBeTruthy();
-    expect(toggleBtn.textContent).toContain('Текст');
+    expect(toggleBtn.textContent).toContain('Aa');
   }));
 
   it('opens popup menu on toggle button click', fakeAsync(() => {

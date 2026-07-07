@@ -11,6 +11,7 @@ describe('LayoutComponent', () => {
 
   const mockApi = {
     currentUser: signal(null),
+    chatHeaderInfo: signal(null),
     totalUnread: computed(() => 0),
   };
 
