@@ -283,6 +283,8 @@ img {
   width: 36px;
   height: 36px;
   border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
   background: var(--avatar-bg);
   color: var(--avatar-text);
   display: flex;
