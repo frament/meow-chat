@@ -26,7 +26,7 @@ describe('AdminComponent', () => {
     downloadBackupUrl: jasmine.createSpy().and.returnValue('/api/admin/backup/backups/b.zip'),
     getGiphyKey: jasmine.createSpy().and.returnValue(of({ has_key: false, key: '' })),
     updateGiphyKey: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
-    getVersion: jasmine.createSpy().and.returnValue(of({ version: '1.0.0' })),
+    getVersion: jasmine.createSpy().and.returnValue(of({ version: '1.1.0' })),
     checkUpdate: jasmine.createSpy().and.returnValue(of({ has_update: false, latest: '', current: '' })),
   };
 

@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.23-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
-  <img src="https://img.shields.io/badge/tests-253_%E2%9C%85-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-374_%E2%9C%85-brightgreen" alt="tests">
 </p>
 
 <p align="center">
@@ -104,6 +104,7 @@ cd backend && go run . admin backup   # или через API
 | Сервер A | Сервер B | Совместимость |
 |----------|----------|---------------|
 | v1.x.x | v1.y.y | ✅ Одинаковый MAJOR |
+| v1.1.x | v1.0.x | ✅ Обратная совместимость |
 | v1.x.x | v2.x.x | ❌ Разные MAJOR |
 
 При федеративном handshake проверяется MAJOR-версия. Сервера с разными MAJOR не могут соединиться.

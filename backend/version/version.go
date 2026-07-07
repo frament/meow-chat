@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const Version = "0.1.0-dev"
+const Version = "1.1.0"
 
 // GitHubRepo is the GitHub repository path for update checks.
 var (
