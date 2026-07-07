@@ -18,6 +18,9 @@ logs:
 restart-backend:
 	docker compose build backend && docker compose up -d --no-deps backend
 
+test-backend:
+	cd backend && GOMEMLIMIT=12GiB go test -count=1 -p=2 -parallel=2 ./...
+
 dev-backend:
 	cd backend && DB_PATH=./data/chat.db go run .
 

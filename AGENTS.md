@@ -58,7 +58,7 @@ cd frontend && npm run build   # production build with service-worker
 - **PWA**: Service worker registers only in production build (`!isDevMode()`). Dev mode has no SW.
 - **Tailwind v4**: Configured via `@import "tailwindcss"` in `styles.css`. No `tailwind.config.js`. Requires `frontend/.postcssrc.json` with `{ "plugins": { "@tailwindcss/postcss": {} } }` — Angular's Vite builder does NOT auto-detect `@tailwindcss/postcss` without it.
 - **No linter/formatter**: Neither backend nor frontend has lint/format config beyond Angular CLI defaults.
-- **No tests beyond defaults**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files.
+- **Tests**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files. Use `make test-backend` to run Go tests — CGO + parallel compilation kills RAM on Intel Macs (16GB), flags limit it.
 - **DB auto-migrates** on startup. Schema: `users`, `messages`, `posts`, `post_images` with foreign keys. SQLite WAL mode enabled.
 - **Frontend uses Angular standalone components** and new `@if/@for` control flow. Do NOT add `CommonModule` imports.
 - **Avatars**: Uploaded via `POST /api/upload-avatar` (multipart), stored in `./uploads/avatars/`, served via `/uploads/`. Profile update via `PUT /api/profile`. Users table has `avatar_url TEXT`. Login/GetUsers/GetFeed all return `avatar_url`.
