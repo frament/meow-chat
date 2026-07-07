@@ -273,6 +273,27 @@ img {
   color: var(--accent);
 }
 
+.admin-nav-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  transition: all 0.2s;
+  background: transparent;
+}
+.admin-nav-btn:hover {
+  background: var(--border-subtle);
+}
+.admin-nav-btn.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .post-header {
   display: flex;
   align-items: center;

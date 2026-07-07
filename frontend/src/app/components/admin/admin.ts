@@ -41,38 +41,31 @@ interface BackupEntry {
           <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Панель администратора</h1>
           <nav class="flex flex-col gap-1">
             <button (click)="activeTab = 'users'"
-              [style.background]="activeTab === 'users' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'users'">
               Пользователи
             </button>
             <button (click)="activeTab = 'files'"
-              [style.background]="activeTab === 'files' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'files'">
               Файлы
             </button>
             <button (click)="activeTab = 'chats'; loadGroupChats()"
-              [style.background]="activeTab === 'chats' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'chats'">
               Чаты
             </button>
             <button (click)="activeTab = 'backups'; loadBackups()"
-              [style.background]="activeTab === 'backups' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'backups'">
               Бэкапы
             </button>
             <button (click)="activeTab = 'federation'; loadFederation()"
-              [style.background]="activeTab === 'federation' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'federation'">
               Федерация
             </button>
             <button (click)="activeTab = 'stickers'; loadStickers()"
-              [style.background]="activeTab === 'stickers' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'stickers'">
               Стикеры
             </button>
             <button (click)="activeTab = 'settings'"
-              [style.background]="activeTab === 'settings' ? 'var(--accent-light)' : 'transparent'"
-              style="padding:10px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-primary);text-align:left;transition:all 0.2s;">
+              class="admin-nav-btn" [class.active]="activeTab === 'settings'">
               Настройки
             </button>
           </nav>
