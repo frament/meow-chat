@@ -132,7 +132,9 @@ import * as QRCode from 'qrcode';
                       <button (click)="showQR(inv.token)" title="QR-код"
                         style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">QR</button>
                       <button (click)="revokeInvite(inv.id)" title="Отозвать"
-                        style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                        style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                      </button>
                     </div>
                   </div>
                   <div style="display:flex;gap:12px;color:var(--text-tertiary);font-size:12px;">
@@ -172,7 +174,10 @@ import * as QRCode from 'qrcode';
                 <div style="display:flex;gap:4px;flex-shrink:0;">
                   <button (click)="copyFriendInvite()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">Копировать</button>
                   <button (click)="showFriendQR()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">QR</button>
-                  <button (click)="clearFriendInvite()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                  <button (click)="clearFriendInvite()" title="Удалить"
+                    style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -200,7 +205,9 @@ import * as QRCode from 'qrcode';
                     <span class="w-2 h-2 rounded-full" style="background:#34d399;"></span>
                   }
                   <button (click)="removeFriend(friend.id)" title="Удалить из друзей"
-                    style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                    style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  </button>
                 </div>
               }
             </div>
@@ -237,8 +244,10 @@ import * as QRCode from 'qrcode';
               @for (cred of bioCreds; track cred.id) {
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:6px;">
                   <span style="color:var(--text-primary);">Биометрия #{{ cred.id }}<br><span style="font-size:11px;color:var(--text-tertiary);">добавлена {{ cred.created_at }}</span></span>
-                  <button (click)="removeBiometric(cred.id)"
-                    style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">✕</button>
+                  <button (click)="removeBiometric(cred.id)" title="Удалить"
+                    style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  </button>
                 </div>
               }
               <button type="button" (click)="registerBiometric()" [disabled]="bioRegistering"
