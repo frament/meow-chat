@@ -274,9 +274,10 @@ img {
 }
 
 .admin-nav-btn {
-  padding: 10px 16px;
+  padding: 10px 16px 10px 13px;
   border-radius: 10px;
   border: none;
+  border-left: 3px solid transparent;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -292,6 +293,7 @@ img {
   background: var(--accent-light);
   color: var(--accent);
   font-weight: 600;
+  border-left-color: var(--accent);
 }
 
 .post-header {
