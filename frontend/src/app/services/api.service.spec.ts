@@ -285,4 +285,114 @@ describe('ApiService', () => {
     tick(5000);
     expect((service as any).wsRetryTimer).toBeNull();
   }));
+
+  // ── T10a: scheduleReconnect — no logout on network error ──
+
+  it('T10a: does not logout on network error during refresh in scheduleReconnect', fakeAsync(() => {
+    const expiredToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 0 })) + '.fakesig';
+    service.storeAuth({
+      access_token: expiredToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    spyOn(service, 'logout');
+
+    // Trigger WS close → scheduleReconnect → timer → refresh
+    triggerWsOnclose();
+    tick(2000);
+
+    const refreshReq = httpMock.expectOne('/api/refresh');
+    // Network error (status 0) — should NOT trigger logout
+    refreshReq.flush('Network Error', { status: 0, statusText: 'Unknown Error' });
+
+    expect(service.logout).not.toHaveBeenCalled();
+  }));
+
+  // ── T10b: scheduleReconnect — does logout on 401 ──
+
+  it('T10b: logs out on 401 during refresh in scheduleReconnect', fakeAsync(() => {
+    const expiredToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 0 })) + '.fakesig';
+    service.storeAuth({
+      access_token: expiredToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    spyOn(service, 'logout');
+
+    triggerWsOnclose();
+    tick(2000);
+
+    const refreshReq = httpMock.expectOne('/api/refresh');
+    // 401 from refresh — should trigger logout
+    refreshReq.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(service.logout).toHaveBeenCalled();
+  }));
+
+  // ── T10c: retryConnection — refresh expired token before WS connect ──
+
+  it('T10c: retryConnection refreshes expired token before connecting WS', fakeAsync(() => {
+    const expiredToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 0 })) + '.fakesig';
+    service.storeAuth({
+      access_token: expiredToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const initialWsCount = wsSpy.calls.count();
+
+    // Simulate disconnected state
+    (service as any).ws = null;
+
+    service.retryConnection();
+
+    // Should call refresh instead of connecting directly
+    const refreshReq = httpMock.expectOne('/api/refresh');
+    expect(wsSpy.calls.count()).toBe(initialWsCount);
+
+    // Flush refresh success
+    refreshReq.flush({ access_token: 'new-token', refresh_token: 'new-rt' });
+    tick();
+
+    expect(wsSpy.calls.count()).toBe(initialWsCount + 1);
+    expect(service.accessToken()).toBe('new-token');
+  }));
+
+  // ── T10d: retryConnection — skip refresh when token is valid ──
+
+  it('T10d: retryConnection skips refresh and connects directly when token is valid', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const initialWsCount = wsSpy.calls.count();
+
+    // Simulate disconnected state
+    (service as any).ws = null;
+
+    service.retryConnection();
+
+    // Should connect directly, no refresh call
+    httpMock.expectNone('/api/refresh');
+    expect(wsSpy.calls.count()).toBe(initialWsCount + 1);
+  }));
 });

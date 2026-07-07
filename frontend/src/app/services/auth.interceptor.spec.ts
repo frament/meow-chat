@@ -21,16 +21,14 @@ describe('authInterceptor', () => {
   let router: jasmine.SpyObj<Router>;
   let mockApi: {
     accessToken: ReturnType<typeof signal<string | null>>;
-    refreshToken: jasmine.Spy;
+    refreshAccessToken: jasmine.Spy;
     logout: jasmine.Spy;
   };
 
   beforeEach(() => {
     mockApi = {
       accessToken: signal('test-token'),
-      refreshToken: jasmine
-        .createSpy('refreshToken')
-        .and.returnValue(of({ access_token: 'new-token', refresh_token: 'new-refresh' })),
+      refreshAccessToken: jasmine.createSpy('refreshAccessToken'),
       logout: jasmine.createSpy('logout'),
     };
 
@@ -73,28 +71,29 @@ describe('authInterceptor', () => {
     req.flush({});
   });
 
-  it('on 401 calls refreshToken then retries', () => {
-    localStorage.setItem('refreshToken', 'old-refresh');
+  it('on 401 calls refreshAccessToken then retries', () => {
+    mockApi.refreshAccessToken.and.returnValue(
+      of({ access_token: 'new-token', refresh_token: 'new-refresh' })
+    );
 
     http.get('/api/test').subscribe();
 
     const req1 = httpMock.expectOne('/api/test');
     req1.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    expect(mockApi.refreshToken).toHaveBeenCalled();
+    expect(mockApi.refreshAccessToken).toHaveBeenCalled();
 
     const retryReq = httpMock.expectOne('/api/test');
     expect(retryReq.request.headers.get('Authorization')).toBe('Bearer new-token');
-    expect(localStorage.getItem('accessToken')).toBe('new-token');
-    expect(localStorage.getItem('refreshToken')).toBe('new-refresh');
-    expect(mockApi.accessToken()).toBe('new-token');
     retryReq.flush({});
   });
 
-  it('on 401 without refreshToken calls logout and navigates to /login', () => {
-    http.get('/api/test').subscribe({
-      error: () => {},
-    });
+  it('on 401 with failing refresh calls logout and navigates to /login', () => {
+    mockApi.refreshAccessToken.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' }))
+    );
+
+    http.get('/api/test').subscribe({ error: () => {} });
 
     const req = httpMock.expectOne('/api/test');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
@@ -111,7 +110,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/login');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    expect(mockApi.refreshToken).not.toHaveBeenCalled();
+    expect(mockApi.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockApi.logout).not.toHaveBeenCalled();
   });
 
@@ -123,7 +122,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/register');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    expect(mockApi.refreshToken).not.toHaveBeenCalled();
+    expect(mockApi.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockApi.logout).not.toHaveBeenCalled();
   });
 
@@ -135,7 +134,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/refresh');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    expect(mockApi.refreshToken).not.toHaveBeenCalled();
+    expect(mockApi.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockApi.logout).not.toHaveBeenCalled();
   });
 
@@ -147,7 +146,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/logout');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    expect(mockApi.refreshToken).not.toHaveBeenCalled();
+    expect(mockApi.refreshAccessToken).not.toHaveBeenCalled();
     expect(mockApi.logout).not.toHaveBeenCalled();
   });
 

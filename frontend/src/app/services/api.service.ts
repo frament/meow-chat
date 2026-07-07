@@ -246,6 +246,16 @@ export class ApiService {
       }
       this.wsReconnecting = false;
       this.wsConnecting = false;
+
+      const token = this.accessToken();
+      if (token && this.isJwtExpired(token)) {
+        this.refreshAccessToken().subscribe({
+          next: () => this.connectWebSocket(),
+          error: () => this.connectWebSocket(),
+        });
+        return;
+      }
+
       this.connectWebSocket();
     }
   }
@@ -883,8 +893,10 @@ export class ApiService {
           next: () => {
             this.connectWebSocket();
           },
-          error: () => {
-            this.logout();
+          error: (err) => {
+            if ((err as any)?.status === 401) {
+              this.logout();
+            }
           },
         });
       } else {

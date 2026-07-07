@@ -29,24 +29,40 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// iOS may invalidate push subscription after force-quit
+let pendingSub = null;
+
 self.addEventListener('pushsubscriptionchange', (event) => {
   event.waitUntil(
     self.registration.pushManager.subscribe({ userVisibleOnly: true })
       .then((newSubscription) => {
         return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
           .then(clients => {
-            for (const client of clients) {
-              client.postMessage({
-                type: 'push-subscription-changed',
+            if (clients.length > 0) {
+              for (const client of clients) {
+                client.postMessage({
+                  type: 'push-subscription-changed',
+                  oldEndpoint: event.oldSubscription?.endpoint,
+                  newSubscription: JSON.parse(JSON.stringify(newSubscription)),
+                });
+              }
+            } else {
+              pendingSub = {
                 oldEndpoint: event.oldSubscription?.endpoint,
                 newSubscription: JSON.parse(JSON.stringify(newSubscription)),
-              });
+              };
             }
           });
       })
-      .catch(() => {
-        // Cannot re-subscribe — nothing we can do
-      })
+      .catch(() => {})
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'flush-pending-sub' && pendingSub) {
+    event.source.postMessage({
+      type: 'push-subscription-changed',
+      ...pendingSub,
+    });
+    pendingSub = null;
+  }
 });

@@ -714,6 +714,114 @@ func TestWS_RateLimit_Exceeded(t *testing.T) {
 	}
 }
 
+// T5c: No push copy when recipient reconnects within grace period (reconnect <30s)
+func TestWS_PushCopy_ReconnectWithinGrace(t *testing.T) {
+	_, userID, baseURL := setupWSTest(t)
+	_ = userID
+
+	sender := wsDialDrain(t, baseURL, 1, false)
+	recipient := wsDialDrain(t, baseURL, 3, false)
+
+	// Drain user_online broadcast from recipient to sender
+	sender.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_, _, _ = sender.ReadMessage()
+	sender.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+	// Disconnect recipient → starts 30s grace period
+	recipient.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	// Reconnect recipient within grace period
+	recipient2 := wsDial(t, baseURL, 3, false)
+
+	// Send message while reconnected recipient is back
+	msg := map[string]interface{}{"to": 3, "content": "post-reconnect msg"}
+	wsWrite(t, sender, msg)
+
+	// Sender gets echo
+	echo := wsRead(t, sender)
+	msgID := int64(echo["id"].(float64))
+
+	// Reconnected recipient gets the message (WS delivery)
+	delivered := wsRead(t, recipient2)
+	if delivered["type"] != "message" {
+		t.Fatalf("expected 'message' for reconnected recipient, got %v", delivered["type"])
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	var copyCount int
+	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
+	if copyCount != 0 {
+		t.Errorf("expected 0 push_copies when recipient reconnected within grace, got %d", copyCount)
+	}
+}
+
+// T5d: Push copy encrypted content matches the push_preview sent by client
+func TestWS_PushCopy_EncryptedPreview(t *testing.T) {
+	_, userID, baseURL := setupWSTest(t)
+	_ = userID
+
+	conn := wsDialDrain(t, baseURL, 1, false)
+
+	msg := map[string]interface{}{
+		"to":           3,
+		"content":      "original content",
+		"push_preview": "preview for push",
+	}
+	wsWrite(t, conn, msg)
+
+	echo := wsRead(t, conn)
+	msgID := int64(echo["id"].(float64))
+
+	time.Sleep(200 * time.Millisecond)
+
+	var serverEncrypted string
+	err := database.DB.QueryRow(
+		"SELECT server_encrypted_content FROM push_copies WHERE message_id = ?", msgID,
+	).Scan(&serverEncrypted)
+	if err != nil {
+		t.Fatalf("expected push_copy row: %v", err)
+	}
+
+	decrypted, err := database.ServerDecrypt(serverEncrypted)
+	if err != nil {
+		t.Fatalf("failed to decrypt push_copy content: %v", err)
+	}
+	if string(decrypted) != "preview for push" {
+		t.Errorf("expected decrypted preview 'preview for push', got '%s'", string(decrypted))
+	}
+}
+
+// T5e: No push copy for E2EE message without push_preview (empty content, no images)
+func TestWS_PushCopy_NoPreviewNoCopy(t *testing.T) {
+	_, userID, baseURL := setupWSTest(t)
+	_ = userID
+
+	conn := wsDialDrain(t, baseURL, 1, false)
+
+	// E2EE message with empty public content and no push_preview
+	msg := map[string]interface{}{
+		"to":                3,
+		"content":           "",
+		"msg_type":          "text",
+		"encrypted_content": "base64encrypteddata",
+		"encrypted_iv":      "base64iv",
+	}
+	wsWrite(t, conn, msg)
+
+	echo := wsRead(t, conn)
+	msgID := int64(echo["id"].(float64))
+
+	time.Sleep(200 * time.Millisecond)
+
+	var copyCount int
+	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
+	if copyCount != 0 {
+		t.Errorf("expected 0 push_copies for empty-preview E2EE message, got %d", copyCount)
+	}
+}
+
 // HTTP-level 401 when accessing WS endpoint without proper upgrade
 func TestWS_HTTP401_NoToken(t *testing.T) {
 	_, _, baseURL := setupWSTest(t)

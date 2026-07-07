@@ -330,6 +330,14 @@ export class App implements OnInit, OnDestroy {
       );
 
       this.#sub.add(
+        fromEvent(document, 'visibilitychange').subscribe(() => {
+          if (document.visibilityState === 'visible' && this.#api.currentUser()) {
+            this.tryReSubscribePush();
+          }
+        })
+      );
+
+      this.#sub.add(
         interval(30 * 60 * 1000)
           .pipe(tap(() => this.#sw.checkForUpdate()))
           .subscribe()
@@ -503,6 +511,8 @@ export class App implements OnInit, OnDestroy {
 
   private async tryReSubscribePush(): Promise<void> {
     if (!this.#swPush.isEnabled) return;
+
+    navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
     try {
       const reg = await navigator.serviceWorker.ready;
