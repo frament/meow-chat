@@ -326,6 +326,44 @@ import * as QRCode from 'qrcode';
         </div>
       </div>
     </div>
+
+    @if (showCrop) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6);">
+        <div class="rounded-2xl p-6 w-full max-w-sm" style="background:var(--bg-surface);">
+          <h3 class="text-lg font-semibold mb-4 text-center" style="color:var(--text-primary);">Редактор аватара</h3>
+
+          <div class="mx-auto mb-3 select-none flex items-center justify-center"
+            style="width:288px;height:288px;border-radius:50%;overflow:hidden;background:var(--bg-body);cursor:grab;touch-action:none;"
+            (pointerdown)="onCropPointerDown($event)"
+            (pointermove)="onCropPointerMove($event)"
+            (pointerup)="onCropPointerUp()"
+            (pointerleave)="onCropPointerUp()">
+            <img [src]="cropImageSrc" draggable="false"
+              [style.width.px]="288 * cropZoom"
+              [style.height.px]="288 * cropZoom"
+              [style.marginLeft.px]="cropX"
+              [style.marginTop.px]="cropY"
+              style="object-fit:cover;max-width:none;max-height:none;flex-shrink:0;display:block;pointer-events:none;">
+          </div>
+
+          <div class="flex items-center gap-3 mb-4 px-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="range" min="1" max="3" step="0.05" [(ngModel)]="cropZoom"
+              style="flex:1;accent-color:var(--accent);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+
+          @if (cropLoading) {
+            <p class="text-sm text-center" style="color:var(--text-tertiary);">Обработка...</p>
+          } @else {
+            <div class="flex gap-3">
+              <button (click)="closeCrop()" class="btn-secondary flex-1" style="padding:10px;">Отмена</button>
+              <button (click)="confirmCrop()" class="btn-primary flex-1" style="padding:10px;">Сохранить</button>
+            </div>
+          }
+        </div>
+      </div>
+    }
   `,
 })
 export class SettingsComponent implements OnInit {
@@ -341,6 +379,14 @@ export class SettingsComponent implements OnInit {
   uploading = false;
   uploadProgress = 0;
   avatarSuccess = false;
+  showCrop = false;
+  cropImageSrc = '';
+  cropZoom = 1;
+  cropX = 0;
+  cropY = 0;
+  cropLoading = false;
+  #cropImgW = 0;
+  #cropImgH = 0;
   selectedTheme: ThemeMode = 'light';
   updateChecking = false;
   updateStatus = '';
@@ -476,9 +522,90 @@ export class SettingsComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files[0]) {
       this.selectedFile = input.files[0];
-      this.previewUrl = URL.createObjectURL(input.files[0]);
-      this.uploadAvatar();
+      const src = URL.createObjectURL(input.files[0]);
+      const img = new Image();
+      img.onload = () => {
+        this.#cropImgW = img.naturalWidth;
+        this.#cropImgH = img.naturalHeight;
+        this.cropImageSrc = src;
+        this.cropZoom = 1;
+        this.cropX = 0;
+        this.cropY = 0;
+        this.showCrop = true;
+      };
+      img.src = src;
     }
+  }
+
+  #cropDrag = false;
+  #cropStartX = 0;
+  #cropStartY = 0;
+  #cropStartPX = 0;
+  #cropStartPY = 0;
+
+  get #cropMaxPan() {
+    const c = 288;
+    return c * (this.cropZoom - 1) / 2;
+  }
+
+  onCropPointerDown(e: PointerEvent) {
+    this.#cropDrag = true;
+    this.#cropStartX = e.clientX;
+    this.#cropStartY = e.clientY;
+    this.#cropStartPX = this.cropX;
+    this.#cropStartPY = this.cropY;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  onCropPointerMove(e: PointerEvent) {
+    if (!this.#cropDrag) return;
+    const max = this.#cropMaxPan;
+    this.cropX = Math.max(-max, Math.min(max, this.#cropStartPX + (e.clientX - this.#cropStartX)));
+    this.cropY = Math.max(-max, Math.min(max, this.#cropStartPY + (e.clientY - this.#cropStartY)));
+  }
+
+  onCropPointerUp() {
+    this.#cropDrag = false;
+  }
+
+  async confirmCrop() {
+    if (!this.#cropImgW || !this.#cropImgH) return;
+    const c = 288;
+    const zoom = this.cropZoom;
+    const contentScale = zoom * Math.max(c / this.#cropImgW, c / this.#cropImgH);
+
+    const origX = this.#cropImgW / 2 - (c / 2 + this.cropX) / contentScale;
+    const origY = this.#cropImgH / 2 - (c / 2 + this.cropY) / contentScale;
+    const origW = c / contentScale;
+    const origH = c / contentScale;
+
+    const size = 256;
+    const out = document.createElement('canvas');
+    out.width = size;
+    out.height = size;
+    const ctx = out.getContext('2d')!;
+
+    const img = new Image();
+    img.src = this.cropImageSrc;
+    await img.decode();
+    ctx.drawImage(img, origX, origY, origW, origH, 0, 0, size, size);
+
+    out.toBlob((blob) => {
+      if (!blob) return;
+      const croppedFile = new File([blob], this.selectedFile?.name || 'avatar.png', { type: 'image/png' });
+      this.showCrop = false;
+      this.previewUrl = URL.createObjectURL(blob);
+      this.selectedFile = croppedFile;
+      URL.revokeObjectURL(this.cropImageSrc);
+      this.uploadAvatar();
+    }, 'image/png');
+  }
+
+  closeCrop() {
+    this.showCrop = false;
+    URL.revokeObjectURL(this.cropImageSrc);
+    this.cropImageSrc = '';
+    this.selectedFile = null;
   }
 
   uploadAvatar() {
