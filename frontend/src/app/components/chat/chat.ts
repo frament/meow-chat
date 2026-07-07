@@ -11,11 +11,12 @@ import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
+import { MdPipe } from '../../pipes/md.pipe';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent],
+  imports: [DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -234,7 +235,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                           }
                         </div>
                       } @else {
-                        @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
+                        @if ($any(item).content) { <p class="md" [innerHTML]="$any(item).content | md"></p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -242,7 +243,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                           (click)="openImage(img.image_url)">
                           }
                         </div>
-                        }
+                      }
                       }
                       @if ($any(item).pending && uploading()) {
                       <div style="height:3px;background:var(--divider);border-radius:2px;margin-top:6px;overflow:hidden;">
@@ -564,7 +565,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                           }
                         </div>
                       } @else {
-                        @if ($any(item).content) { <p>{{ $any(item).content }}</p> }
+                        @if ($any(item).content) { <p class="md" [innerHTML]="$any(item).content | md"></p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
@@ -572,7 +573,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
                           (click)="openImage(img.image_url)">
                           }
                         </div>
-                        }
+                      }
                       }
                       @if ($any(item).pending && uploading()) {
                       <div style="height:3px;background:var(--divider);border-radius:2px;margin-top:6px;overflow:hidden;">

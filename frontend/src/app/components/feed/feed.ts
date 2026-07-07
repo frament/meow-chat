@@ -2,11 +2,12 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ApiService, Post, PostImage } from '../../services/api.service';
 import { PostDialogComponent } from '../post-dialog/post-dialog';
+import { MdPipe } from '../../pipes/md.pipe';
 
 @Component({
   selector: 'app-feed',
   standalone: true,
-  imports: [DatePipe, PostDialogComponent],
+  imports: [DatePipe, PostDialogComponent, MdPipe],
   template: `
     <div class="px-4 py-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
       <button (click)="postDialog.open()"
@@ -43,7 +44,7 @@ import { PostDialogComponent } from '../post-dialog/post-dialog';
               <button (click)="deletePost(post)" class="text-base p-3 pt-0 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
             }
           </div>
-          <p class="post-content">{{ post.content }}</p>
+          <p class="post-content md" [innerHTML]="post.content | md"></p>
           @if (post.images && post.images.length > 0) {
             @let count = post.images.length;
             @let showCount = count > 4 ? 4 : count;
