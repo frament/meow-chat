@@ -1137,12 +1137,21 @@ func (h *Handler) MarkMessagesRead(c *fiber.Ctx) error {
 		args = append(args, mid)
 	}
 
-	_, err := database.DB.Exec(
+	result, err := database.DB.Exec(
 		"UPDATE messages SET is_read = 1 WHERE to_user_id = ? AND id IN ("+strings.Join(placeholders, ",")+") AND is_read = 0",
 		args...,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to mark messages as read"})
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected > 0 && req.UserID > 0 {
+		h.SendToUser(req.UserID, fiber.Map{
+			"type":        "mark_read",
+			"message_ids": req.MessageIDs,
+			"from_user":   userID,
+		})
 	}
 
 	return c.JSON(fiber.Map{"ok": true})

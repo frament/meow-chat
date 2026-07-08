@@ -257,7 +257,7 @@ import { MdPipe } from '../../pipes/md.pipe';
                         } @else if ($any(item).from_user_id === currentUserId) {
                           <span style="display:inline-flex;">
                             @if ($any(item).is_read) {
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
+                              <svg width="14" height="12" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6 12 14 4"/><polyline points="9 8 12 12 20 4"/></svg>
                             } @else {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                             }
@@ -587,7 +587,7 @@ import { MdPipe } from '../../pipes/md.pipe';
                         } @else if ($any(item).from_user_id === currentUserId) {
                           <span style="display:inline-flex;">
                             @if ($any(item).is_read) {
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-2-2-9 9-4-4-2 2 6 6z"/></svg>
+                              <svg width="14" height="12" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6 12 14 4"/><polyline points="9 8 12 12 20 4"/></svg>
                             } @else {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                             }
@@ -1069,6 +1069,11 @@ export class ChatComponent implements OnInit, OnDestroy {
           const groupId = data.group_chat_id;
           if (groupId && !this.selectedGroup) {
             this.resolvePendingGroupChat(groupId);
+          }
+        }
+        if (data.type === 'mark_read') {
+          for (const m of this.messages) {
+            if (data.message_ids.includes(m.id)) m.is_read = true;
           }
         }
       })
