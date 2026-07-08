@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ApiService } from '../../services/api.service';
 import { FormsModule } from '@angular/forms';
+import * as QRCode from 'qrcode';
 
 @Component({
   selector: 'app-admin-federation',
@@ -129,8 +130,18 @@ import { FormsModule } from '@angular/forms';
           <input type="number" [(ngModel)]="inviteMaxUses" min="0" style="width:100%;padding:10px 12px;border:1px solid var(--border-default);border-radius:8px;font-size:14px;margin-bottom:12px;">
           <button (click)="createInvite()" style="padding:8px 16px;border-radius:8px;border:none;background:#27ae60;color:white;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:12px;">Создать</button>
           @if (generatedInviteUrl) {
-            <div style="padding:12px;background:var(--bg-secondary);border-radius:8px;font-size:13px;word-break:break-all;color:var(--text-primary);margin-bottom:12px;">
-              {{ generatedInviteUrl }}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
+              <span style="color:var(--text-primary);font-weight:500;word-break:break-all;font-size:12px;flex:1;">{{ generatedInviteUrl }}</span>
+              <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
+                <button (click)="copyFederationInvite()" title="Копировать"
+                  style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button (click)="showFederationQR()" title="QR-код"
+                  style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-5v5"/><path d="M16 21v-5h5"/><rect x="10" y="10" width="4" height="4"/></svg>
+                </button>
+              </div>
             </div>
           }
           <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -154,6 +165,19 @@ import { FormsModule } from '@angular/forms';
         </div>
       </div>
     }
+
+    @if (federationQrDataUrl) {
+      <div (click)="closeFederationQR()" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+        <div (click)="$event.stopPropagation()" style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:360px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,0.3);">
+          <img [src]="federationQrDataUrl" style="width:240px;height:240px;margin:0 auto 16px;border-radius:8px;">
+          <p style="font-size:14px;color:#333;font-weight:600;word-break:break-all;margin-bottom:12px;">{{ federationQrInviteUrl }}</p>
+          <div style="display:flex;gap:8px;justify-content:center;">
+            <button (click)="copyFederationInviteFromQR()" style="padding:8px 20px;border-radius:8px;border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-size:14px;font-weight:500;">Копировать ссылку</button>
+            <button (click)="closeFederationQR()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:14px;color:#666;">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class AdminFederationComponent implements OnInit {
@@ -172,6 +196,9 @@ export class AdminFederationComponent implements OnInit {
 
   showRestore = false;
   restoreUrl = '';
+
+  federationQrDataUrl = '';
+  federationQrInviteUrl = '';
 
   constructor(private api: ApiService) {}
 
@@ -271,6 +298,24 @@ export class AdminFederationComponent implements OnInit {
         this.clearMsg();
       },
     });
+  }
+
+  copyFederationInvite() {
+    navigator.clipboard.writeText(this.generatedInviteUrl).catch(() => {});
+  }
+
+  async showFederationQR() {
+    this.federationQrInviteUrl = this.generatedInviteUrl;
+    this.federationQrDataUrl = await QRCode.toDataURL(this.federationQrInviteUrl, { width: 512, margin: 2 });
+  }
+
+  closeFederationQR() {
+    this.federationQrDataUrl = '';
+    this.federationQrInviteUrl = '';
+  }
+
+  copyFederationInviteFromQR() {
+    navigator.clipboard.writeText(this.federationQrInviteUrl).catch(() => {});
   }
 
   updateCacheLimit(s: any, event: Event) {
