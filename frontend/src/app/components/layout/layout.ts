@@ -42,7 +42,7 @@ import { KeyboardService } from '../../services/keyboard.service';
                   }
                 </div>
               }
-              <a routerLink="/feed" class="sm:flex items-center gap-2 whitespace-nowrap" [class.hidden]="api.chatHeaderInfo()">
+              <a routerLink="/feed" class="flex items-center gap-2 whitespace-nowrap" [class.hidden]="api.chatHeaderInfo()">
                 <img src="favicon.png" class="w-7 h-7" style="background:transparent;">
                 <span class="font-bold text-lg" style="background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MeowChat</span>
               </a>
