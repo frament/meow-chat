@@ -10,6 +10,11 @@ import { SwUpdate, SwPush } from '@angular/service-worker';
 import { signal, computed } from '@angular/core';
 import { Subject, of } from 'rxjs';
 
+// Minimal PushSubscriptionJSON-like object for mock
+function makeSubJSON(endpoint = 'https://example.push'): PushSubscriptionJSON {
+  return { endpoint, keys: { p256dh: 'abc', auth: 'def' } };
+}
+
 @Component({ selector: 'app-device-auth', standalone: true, template: '' })
 class MockDeviceAuth {
   showIncomingRequest = jasmine.createSpy('showIncomingRequest');
@@ -173,5 +178,97 @@ describe('App', () => {
 
     wsMessages$.next({ type: 'device_auth_request', from_device_id: 'test' });
     expect().nothing();
+  });
+
+  describe('tryReSubscribePush', () => {
+    let origSW: any;
+    let mockReg: jasmine.SpyObj<ServiceWorkerRegistration>;
+    let mockSW: any;
+
+    function makeMockSW(controller: any) {
+      return {
+        controller,
+        ready: Promise.resolve(mockReg),
+        addEventListener: jasmine.createSpy('addEventListener'),
+        removeEventListener: jasmine.createSpy('removeEventListener'),
+        postMessage: jasmine.createSpy('postMessage'),
+        getRegistration: () => Promise.resolve(mockReg),
+      };
+    }
+
+    beforeEach(() => {
+      origSW = (navigator as any).serviceWorker;
+      mockReg = jasmine.createSpyObj('ServiceWorkerRegistration', [], {
+        pushManager: jasmine.createSpyObj('PushManager', ['getSubscription', 'subscribe']),
+      });
+      (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo(null);
+      mockSW = makeMockSW(null);
+    });
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        writable: true,
+        value: origSW,
+      });
+    });
+
+    it('subscribes when SwPush.isEnabled is false (controller null) — iOS first launch', fakeAsync(async () => {
+      mockSW = makeMockSW(null);
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => mockSW,
+      });
+      (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+      (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+      tick();
+
+      expect(mockReg.pushManager.subscribe).toHaveBeenCalledWith({
+        userVisibleOnly: true,
+        applicationServerKey: 'test-vapid-key',
+      });
+      expect(mockApi.pushSubscribe).toHaveBeenCalledWith(makeSubJSON());
+    }));
+
+    it('renews existing subscription when already subscribed', fakeAsync(async () => {
+      mockSW = makeMockSW({ postMessage: jasmine.createSpy('postMessage') });
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => mockSW,
+      });
+      (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo({
+        toJSON: () => makeSubJSON('https://existing.push'),
+      });
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+      tick();
+
+      expect(mockReg.pushManager.getSubscription).toHaveBeenCalled();
+      expect(mockReg.pushManager.subscribe).not.toHaveBeenCalled();
+      expect(mockApi.pushSubscribe).toHaveBeenCalledWith(makeSubJSON('https://existing.push'));
+    }));
+
+    it('does nothing when navigator has no serviceWorker', fakeAsync(async () => {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        value: undefined,
+      });
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+
+      expect(mockApi.getVapidPublicKey).not.toHaveBeenCalled();
+    }));
   });
 });

@@ -510,7 +510,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   private async tryReSubscribePush(): Promise<void> {
-    if (!('serviceWorker' in navigator)) return;
+    if (!navigator.serviceWorker) return;
     navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
     const reg = await navigator.serviceWorker.ready.catch(() => null);
