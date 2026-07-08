@@ -1407,15 +1407,16 @@ func (h *Handler) CreateFriendInvite(c *fiber.Ctx) error {
 
 	token := generateToken()
 
-	_, err := database.DB.Exec(
-		"INSERT INTO friend_invites (created_by, token) VALUES (?, ?)",
+	var createdAt string
+	err := database.DB.QueryRow(
+		"INSERT INTO friend_invites (created_by, token) VALUES (?, ?) RETURNING created_at",
 		userID, token,
-	)
+	).Scan(&createdAt)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create friend invite"})
 	}
 
-	return c.Status(201).JSON(fiber.Map{"token": token})
+	return c.Status(201).JSON(fiber.Map{"token": token, "created_at": createdAt})
 }
 
 func (h *Handler) CheckFriendInvite(c *fiber.Ctx) error {

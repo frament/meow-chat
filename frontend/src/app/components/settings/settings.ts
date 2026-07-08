@@ -169,22 +169,23 @@ import * as QRCode from 'qrcode';
             <p class="text-sm mb-2" style="color:#e74c3c;">{{ friendInviteError }}</p>
           }
           @if (friendInviteSuccess) {
-            <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
-              <div style="display:flex;justify-content:flex-end;align-items:center;">
-                <div style="display:flex;gap:4px;">
-                  <button (click)="copyFriendInvite()" title="Копировать"
-                    style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                  </button>
-                  <button (click)="showFriendQR()" title="QR-код"
-                    style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-5v5"/><path d="M16 21v-5h5"/><rect x="10" y="10" width="4" height="4"/></svg>
-                  </button>
-                  <button (click)="clearFriendInvite()" title="Удалить"
-                    style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                  </button>
-                </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
+              <div style="display:flex;gap:12px;color:var(--text-tertiary);font-size:12px;">
+                <span>{{ friendInviteCreatedAt | date:'dd.MM.yy' }}</span>
+              </div>
+              <div style="display:flex;gap:4px;">
+                <button (click)="copyFriendInvite()" title="Копировать"
+                  style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button (click)="showFriendQR()" title="QR-код"
+                  style="padding:5px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-5v5"/><path d="M16 21v-5h5"/><rect x="10" y="10" width="4" height="4"/></svg>
+                </button>
+                <button (click)="clearFriendInvite()" title="Удалить"
+                  style="padding:4px;border-radius:6px;border:none;background:transparent;cursor:pointer;color:#e74c3c;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
               </div>
             </div>
           }
@@ -418,6 +419,7 @@ export class SettingsComponent implements OnInit {
   friendInviteSuccess = false;
   friendInviteUrl = '';
   friendInviteToken = '';
+  friendInviteCreatedAt = '';
   friendQrUrl = '';
   friendQrDataUrl = '';
 
@@ -730,6 +732,7 @@ export class SettingsComponent implements OnInit {
         this.creatingFriendInvite = false;
         this.friendInviteToken = res.token;
         this.friendInviteUrl = `${window.location.origin}/add-friend?token=${res.token}`;
+        this.friendInviteCreatedAt = res.created_at;
         this.friendInviteSuccess = true;
       },
       error: () => {

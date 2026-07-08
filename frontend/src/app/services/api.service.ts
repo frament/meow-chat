@@ -732,7 +732,7 @@ export class ApiService {
   }
 
   createFriendInvite() {
-    return this.http.post<{ token: string }>(`${this.baseUrl}/friend-invites`, {});
+    return this.http.post<{ token: string; created_at: string }>(`${this.baseUrl}/friend-invites`, {});
   }
 
   checkFriendInvite(token: string) {
