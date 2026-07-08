@@ -510,26 +510,24 @@ export class App implements OnInit, OnDestroy {
   }
 
   private async tryReSubscribePush(): Promise<void> {
-    if (!this.#swPush.isEnabled) return;
-
+    if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const existingSub = await reg.pushManager.getSubscription();
-      if (existingSub) {
-        // Already subscribed — re-register on server (INSERT OR IGNORE)
-        this.#api.pushSubscribe(existingSub.toJSON()).subscribe();
-        return;
-      }
-    } catch {
-      // Service worker not ready yet
+    const reg = await navigator.serviceWorker.ready.catch(() => null);
+    if (!reg) return;
+
+    const existingSub = await reg.pushManager.getSubscription();
+    if (existingSub) {
+      this.#api.pushSubscribe(existingSub.toJSON()).subscribe();
+      return;
     }
 
-    // No valid subscription — request a new one (may prompt on first time)
     this.#api.getVapidPublicKey().subscribe({
       next: (keys) => {
-        this.#swPush.requestSubscription({ serverPublicKey: keys.publicKey })
+        reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: keys.publicKey,
+        })
           .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe())
           .catch(() => {});
       },

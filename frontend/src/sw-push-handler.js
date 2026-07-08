@@ -1,13 +1,19 @@
 importScripts('./ngsw-worker.js');
 
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
 self.addEventListener('push', (event) => {
-  const data = event.data.json();
+  let data;
+  try { data = event.data?.json(); } catch {}
+  if (!data) return;
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon || '/favicon.png',
       data: data.data,
-      silent: true,
+      tag: data.data?.tag || 'default',
+      requireInteraction: true,
     })
   );
 });

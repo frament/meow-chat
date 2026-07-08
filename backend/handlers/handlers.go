@@ -257,6 +257,7 @@ func (h *Handler) runHub() {
 					map[string]interface{}{
 						"url":      fmt.Sprintf("/chat/%d", msg.from),
 						"senderId": msg.from,
+						"tag":      fmt.Sprintf("chat-%d", msg.from),
 					},
 				)
 			}
@@ -330,6 +331,7 @@ func (h *Handler) runHub() {
 						map[string]interface{}{
 							"url":      fmt.Sprintf("/chat/group/%d", msg.groupID),
 							"groupId":  msg.groupID,
+							"tag":      fmt.Sprintf("group-%d", msg.groupID),
 						},
 					)
 				}
