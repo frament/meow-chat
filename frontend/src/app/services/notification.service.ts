@@ -6,6 +6,7 @@ export class NotificationService {
   private permission = signal<NotificationPermission | null>(null);
   private tabHidden = signal(false);
   private audio: HTMLAudioElement | null = null;
+  private unlocked = false;
 
   constructor() {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -19,7 +20,24 @@ export class NotificationService {
     if (typeof window !== 'undefined') {
       fromEvent(window, 'blur').subscribe(() => this.tabHidden.set(true));
       fromEvent(window, 'focus').subscribe(() => this.tabHidden.set(false));
+      fromEvent(window, 'pointerdown').subscribe(() => this.unlockAudio());
     }
+  }
+
+  private unlockAudio(): void {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const src = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain).connect(ctx.destination);
+      src.start();
+      src.stop(ctx.currentTime + 0.01);
+    } catch {}
   }
 
   async requestPermission(): Promise<boolean> {

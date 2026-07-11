@@ -1075,6 +1075,9 @@ export class ChatComponent implements OnInit, OnDestroy {
           for (const m of this.messages) {
             if (data.message_ids.includes(m.id)) m.is_read = true;
           }
+          if (this.selectedUser) {
+            localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+          }
         }
       })
     );
@@ -1089,8 +1092,10 @@ export class ChatComponent implements OnInit, OnDestroy {
             const existingIds = new Set(this.messages.map(m => m.id));
             for (const msg of msgs) {
               if (!existingIds.has(msg.id)) {
-                const decrypted = await this.decryptMsg(msg, user.id);
-                this.messages.push(decrypted);
+                this.messages.push(msg);
+              } else {
+                const existing = this.messages.find(m => m.id === msg.id);
+                if (existing) existing.is_read = msg.is_read;
               }
             }
             if (msgs.length > 0) {
@@ -1194,6 +1199,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       for (const msg of msgs) {
         if (!existingIds.has(msg.id)) {
           this.messages.push(msg);
+        } else {
+          const existing = this.messages.find(m => m.id === msg.id);
+          if (existing) existing.is_read = msg.is_read;
         }
       }
       this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
