@@ -318,10 +318,12 @@ import * as QRCode from 'qrcode';
             <p class="text-sm mb-2" style="color:#e74c3c;">{{ gitHubCheckError }}</p>
           }
 
-          <button type="button" (click)="checkGitHubUpdates()" [disabled]="gitHubChecking"
-            class="btn-secondary" style="width:100%;padding:12px 20px;margin-bottom:8px;">
-            {{ gitHubChecking ? 'Проверка...' : 'Проверить новые версии на GitHub' }}
-          </button>
+          @if (api.currentUser()?.is_admin) {
+            <button type="button" (click)="checkGitHubUpdates()" [disabled]="gitHubChecking"
+              class="btn-secondary" style="width:100%;padding:12px 20px;margin-bottom:8px;">
+              {{ gitHubChecking ? 'Проверка...' : 'Проверить новые версии на GitHub' }}
+            </button>
+          }
 
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
