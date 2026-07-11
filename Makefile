@@ -84,6 +84,9 @@ admin-list:
 reset-password:
 	docker compose exec backend ./server admin reset-password $(filter-out $@,$(MAKECMDGOALS))
 
+push-test:
+	CGO_ENABLED=1 go build -o ./bin/push-test ./cmd/push-test/ && echo "built bin/push-test"
+
 # Prevent make from erroring on unknown targets passed as args
 %:
 	@:
