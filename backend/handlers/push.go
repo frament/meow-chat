@@ -136,7 +136,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 		})
 
 		resp, err := webpush.SendNotification(payload, sub, &webpush.Options{
-			Subscriber:      "admin@mychat.local",
+			Subscriber:      "admin@chat.frament.netcraze.link",
 			VAPIDPublicKey:  vapid.Public,
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
