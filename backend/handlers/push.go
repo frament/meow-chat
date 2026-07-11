@@ -156,6 +156,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			VAPIDPublicKey:  vapid.Public,
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
+			RecordSize:      1024,
 			AuthScheme:      webpush.WebPush,
 			HTTPClient:      &http.Client{Transport: &bearerTransport{inner: http.DefaultTransport}},
 		})
