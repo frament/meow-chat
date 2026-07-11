@@ -188,6 +188,7 @@ func (h *Handler) runHub() {
 			}
 
 		case uid := <-h.forceOffline:
+			log.Printf("Hub forceOffline for user %d", uid)
 			for conn, cu := range h.clients {
 				if cu == uid {
 					conn.Close()
@@ -203,6 +204,7 @@ func (h *Handler) runHub() {
 				default:
 				}
 			})
+			log.Printf("Hub forceOffline done for user %d, %d clients remaining", uid, len(h.clients))
 
 		case msg := <-h.broadcast:
 			h.wsMessagesSentTotal.Add(1)
@@ -249,6 +251,7 @@ func (h *Handler) runHub() {
 				}
 			}
 			if !delivered && msg.messageID > 0 {
+				log.Printf("Message %d: WS delivery failed for user %d, sending push", msg.messageID, msg.to)
 				preview := msg.pushPreview
 				if preview == "" {
 					preview = msg.content
@@ -395,9 +398,12 @@ func (h *Handler) WSHealth(c *fiber.Ctx) error {
 
 func (h *Handler) GoOffline(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
+	log.Printf("GoOffline called for user %d", userID)
 	select {
 	case h.forceOffline <- userID:
+		log.Printf("GoOffline sent to hub for user %d", userID)
 	default:
+		log.Printf("GoOffline forceOffline channel full for user %d", userID)
 	}
 	return c.JSON(fiber.Map{"ok": true})
 }

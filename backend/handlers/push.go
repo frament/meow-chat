@@ -97,7 +97,9 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 	}
 	defer rows.Close()
 
+	hasSubs := false
 	for rows.Next() {
+		hasSubs = true
 		var endpoint, p256dh, auth string
 		if err := rows.Scan(&endpoint, &p256dh, &auth); err != nil {
 			continue
@@ -129,9 +131,13 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			continue
 		}
 		resp.Body.Close()
+		log.Printf("Web Push sent to user %d, endpoint %s..., status %d", toUserID, endpoint[:min(len(endpoint), 50)], resp.StatusCode)
 
 		if resp.StatusCode == 410 || resp.StatusCode == 404 {
 			database.DB.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
 		}
+	}
+	if !hasSubs {
+		log.Printf("No push subscriptions found for user %d", toUserID)
 	}
 }
