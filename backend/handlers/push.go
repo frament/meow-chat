@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"my-chat-backend/database"
 	"my-chat-backend/models"
@@ -15,18 +14,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/SherClockHolmes/webpush-go"
 )
-
-type bearerTransport struct {
-	inner http.RoundTripper
-}
-
-func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	auth := req.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "WebPush ") {
-		req.Header.Set("Authorization", "Bearer "+auth[8:])
-	}
-	return t.inner.RoundTrip(req)
-}
 
 type vapidKeys struct {
 	Public  string `json:"public"`
@@ -141,7 +128,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
 			AuthScheme:      webpush.WebPush,
-			HTTPClient:      &http.Client{Transport: &bearerTransport{inner: http.DefaultTransport}},
+			HTTPClient:      &http.Client{},
 		})
 		if err != nil {
 			log.Println("Web Push send error:", err)
