@@ -318,7 +318,7 @@ import * as QRCode from 'qrcode';
             <p class="text-sm mb-2" style="color:#e74c3c;">{{ gitHubCheckError }}</p>
           }
 
-          @if (api.currentUser()?.is_admin) {
+          @if (isAdmin) {
             <button type="button" (click)="checkGitHubUpdates()" [disabled]="gitHubChecking"
               class="btn-secondary" style="width:100%;padding:12px 20px;margin-bottom:8px;">
               {{ gitHubChecking ? 'Проверка...' : 'Проверить новые версии на GitHub' }}
@@ -478,6 +478,10 @@ export class SettingsComponent implements OnInit {
 
   get currentAvatar() {
     return this.api.currentUser()?.avatar_url ?? '';
+  }
+
+  get isAdmin() {
+    return this.api.currentUser()?.is_admin ?? false;
   }
 
   ngOnInit() {
