@@ -3,7 +3,8 @@ module my-chat-backend
 go 1.23
 
 require (
-	github.com/SherClockHolmes/webpush-go v1.4.0
+	github.com/SherClockHolmes/webpush-go v1.4.1-0.20260422052225-76cc00f5ac2d
+	github.com/fasthttp/websocket v1.5.8
 	github.com/go-webauthn/webauthn v0.10.1
 	github.com/gofiber/contrib/websocket v1.3.2
 	github.com/gofiber/fiber/v2 v2.52.5
@@ -14,7 +15,6 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-webauthn/x v0.1.16 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect

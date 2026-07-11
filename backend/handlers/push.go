@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -125,13 +126,19 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			VAPIDPublicKey:  vapid.Public,
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
+			AuthScheme:      webpush.WebPush,
 		})
 		if err != nil {
 			log.Println("Web Push send error:", err)
 			continue
 		}
-		resp.Body.Close()
 		log.Printf("Web Push sent to user %d, endpoint %s..., status %d", toUserID, endpoint[:min(len(endpoint), 50)], resp.StatusCode)
+		if resp.StatusCode != 201 {
+			if bodyBytes, readErr := io.ReadAll(resp.Body); readErr == nil {
+				log.Printf("Web Push response body: %s", string(bodyBytes))
+			}
+		}
+		resp.Body.Close()
 
 		if resp.StatusCode == 410 || resp.StatusCode == 404 {
 			database.DB.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
