@@ -88,6 +88,13 @@ func (h *Handler) UnsubscribePush(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Unsubscribed"})
 }
 
+func contactEmail() string {
+	if e := os.Getenv("VAPID_CONTACT"); e != "" {
+		return e
+	}
+	return "admin@gmail.com"
+}
+
 func (h *Handler) sendPushNotification(toUserID int64, title, body string, data map[string]interface{}) {
 	rows, err := database.DB.Query(
 		"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
@@ -123,7 +130,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 		})
 
 		resp, err := webpush.SendNotification(payload, sub, &webpush.Options{
-			Subscriber:      "admin@gmail.com",
+			Subscriber:      contactEmail(),
 			VAPIDPublicKey:  vapid.Public,
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
