@@ -524,14 +524,22 @@ export class App implements OnInit, OnDestroy {
 
     this.#api.getVapidPublicKey().subscribe({
       next: (keys) => {
+        const key = this.urlBase64ToUint8Array(keys.publicKey);
         reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: keys.publicKey,
+          applicationServerKey: key,
         })
           .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe())
-          .catch(() => {});
+          .catch((err) => console.warn('Push subscribe failed:', err));
       },
     });
+  }
+
+  private urlBase64ToUint8Array(base64: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+    const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64);
+    return Uint8Array.from(raw, c => c.charCodeAt(0));
   }
 
   ngOnDestroy() {

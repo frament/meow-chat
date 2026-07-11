@@ -229,12 +229,16 @@ export class ApiService {
       } catch {}
     }
 
-    // PWA: close WebSocket on hide so server immediately detects offline and sends push notifications
+    // PWA: notify server on hide so it closes zombie WS and sends push notifications
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         if (this.currentUser()) this.resetRetryState();
       } else if (document.visibilityState === 'hidden' && this.currentUser()) {
         this.disconnectWebSocket();
+        const token = this.accessToken();
+        if (token) {
+          fetch(`${this.baseUrl}/offline`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, keepalive: true }).catch(() => {});
+        }
       }
     });
   }
@@ -671,6 +675,10 @@ export class ApiService {
 
   checkHealth() {
     return this.http.get<{ status: string }>(`${this.baseUrl}/health`);
+  }
+
+  goOffline() {
+    return this.http.post(`${this.baseUrl}/offline`, {});
   }
 
   getBackupSettings() {

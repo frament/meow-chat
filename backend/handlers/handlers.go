@@ -35,6 +35,7 @@ type Handler struct {
 	broadcastAll    chan fiber.Map
 	broadcastToUser chan userMessage
 	graceExpired    chan int64
+	forceOffline    chan int64
 	onlineUsers     map[int64]bool
 	graceTimers     map[int64]*time.Timer
 	stop            chan struct{}
@@ -88,7 +89,8 @@ func NewHandler() *Handler {
 		broadcastAll:    make(chan fiber.Map, 256),
 		broadcastToUser: make(chan userMessage, 1024),
 		graceExpired:    make(chan int64, 1024),
-		onlineUsers:     make(map[int64]bool),
+		forceOffline:     make(chan int64, 1024),
+		onlineUsers:      make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
 		stop:            make(chan struct{}),
 	}
@@ -184,6 +186,23 @@ func (h *Handler) runHub() {
 					}
 				}
 			}
+
+		case uid := <-h.forceOffline:
+			for conn, cu := range h.clients {
+				if cu == uid {
+					conn.Close()
+					delete(h.clients, conn)
+				}
+			}
+			if !h.onlineUsers[uid] {
+				h.onlineUsers[uid] = true
+			}
+			h.graceTimers[uid] = time.AfterFunc(30*time.Second, func() {
+				select {
+				case h.graceExpired <- uid:
+				default:
+				}
+			})
 
 		case msg := <-h.broadcast:
 			h.wsMessagesSentTotal.Add(1)
@@ -372,6 +391,15 @@ func (h *Handler) WSHealth(c *fiber.Ctx) error {
 		"messages_sent":   h.wsMessagesSentTotal.Load(),
 		"write_errors":    h.wsWriteErrorsTotal.Load(),
 	})
+}
+
+func (h *Handler) GoOffline(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	select {
+	case h.forceOffline <- userID:
+	default:
+	}
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 func (h *Handler) SendToUser(userID int64, data fiber.Map) {

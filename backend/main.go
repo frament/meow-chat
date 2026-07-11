@@ -181,6 +181,7 @@ func main() {
 	})
 
 	api.Get("/ws-health", h.WSHealth)
+	api.Post("/offline", h.GoOffline)
 
 	api.Use(handlers.AuthRequired)
 
