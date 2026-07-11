@@ -513,6 +513,9 @@ export class App implements OnInit, OnDestroy {
     if (!navigator.serviceWorker) return;
     navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
+    const ok = await this.#notif.requestPermission();
+    if (!ok) { console.warn('Push: permission denied'); return; }
+
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     if (!reg) return;
 
