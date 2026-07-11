@@ -2213,9 +2213,9 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	c.SetReadLimit(65536)
 
 	// Ping/pong health check
-	c.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.SetReadDeadline(time.Now().Add(15 * time.Second))
 	c.SetPongHandler(func(string) error {
-		c.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.SetReadDeadline(time.Now().Add(15 * time.Second))
 		return nil
 	})
 
@@ -2226,7 +2226,7 @@ func (h *Handler) HandleWebSocket(c *websocket.Conn) {
 	defer close(stopPing)
 
 	go func() {
-		ticker := time.NewTicker(25 * time.Second)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {

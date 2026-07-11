@@ -518,7 +518,9 @@ export class App implements OnInit, OnDestroy {
 
     const existingSub = await reg.pushManager.getSubscription();
     if (existingSub) {
-      this.#api.pushSubscribe(existingSub.toJSON()).subscribe();
+      this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
+        error: () => this.schedulePushRetry(),
+      });
       return;
     }
 
@@ -529,10 +531,26 @@ export class App implements OnInit, OnDestroy {
           userVisibleOnly: true,
           applicationServerKey: key,
         })
-          .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe())
-          .catch((err) => console.warn('Push subscribe failed:', err));
+          .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe({
+            error: () => this.schedulePushRetry(),
+          }))
+          .catch((err) => {
+            console.warn('Push subscribe failed:', err);
+            this.schedulePushRetry();
+          });
       },
+      error: () => this.schedulePushRetry(),
     });
+  }
+
+  private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private schedulePushRetry(): void {
+    if (this.pushRetryTimer) return;
+    this.pushRetryTimer = setTimeout(() => {
+      this.pushRetryTimer = null;
+      this.tryReSubscribePush();
+    }, 10000);
   }
 
   private urlBase64ToUint8Array(base64: string): Uint8Array {

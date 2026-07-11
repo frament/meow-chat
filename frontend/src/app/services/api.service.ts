@@ -230,17 +230,22 @@ export class ApiService {
     }
 
     // PWA: notify server on hide so it closes zombie WS and sends push notifications
+    const goOffline = () => {
+      if (!this.currentUser()) return;
+      this.disconnectWebSocket();
+      const token = this.accessToken();
+      if (token) {
+        fetch(`${this.baseUrl}/offline`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, keepalive: true }).catch(() => {});
+      }
+    };
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         if (this.currentUser()) this.resetRetryState();
-      } else if (document.visibilityState === 'hidden' && this.currentUser()) {
-        this.disconnectWebSocket();
-        const token = this.accessToken();
-        if (token) {
-          fetch(`${this.baseUrl}/offline`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, keepalive: true }).catch(() => {});
-        }
+      } else {
+        goOffline();
       }
     });
+    document.addEventListener('pagehide', goOffline);
   }
 
   retryConnection(): void {
