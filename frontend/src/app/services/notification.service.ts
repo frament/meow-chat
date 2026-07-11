@@ -7,6 +7,7 @@ export class NotificationService {
   private tabHidden = signal(false);
   private ctx: AudioContext | null = null;
   private buffer: AudioBuffer | null = null;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -20,19 +21,29 @@ export class NotificationService {
     if (typeof window !== 'undefined') {
       fromEvent(window, 'blur').subscribe(() => this.tabHidden.set(true));
       fromEvent(window, 'focus').subscribe(() => this.tabHidden.set(false));
-      fromEvent(window, 'pointerdown').subscribe(() => this.init());
     }
+    // Unlock audio on first user gesture (required by iOS)
+    const unlock = () => { this.init(); document.removeEventListener('pointerdown', unlock); document.removeEventListener('touchstart', unlock); };
+    document.addEventListener('pointerdown', unlock);
+    document.addEventListener('touchstart', unlock);
   }
 
   private async init(): Promise<void> {
     if (this.ctx) return;
-    try {
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return;
-      this.ctx = new AC();
-      const res = await fetch('/notification.mp3');
-      this.buffer = await this.ctx.decodeAudioData(await res.arrayBuffer());
-    } catch {}
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = (async () => {
+      try {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        const res = await fetch('/notification.mp3');
+        const ab = await res.arrayBuffer();
+        if (this.ctx) {
+          this.buffer = await this.ctx.decodeAudioData(ab);
+        }
+      } catch {}
+    })();
+    return this.initPromise;
   }
 
   async requestPermission(): Promise<boolean> {
@@ -62,9 +73,15 @@ export class NotificationService {
     }
   }
 
-  private playSound(): void {
+  private async playSound(): Promise<void> {
+    if (!this.ctx) {
+      await this.init();
+    }
     if (!this.ctx || !this.buffer) return;
     try {
+      if (this.ctx.state === 'suspended') {
+        await this.ctx.resume();
+      }
       const src = this.ctx.createBufferSource();
       src.buffer = this.buffer;
       const gain = this.ctx.createGain();
