@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,22 +25,7 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if strings.HasPrefix(auth, "WebPush ") {
 		req.Header.Set("Authorization", "Bearer "+auth[8:])
 	}
-
-	body, _ := io.ReadAll(req.Body)
-	req.Body = io.NopCloser(bytes.NewReader(body))
-	log.Printf(">> %s %s", req.Method, req.URL)
-	log.Printf(">> Authorization: %s", req.Header.Get("Authorization"))
-	log.Printf(">> Crypto-Key: %s", req.Header.Get("Crypto-Key"))
-	log.Printf(">> Content-Encoding: %s", req.Header.Get("Content-Encoding"))
-	log.Printf(">> TTL: %s", req.Header.Get("TTL"))
-	log.Printf(">> Content-Type: %s", req.Header.Get("Content-Type"))
-	log.Printf(">> body (%d bytes): %x", len(body), body[:min(len(body), 64)])
-
-	resp, err := t.inner.RoundTrip(req)
-	if resp != nil {
-		log.Printf("<< status %d", resp.StatusCode)
-	}
-	return resp, err
+	return t.inner.RoundTrip(req)
 }
 
 type vapidKeys struct {
@@ -52,7 +36,7 @@ type vapidKeys struct {
 var vapid *vapidKeys
 
 func (h *Handler) LoadVAPIDKeys() error {
-	const path = "./vapid_keys.json"
+	const path = "/data/vapid_keys.json"
 	if data, err := os.ReadFile(path); err == nil {
 		var k vapidKeys
 		if json.Unmarshal(data, &k) == nil && k.Public != "" && k.Private != "" {
@@ -156,7 +140,6 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			VAPIDPublicKey:  vapid.Public,
 			VAPIDPrivateKey: vapid.Private,
 			TTL:             86400,
-			RecordSize:      1024,
 			AuthScheme:      webpush.WebPush,
 			HTTPClient:      &http.Client{Transport: &bearerTransport{inner: http.DefaultTransport}},
 		})
