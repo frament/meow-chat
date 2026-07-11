@@ -22,6 +22,13 @@ iOS PWA push notifications returned `403 Forbidden` from Apple Push Service (APN
 ### Commit `626c1af` — VAPID keys persistence (previous session)
 - VAPID keys saved to `/data/vapid_keys.json` so they survive container restarts
 
+### Commit `5c22d96` — VAPID contact configurable
+- Added `contactEmail()` helper, reads `VAPID_CONTACT` env var, fallback `admin@gmail.com`
+- Added `VAPID_CONTACT=${VAPID_CONTACT:-admin@gmail.com}` to docker-compose.yml
+
+### Commit `f8862d0` — GitHub check admin-only
+- Wrapped "Проверить новые версии на GitHub" button in `@if (isAdmin)` in settings
+
 ### DB Cleanup
 - Deleted all rows from `push_subscriptions` table to force fresh subscriptions with current VAPID keys
 

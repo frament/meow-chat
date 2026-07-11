@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.1.1] — 2026-07-11
+
+### 🐛 Bug Fixes
+- **iOS PWA push notifications** — полностью починен `403 Forbidden` от Apple Push.
+  - VAPID keys persistence (`/data/vapid_keys.json` — не теряются при пересборке)
+  - VAPID subscriber: `admin@chat.frament.netcraze.link` → `admin@gmail.com`
+  - Удалён `bearerTransport` — теперь стандартный `WebPush` auth (Apple не принимал `Bearer` схему)
+  - Старые push subscriptions удалены из DB для принудительной переподписки
+  - Настройка email через `VAPID_CONTACT` env var (дефолт `admin@gmail.com`)
+- **Notification sound** — звук уведомления через AudioContext для iOS.
+- **Read receipts** — иконки прочтения терялись при переоткрытии чата.
+- **GitHub version check** — скрыта от обычных пользователей, только для админов.
+- **Mobile header** — логотип и текст на одной строке.
+- **Friend invites** — дата в карточке заявки, иконки вместо текстовых кнопок.
+
+### 🚀 Features
+- **Real-time read receipts** — отметки о прочтении через WS broadcast.
+- **VAPID contact** — настраивается через `VAPID_CONTACT` env var.
+
+### 🧪 Testing
+- **Makefile** — добавлен `test-backend` с CGO RAM limit для Intel Mac.
+
+### 📝 Documentation
+- Session docs: iOS push notifications fix.
+
+---
+
 ## [1.1.0] — 2026-07-07
 
 ### 🚀 Features
