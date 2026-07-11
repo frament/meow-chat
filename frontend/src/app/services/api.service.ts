@@ -229,10 +229,12 @@ export class ApiService {
       } catch {}
     }
 
-    // PWA/Standalone: when user returns to the app, reset retry state and reconnect
+    // PWA: close WebSocket on hide so server immediately detects offline and sends push notifications
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.currentUser()) {
-        this.resetRetryState();
+      if (document.visibilityState === 'visible') {
+        if (this.currentUser()) this.resetRetryState();
+      } else if (document.visibilityState === 'hidden' && this.currentUser()) {
+        this.disconnectWebSocket();
       }
     });
   }
