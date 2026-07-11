@@ -181,9 +181,10 @@ func main() {
 	})
 
 	api.Get("/ws-health", h.WSHealth)
-	api.Post("/offline", h.GoOffline)
 
 	api.Use(handlers.AuthRequired)
+
+	api.Post("/offline", h.GoOffline)
 
 	dev := api.Group("/devices")
 	dev.Post("/register", h.RegisterDevice)
