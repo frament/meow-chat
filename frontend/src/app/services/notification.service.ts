@@ -5,8 +5,8 @@ import { fromEvent } from 'rxjs';
 export class NotificationService {
   private permission = signal<NotificationPermission | null>(null);
   private tabHidden = signal(false);
-  private audio: HTMLAudioElement | null = null;
-  private unlocked = false;
+  private ctx: AudioContext | null = null;
+  private buffer: AudioBuffer | null = null;
 
   constructor() {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -20,23 +20,18 @@ export class NotificationService {
     if (typeof window !== 'undefined') {
       fromEvent(window, 'blur').subscribe(() => this.tabHidden.set(true));
       fromEvent(window, 'focus').subscribe(() => this.tabHidden.set(false));
-      fromEvent(window, 'pointerdown').subscribe(() => this.unlockAudio());
+      fromEvent(window, 'pointerdown').subscribe(() => this.init());
     }
   }
 
-  private unlockAudio(): void {
-    if (this.unlocked) return;
-    this.unlocked = true;
+  private async init(): Promise<void> {
+    if (this.ctx) return;
     try {
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       if (!AC) return;
-      const ctx = new AC();
-      const src = ctx.createOscillator();
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      src.connect(gain).connect(ctx.destination);
-      src.start();
-      src.stop(ctx.currentTime + 0.01);
+      this.ctx = new AC();
+      const res = await fetch('/notification.mp3');
+      this.buffer = await this.ctx.decodeAudioData(await res.arrayBuffer());
     } catch {}
   }
 
@@ -68,13 +63,14 @@ export class NotificationService {
   }
 
   private playSound(): void {
+    if (!this.ctx || !this.buffer) return;
     try {
-      if (!this.audio) {
-        this.audio = new Audio('/notification.mp3');
-        this.audio.volume = 0.3;
-      }
-      this.audio.currentTime = 0;
-      this.audio.play().catch(() => {});
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.buffer;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.3;
+      src.connect(gain).connect(this.ctx.destination);
+      src.start();
     } catch {}
   }
 }
