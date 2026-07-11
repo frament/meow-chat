@@ -11,6 +11,7 @@ services:
       - DB_PATH=/data/chat.db
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_ORIGIN=${WEBAUTHN_RP_ORIGIN:-http://localhost:4200}
+      - VAPID_CONTACT=${VAPID_CONTACT:-admin@gmail.com}
     volumes:
       - chat-data:/data
       - ./uploads:/app/uploads
