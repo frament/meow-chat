@@ -1,7 +1,7 @@
 import { Component, inject, signal, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
-import { interval, fromEvent, filter, tap, map, switchMap, Subscription } from 'rxjs';
+import { interval, fromEvent, merge, filter, tap, map, switchMap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
@@ -322,27 +322,24 @@ export class App implements OnInit, OnDestroy {
         .subscribe(() => this.updateAvailable.set(true));
 
       this.#sub.add(
-        fromEvent(window, 'focus').subscribe(() => {
-          this.#sw.checkForUpdate();
-          this.#clearBadge();
-          this.tryReSubscribePush();
-        })
-      );
-
-      this.#sub.add(
-        fromEvent(document, 'visibilitychange').subscribe(() => {
-          if (document.visibilityState === 'visible' && this.#api.currentUser()) {
-            this.tryReSubscribePush();
-          }
-        })
-      );
-
-      this.#sub.add(
         interval(30 * 60 * 1000)
           .pipe(tap(() => this.#sw.checkForUpdate()))
           .subscribe()
       );
     }
+
+    this.#sub.add(
+      merge(
+        fromEvent(window, 'focus'),
+        fromEvent(document, 'visibilitychange').pipe(
+          filter(() => document.visibilityState === 'visible' && !!this.#api.currentUser())
+        )
+      ).subscribe(() => {
+        this.#sw.checkForUpdate();
+        this.#clearBadge();
+        this.tryReSubscribePush();
+      })
+    );
 
     // Periodic GitHub update check (only for logged-in users, once per 6 hours)
     this.#sub.add(
@@ -517,9 +514,9 @@ export class App implements OnInit, OnDestroy {
     if (!ok) { console.warn('Push: permission denied'); return; }
 
     const reg = await navigator.serviceWorker.ready.catch(() => null);
-    if (!reg) return;
+    if (!reg) { this.schedulePushRetry(); return; }
 
-    const existingSub = await reg.pushManager.getSubscription();
+    const existingSub = await reg.pushManager?.getSubscription().catch(() => null);
     if (existingSub) {
       this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
         error: () => this.schedulePushRetry(),
