@@ -203,6 +203,7 @@ describe('App', () => {
       });
       (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo(null);
       mockSW = makeMockSW(null);
+      (mockNotif.requestPermission as jasmine.Spy).and.returnValue(Promise.resolve(true));
     });
 
     afterEach(() => {
@@ -219,7 +220,8 @@ describe('App', () => {
         configurable: true,
         get: () => mockSW,
       });
-      (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+          (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
       (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
 
       const fixture = TestBed.createComponent(App);
@@ -230,7 +232,7 @@ describe('App', () => {
 
       expect(mockReg.pushManager.subscribe).toHaveBeenCalledWith({
         userVisibleOnly: true,
-        applicationServerKey: 'test-vapid-key',
+        applicationServerKey: jasmine.any(Uint8Array),
       });
       expect(mockApi.pushSubscribe).toHaveBeenCalledWith(makeSubJSON());
     }));

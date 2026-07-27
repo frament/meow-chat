@@ -1,8 +1,8 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { DeviceAuthComponent } from './device-auth';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 describe('DeviceAuthComponent', () => {
   let component: DeviceAuthComponent;
@@ -27,6 +27,11 @@ describe('DeviceAuthComponent', () => {
   };
 
   beforeEach(async () => {
+    mockApi.createAuthRequest.calls.reset();
+    mockApi.approveAuthRequest.calls.reset();
+    mockApi.denyAuthRequest.calls.reset();
+    mockApi.recoverKeys.calls.reset();
+
     await TestBed.configureTestingModule({
       imports: [DeviceAuthComponent],
       providers: [
@@ -61,4 +66,54 @@ describe('DeviceAuthComponent', () => {
     expect(compiled.querySelector('select')).toBeTruthy();
     expect(compiled.querySelector('input[placeholder*="пароль"]')).toBeTruthy();
   });
+
+  it('calls approveAuthRequest on approve', fakeAsync(() => {
+    component.showIncomingRequest({ id: 2, device_name: 'Laptop', device_public_key: 'pk' });
+    fixture.detectChanges();
+
+    component.approveRequest();
+    tick();
+
+    expect(mockCrypto.encryptIdentityKeyForDevice).toHaveBeenCalledWith('pk');
+    expect(mockApi.approveAuthRequest).toHaveBeenCalledWith(2, 'enc', 'iv');
+  }));
+
+  it('calls denyAuthRequest on deny', fakeAsync(() => {
+    component.showIncomingRequest({ id: 3, device_name: 'Tablet', device_public_key: 'pk2' });
+    fixture.detectChanges();
+
+    component.denyRequest();
+    tick();
+
+    expect(mockApi.denyAuthRequest).toHaveBeenCalledWith(3);
+  }));
+
+  it('clears incomingRequest after approve', fakeAsync(() => {
+    component.showIncomingRequest({ id: 2, device_name: 'Laptop', device_public_key: 'pk' });
+    component.approveRequest();
+    tick();
+    expect(component.incomingRequest()).toBeNull();
+  }));
+
+  it('clears incomingRequest after deny', fakeAsync(() => {
+    component.showIncomingRequest({ id: 3, device_name: 'Tablet', device_public_key: 'pk2' });
+    component.denyRequest();
+    tick();
+    expect(component.incomingRequest()).toBeNull();
+  }));
+
+  it('calls recoverKeys on doRecover', fakeAsync(() => {
+    component.recoveryInput = 'mypassword';
+    component.doRecover();
+    tick();
+    expect(mockApi.recoverKeys).toHaveBeenCalledWith('password', 'mypassword');
+  }));
+
+  it('shows recovery error on failed recover', fakeAsync(() => {
+    mockApi.recoverKeys.and.returnValue(throwError(() => ({})));
+    component.recoveryInput = 'wrong';
+    component.doRecover();
+    tick();
+    expect(component.recoveryError).toBe('Неверный пароль или фраза восстановления');
+  }));
 });

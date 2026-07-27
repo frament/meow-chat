@@ -130,15 +130,15 @@ func TestCheckUpdate_UpToDate(t *testing.T) {
 	}
 }
 
-func TestCheckUpdate_SameVersion_Dev(t *testing.T) {
+func TestCheckUpdate_NewerVersion(t *testing.T) {
 	updateCacheMu.Lock()
 	updateCache = nil
 	updateCacheMu.Unlock()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]string{
-			"tag_name": "v0.1.0",
-			"html_url": "https://github.com/frament/my-chat/releases/tag/v0.1.0",
+			"tag_name": "v2.0.0",
+			"html_url": "https://github.com/frament/my-chat/releases/tag/v2.0.0",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -163,9 +163,8 @@ func TestCheckUpdate_SameVersion_Dev(t *testing.T) {
 	var result UpdateCheckResult
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	// 0.1.0-dev should be notified about 0.1.0 release
 	if !result.UpdateAvailable {
-		t.Error("expected update_available=true (dev should update to release)")
+		t.Error("expected update_available=true (v2.0.0 > 1.1.0)")
 	}
 }
 
