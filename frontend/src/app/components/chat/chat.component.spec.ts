@@ -31,6 +31,7 @@ describe('ChatComponent', () => {
     getMessages: jasmine.createSpy().and.returnValue(of({ messages: [], hasMore: false })),
     sendMessage: jasmine.createSpy().and.returnValue(of({ id: 1 })),
     getGroupChats: jasmine.createSpy().and.returnValue(of([])),
+    getFriends: jasmine.createSpy().and.returnValue(of([])),
     getGroupMessages: jasmine.createSpy().and.returnValue(of([])),
     sendGroupMessage: jasmine.createSpy().and.returnValue(of({ id: 1 })),
     pinUser: jasmine.createSpy().and.returnValue(of({})),

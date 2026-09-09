@@ -775,6 +775,30 @@ import { toMemoryFile } from '../../services/upload-utils';
           }
         </div>
 
+        @if (selectedGroup.created_by === currentUserId) {
+        <div class="mb-3">
+          <h4 class="text-sm font-medium mb-2" style="color:var(--text-primary);">Пригласить друзей</h4>
+          @if (groupFriendCandidates.length === 0) {
+            <p class="text-xs opacity-60">Нет друзей для добавления</p>
+          }
+          @for (f of groupFriendCandidates; track f.id) {
+          <div class="flex items-center gap-2 py-1">
+            @if (f.avatar_url) {
+              <img [src]="f.avatar_url" class="w-6 h-6 rounded-full object-cover">
+            } @else {
+              <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
+                style="background:var(--avatar-bg);color:var(--avatar-text);">{{ f.username[0] }}</div>
+            }
+            <span class="text-sm flex-1 truncate" style="color:var(--text-primary);">{{ f.username }}</span>
+            <button (click)="addFriendToGroup(f)"
+              style="padding:4px 10px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;font-size:11px;cursor:pointer;">
+              Добавить
+            </button>
+          </div>
+          }
+        </div>
+        }
+
         <div class="flex justify-between items-center">
           @if (selectedGroup && selectedGroup.created_by === currentUserId) {
           <button (click)="deleteCurrentGroup()"
@@ -896,6 +920,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   showGroupInfo = false;
   showCreateGroup = false;
   newGroupName = '';
+  groupFriendCandidates: User[] = [];
   inviteToken = '';
   inviteUrl = '';
   copied = false;
@@ -1743,6 +1768,35 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.api.getGroupChat(this.selectedGroup.id).subscribe((res) => {
       this.groupMembers = res.members;
       this.showGroupInfo = true;
+      this.loadFriendCandidates();
+    });
+  }
+
+  private loadFriendCandidates() {
+    if (!this.selectedGroup || this.selectedGroup.created_by !== this.currentUserId) {
+      this.groupFriendCandidates = [];
+      return;
+    }
+    const memberIds = new Set(this.groupMembers.map((m) => m.user_id));
+    this.api.getFriends().subscribe((friends) => {
+      this.groupFriendCandidates = friends.filter((f) => f.id !== this.currentUserId && !memberIds.has(f.id));
+    });
+  }
+
+  addFriendToGroup(friend: User) {
+    if (!this.selectedGroup) return;
+    this.api.addGroupMember(this.selectedGroup.id, friend.username).subscribe({
+      next: () => {
+        this.groupMembers = [...this.groupMembers, {
+          user_id: friend.id,
+          username: friend.username,
+          avatar_url: friend.avatar_url || '',
+        }];
+        this.groupFriendCandidates = this.groupFriendCandidates.filter((f) => f.id !== friend.id);
+      },
+      error: () => {
+        this.groupFriendCandidates = this.groupFriendCandidates.filter((f) => f.id !== friend.id);
+      },
     });
   }
 
