@@ -21,6 +21,9 @@ vapid_keys.json
 # LeanKG
 .leankg/
 
+# Private production ops runbook (contains server credentials) — never commit
+.opencode/skills/prod-ops/
+
 # Brainstorm session files
 .superpowers/
 mockups/

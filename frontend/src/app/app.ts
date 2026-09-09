@@ -3,6 +3,7 @@ import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { interval, fromEvent, merge, filter, tap, map, switchMap, Subscription } from 'rxjs';
 import { ApiService } from './services/api.service';
+import { PwaInstallService } from './services/pwa-install.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
@@ -35,7 +36,7 @@ import { DeviceAuthComponent } from './components/device-auth/device-auth';
         </div>
       </div>
     }
-    @if (canInstall()) {
+    @if (pwa.canInstall()) {
       <div class="install-banner">
         <span>Установите MeowChat на устройство</span>
         <button (click)="installApp()">Установить</button>
@@ -272,9 +273,9 @@ export class App implements OnInit, OnDestroy {
   readonly #router = inject(Router);
   readonly #theme = inject(ThemeService);
   readonly #crypto = inject(CryptoService);
+  readonly #pwa = inject(PwaInstallService);
   readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
-  readonly canInstall = signal(false);
   readonly #sub = new Subscription();
   readonly maintenanceMode = signal(false);
   readonly pullDistance = signal(0);
@@ -286,7 +287,6 @@ export class App implements OnInit, OnDestroy {
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
   #badgeCount = 0;
   #deviceAuthInitDone = false;
-  #installPrompt: any = null;
   #pullStartY = 0;
   #pulling = false;
   #offlineDismissed = false;
@@ -294,22 +294,7 @@ export class App implements OnInit, OnDestroy {
   @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
-    // PWA install prompt
-    const wasDismissed = localStorage.getItem('installDismissed') === 'true';
-    window.addEventListener('beforeinstallprompt', (e: Event) => {
-      e.preventDefault();
-      this.#installPrompt = e;
-      if (!wasDismissed) {
-        this.canInstall.set(true);
-      }
-    });
-    window.addEventListener('appinstalled', () => {
-      this.canInstall.set(false);
-      this.#installPrompt = null;
-      localStorage.removeItem('installDismissed');
-    });
-
-    // Listen for push subscription change from service worker
+    // Push subscription change from service worker
     navigator.serviceWorker?.addEventListener('message', (event) => {
       if (event.data?.type === 'push-subscription-changed') {
         this.tryReSubscribePush();
@@ -566,22 +551,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   installApp() {
-    if (this.#installPrompt) {
-      this.#installPrompt.prompt();
-      this.#installPrompt.userChoice.then((result: any) => {
-        if (result.outcome === 'accepted') {
-          this.canInstall.set(false);
-          localStorage.removeItem('installDismissed');
-        }
-        this.#installPrompt = null;
-      });
-    }
+    this.#pwa.install();
   }
 
   dismissInstall() {
-    this.canInstall.set(false);
-    this.#installPrompt = null;
-    localStorage.setItem('installDismissed', 'true');
+    this.#pwa.dismiss();
   }
 
   openChat(userId: number) {
@@ -628,6 +602,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   get api() { return this.#api; }
+  get pwa() { return this.#pwa; }
   get offlineDismissed() { return this.#offlineDismissed; }
 
   dismissOffline() {

@@ -5,6 +5,7 @@ import { ApiService } from './services/api.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
+import { PwaInstallService } from './services/pwa-install.service';
 import { Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { signal, computed } from '@angular/core';
@@ -87,6 +88,7 @@ describe('App', () => {
         { provide: CryptoService, useValue: mockCrypto },
         { provide: SwUpdate, useValue: mockSwUpdate },
         { provide: SwPush, useValue: mockSwPush },
+        { provide: PwaInstallService },
         { provide: Router, useValue: { events: routerEvents, url: '/feed', navigate: jasmine.createSpy() } },
       ],
     }).compileComponents();
@@ -149,26 +151,29 @@ describe('App', () => {
 
   it('shows install banner on beforeinstallprompt event', () => {
     localStorage.removeItem('installDismissed');
+    const pwa = TestBed.inject(PwaInstallService);
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
-    expect(app.canInstall()).toBeFalse();
+    expect(pwa.canInstall()).toBeFalse();
 
     window.dispatchEvent(new Event('beforeinstallprompt'));
-    expect(app.canInstall()).toBeTrue();
+    expect(pwa.canInstall()).toBeTrue();
+    expect(app.pwa.canInstall()).toBeTrue();
   });
 
   it('dismissInstall hides banner and sets localStorage flag', () => {
     localStorage.removeItem('installDismissed');
+    const pwa = TestBed.inject(PwaInstallService);
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
 
     window.dispatchEvent(new Event('beforeinstallprompt'));
-    expect(app.canInstall()).toBeTrue();
+    expect(pwa.canInstall()).toBeTrue();
 
     app.dismissInstall();
-    expect(app.canInstall()).toBeFalse();
+    expect(pwa.canInstall()).toBeFalse();
     expect(localStorage.getItem('installDismissed')).toBe('true');
   });
 

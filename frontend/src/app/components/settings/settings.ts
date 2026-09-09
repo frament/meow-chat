@@ -8,6 +8,7 @@ import { ApiService, InviteToken, User } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { CryptoService } from '../../services/crypto.service';
 import { toMemoryFile } from '../../services/upload-utils';
+import { PwaInstallService } from '../../services/pwa-install.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -333,6 +334,14 @@ import * as QRCode from 'qrcode';
           @if (updateStatus) {
             <p class="mt-2 text-sm text-center" [style.color]="updateStatusColor">{{ updateStatus }}</p>
           }
+
+          <button type="button" (click)="installPwa()"
+            class="btn-secondary" style="width:100%;padding:12px 20px;margin-top:8px;">
+            Установить приложение (PWA)
+          </button>
+          @if (installStatus) {
+            <p class="mt-2 text-sm text-center" style="color:var(--text-secondary);">{{ installStatus }}</p>
+          }
         </div>
       </div>
     </div>
@@ -401,6 +410,7 @@ export class SettingsComponent implements OnInit {
   updateChecking = false;
   updateStatus = '';
   updateStatusColor = '';
+  installStatus = '';
   currentVersion = '—';
   latestVersion = '';
   downloadUrl = '';
@@ -439,6 +449,7 @@ export class SettingsComponent implements OnInit {
     private router: Router,
     private theme: ThemeService,
     private crypto: CryptoService,
+    private pwa: PwaInstallService,
   ) {
     this.selectedTheme = this.theme.currentMode;
   }
@@ -471,6 +482,22 @@ export class SettingsComponent implements OnInit {
 
   get webauthnSupported() {
     return typeof PublicKeyCredential !== 'undefined';
+  }
+
+  async installPwa() {
+    this.installStatus = '';
+    if (this.pwa.isStandalone) {
+      this.installStatus = 'Приложение уже установлено. Для переустановки удалите его и добавьте заново.';
+      return;
+    }
+    if (this.pwa.canPrompt) {
+      const ok = await this.pwa.install();
+      this.installStatus = ok ? 'Приложение установлено' : 'Установка отменена';
+      return;
+    }
+    this.installStatus = this.pwa.isIos
+      ? 'Откройте в Safari → «Поделиться» → «На экран „Домой"»'
+      : 'Откройте меню браузера → «Установить приложение» или «Добавить на главный экран».';
   }
 
   get currentUsername() {
