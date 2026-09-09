@@ -372,12 +372,14 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), COALESCE(m.sticker_url, '')
-		FROM group_messages m
-		JOIN users u ON m.from_user_id = u.id
-		WHERE m.group_chat_id = ?
-		ORDER BY m.created_at ASC
-		LIMIT 100
+		SELECT * FROM (
+			SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), COALESCE(m.sticker_url, '')
+			FROM group_messages m
+			JOIN users u ON m.from_user_id = u.id
+			WHERE m.group_chat_id = ?
+			ORDER BY m.id DESC
+			LIMIT 100
+		) ORDER BY id ASC
 	`, groupID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch messages"})
@@ -618,6 +620,9 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 	}
 
 	resp := fiber.Map{"id": messageID, "message": "Message sent"}
+	if len(images) > 0 {
+		resp["images"] = images
+	}
 	if pollData != nil {
 		resp["poll"] = pollData
 	}

@@ -889,17 +889,19 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	}
 
 	rows, err := database.DB.Query(`
-		SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
-			COALESCE(u.username, fu.username) as from_username,
-			COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
-			COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0)
-		FROM messages m
-		LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
-		LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
-		WHERE (m.from_user_id = ? AND m.to_user_id = ?)
-		   OR (m.from_user_id = ? AND m.to_user_id = ?)
-		ORDER BY m.created_at ASC
-		LIMIT 100
+		SELECT * FROM (
+			SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
+				COALESCE(u.username, fu.username) as from_username,
+				COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
+				COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0)
+			FROM messages m
+			LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
+			LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
+			WHERE (m.from_user_id = ? AND m.to_user_id = ?)
+			   OR (m.from_user_id = ? AND m.to_user_id = ?)
+			ORDER BY m.id DESC
+			LIMIT 100
+		) ORDER BY id ASC
 	`, userID1, userID2, userID2, userID1)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch messages"})
@@ -1146,6 +1148,9 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	resp := fiber.Map{"id": messageID, "message": "Message sent"}
+	if len(images) > 0 {
+		resp["images"] = images
+	}
 	if pollData != nil {
 		resp["poll"] = pollData
 	}

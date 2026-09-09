@@ -4,6 +4,7 @@ import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 import { KeyboardService } from '../../services/keyboard.service';
+import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
   selector: 'app-post-dialog',
@@ -197,14 +198,14 @@ export class PostDialogComponent {
     }
   }
 
-  onFilesSelected(event: Event) {
+  async onFilesSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files) {
       for (let i = 0; i < input.files.length; i++) {
-        const file = input.files[i];
         if (this.selectedFiles.length >= 10) break;
-        this.selectedFiles.push(file);
-        this.previews.push(URL.createObjectURL(file));
+        const mem = await toMemoryFile(input.files[i]);
+        this.selectedFiles.push(mem);
+        this.previews.push(URL.createObjectURL(mem));
       }
       input.value = '';
     }

@@ -7,6 +7,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { ApiService, InviteToken, User } from '../../services/api.service';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { CryptoService } from '../../services/crypto.service';
+import { toMemoryFile } from '../../services/upload-utils';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -532,11 +533,11 @@ export class SettingsComponent implements OnInit {
     this.e2eeStatus = pubKey ? 'Активно' : 'Не активировано';
   }
 
-  onFileSelected(event: Event) {
+  async onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files[0]) {
-      this.selectedFile = input.files[0];
-      const src = URL.createObjectURL(input.files[0]);
+      this.selectedFile = await toMemoryFile(input.files[0]);
+      const src = URL.createObjectURL(this.selectedFile);
       const img = new Image();
       img.onload = () => {
         this.#cropImgW = img.naturalWidth;

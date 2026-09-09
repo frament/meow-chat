@@ -12,6 +12,7 @@ import { KeyboardService } from '../../services/keyboard.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { MdPipe } from '../../pipes/md.pipe';
+import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
   selector: 'app-chat',
@@ -1012,7 +1013,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           };
           this.messages.push(msg);
           this.messages = [...this.messages];
-          localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+          this.persistCache(this.selectedUser.id);
           this.scrollToBottom();
         }
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
@@ -1076,7 +1077,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             if (data.message_ids.includes(m.id)) m.is_read = true;
           }
           if (this.selectedUser) {
-            localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+            this.persistCache(this.selectedUser.id);
           }
         }
       })
@@ -1100,7 +1101,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             }
             if (msgs.length > 0) {
               this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-              localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(this.messages));
+              this.persistCache(user.id);
               this.scrollToBottom();
             }
           });
@@ -1179,6 +1180,14 @@ export class ChatComponent implements OnInit, OnDestroy {
     return `cached_messages_${ids[0]}_${ids[1]}`;
   }
 
+  private persistCache(peerId: number) {
+    const clean = this.messages.map(m => ({
+      ...m,
+      images: (m.images || []).filter(i => !i.image_url.startsWith('data:')),
+    }));
+    localStorage.setItem(this.messageCacheKey(peerId), JSON.stringify(clean));
+  }
+
   selectUser(user: User) {
     this.selectedUser = user;
     this.selectedGroup = null;
@@ -1205,7 +1214,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
       }
       this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      localStorage.setItem(this.messageCacheKey(user.id), JSON.stringify(this.messages));
+      this.persistCache(user.id);
       if (boundary) {
         const idx = msgs.findIndex(m => new Date(m.created_at) >= new Date(boundary));
         this.unreadDividerIdx = idx >= 0 ? idx : -1;
@@ -1341,6 +1350,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     const rawContent = this.messageContent;
     const files = [...this.selectedFiles];
+    const previewUrls = [...this.previews];
 
     let encryptedContent: string | undefined;
     let encryptedIV: string | undefined;
@@ -1380,6 +1390,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         created_at: new Date().toISOString(),
         from_user: this.api.currentUser()?.username ?? '',
         pending: true,
+        images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
       };
       this.messages.push(optimisticMsg);
       this.messages = [...this.messages];
@@ -1400,7 +1411,7 @@ export class ChatComponent implements OnInit, OnDestroy {
                 this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
               } else if (event.type === HttpEventType.Response) {
                 this.uploading.set(false);
-                this.finalizeOptimistic(tempId, event.body?.id);
+                this.finalizeOptimistic(tempId, event.body);
               }
             },
             error: () => {
@@ -1410,7 +1421,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           });
       } else {
         this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
-          next: (res) => this.finalizeOptimistic(tempId, res.id),
+          next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });
       }
@@ -1426,10 +1437,11 @@ export class ChatComponent implements OnInit, OnDestroy {
         created_at: new Date().toISOString(),
         from_user: this.api.currentUser()?.username ?? '',
         pending: true,
+        images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
       };
       this.messages.push(optimisticMsg);
       this.messages = [...this.messages];
-      localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+      this.persistCache(this.selectedUser.id);
       this.messageContent = '';
       this.clearFiles();
       this.scrollToBottom();
@@ -1447,7 +1459,7 @@ export class ChatComponent implements OnInit, OnDestroy {
                 this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
               } else if (event.type === HttpEventType.Response) {
                 this.uploading.set(false);
-                this.finalizeOptimistic(tempId, event.body?.id);
+                this.finalizeOptimistic(tempId, event.body);
               }
             },
             error: () => {
@@ -1457,7 +1469,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           });
       } else {
         this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
-          next: (res) => this.finalizeOptimistic(tempId, res.id),
+          next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });
       }
@@ -1467,16 +1479,22 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.pollMultiple = false;
       this.messageType = 'text';
     }
+    if (type === 'image') {
+      this.messageType = 'text';
+    }
   }
 
-  private finalizeOptimistic(tempId: number, serverId?: number) {
+  private finalizeOptimistic(tempId: number, server?: any) {
     this.sending = false;
     const idx = this.messages.findIndex(m => m.id === tempId);
     if (idx !== -1) {
       this.messages[idx].pending = false;
-      if (serverId) this.messages[idx].id = serverId;
+      if (server?.id) this.messages[idx].id = server.id;
+      if (server?.images && server.images.length > 0) {
+        this.messages[idx].images = server.images.map((url: string) => ({ id: 0, image_url: url }));
+      }
       if (this.selectedUser) {
-        localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+        this.persistCache(this.selectedUser.id);
       }
     }
   }
@@ -1487,12 +1505,12 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (idx !== -1) {
       this.messages.splice(idx, 1);
       if (this.selectedUser) {
-        localStorage.setItem(this.messageCacheKey(this.selectedUser.id), JSON.stringify(this.messages));
+        this.persistCache(this.selectedUser.id);
       }
     }
   }
 
-  onPaste(event: ClipboardEvent) {
+  async onPaste(event: ClipboardEvent) {
     const items = event.clipboardData?.items;
     if (!items) return;
     const remaining = 10 - this.selectedFiles.length;
@@ -1502,10 +1520,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (!file) continue;
-        this.selectedFiles.push(file);
-        const reader = new FileReader();
-        reader.onload = (e) => this.previews.push(e.target!.result as string);
-        reader.readAsDataURL(file);
+        const mem = await toMemoryFile(file);
+        this.selectedFiles.push(mem);
+        this.addPreview(mem);
         added++;
       }
     }
@@ -1517,27 +1534,39 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
-  onFileSelected(event: Event) {
+  async onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files) return;
     const remaining = 10 - this.selectedFiles.length;
-    for (let i = 0; i < Math.min(input.files.length, remaining); i++) {
-      this.selectedFiles.push(input.files[i]);
-      const reader = new FileReader();
-      reader.onload = (e) => this.previews.push(e.target!.result as string);
-      reader.readAsDataURL(input.files[i]);
+    const chosen = Array.from(input.files).slice(0, remaining);
+    for (const file of chosen) {
+      const mem = await toMemoryFile(file);
+      this.selectedFiles.push(mem);
+      this.addPreview(mem);
     }
     input.value = '';
+  }
+
+  private addPreview(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => this.previews.push(e.target!.result as string);
+    reader.readAsDataURL(file);
   }
 
   removeFile(index: number) {
     this.selectedFiles.splice(index, 1);
     this.previews.splice(index, 1);
+    if (this.selectedFiles.length === 0 && this.messageType === 'image') {
+      this.messageType = 'text';
+    }
   }
 
   private clearFiles() {
     this.selectedFiles = [];
     this.previews = [];
+    if (this.messageType === 'image') {
+      this.messageType = 'text';
+    }
   }
 
   // ── Polls ──

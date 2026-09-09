@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ApiService, User, StickerPack } from '../../services/api.service';
+import { toMemoryFile } from '../../services/upload-utils';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
 interface FileEntry {
@@ -935,10 +936,10 @@ export class AdminComponent implements OnInit {
     });
   }
 
-  uploadSticker(pack: StickerPack, event: Event) {
+  async uploadSticker(pack: StickerPack, event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
-    const file = input.files[0];
+    const file = await toMemoryFile(input.files[0]);
     input.value = '';
     this.api.adminUploadSticker(pack.id, file).subscribe({
       next: () => {

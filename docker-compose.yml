@@ -12,6 +12,8 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_ORIGIN=${WEBAUTHN_RP_ORIGIN:-http://localhost:4200}
       - VAPID_CONTACT=${VAPID_CONTACT:-admin@gmail.com}
+    dns:
+      - 192.168.1.1
     volumes:
       - chat-data:/data
       - ./uploads:/app/uploads
