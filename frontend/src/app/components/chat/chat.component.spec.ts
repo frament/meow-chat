@@ -12,6 +12,7 @@ describe('ChatComponent', () => {
 
   const wsMessages$ = new Subject<any>();
   const wsOnlineEvent = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
+  const groupInfoRequest$ = new Subject<number>();
 
   const mockApi = {
     currentUser: signal({ id: 1, username: 'test', avatar_url: '' }),
@@ -23,6 +24,7 @@ describe('ChatComponent', () => {
     totalUnread: computed(() => 0),
     wsMessages$: wsMessages$.asObservable(),
     wsOnlineEvent: wsOnlineEvent.asObservable(),
+    groupInfoRequest$: groupInfoRequest$.asObservable(),
     selectUser: jasmine.createSpy(),
     getUsers: jasmine.createSpy().and.returnValue(of([])),
     getPinned: jasmine.createSpy().and.returnValue(of({ pinned_user_ids: [] })),
@@ -71,6 +73,15 @@ describe('ChatComponent', () => {
 
   it('creates the component', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('opens group info when groupInfoRequest matches selected group', () => {
+    (component as any).selectedGroup = { id: 5, name: 'G', member_count: 2 };
+    spyOn(component, 'loadGroupInfo');
+    groupInfoRequest$.next(5);
+    expect(component.loadGroupInfo).toHaveBeenCalled();
+    groupInfoRequest$.next(6);
+    expect(component.loadGroupInfo).toHaveBeenCalledTimes(1);
   });
 
   it('renders user list section with friends heading', () => {

@@ -979,6 +979,14 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
     });
 
+    this.subscriptions.push(
+      this.api.groupInfoRequest$.subscribe((groupId) => {
+        if (this.selectedGroup && groupId === this.selectedGroup.id) {
+          this.loadGroupInfo();
+        }
+      })
+    );
+
     this.loadFromCache();
     this.loadFromServer();
     this.loadGroupChats();
