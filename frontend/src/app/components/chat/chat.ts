@@ -516,7 +516,7 @@ import { toMemoryFile } from '../../services/upload-utils';
       }
 
       @if (showMobileChat && (selectedUser || selectedGroup)) {
-        <div class="flex flex-col fixed inset-x-0 top-14 z-30" [style.height]="mobileChatHeight()">
+        <div class="flex flex-col fixed inset-x-0 z-30" style="top:calc(3.5rem + env(safe-area-inset-top, 0px));" [style.height]="mobileChatHeight()">
           <div #scrollContainerMobile class="flex-1 overflow-y-auto" style="min-height:0;">
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
@@ -836,9 +836,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   showStickerPicker = false;
   mobileChatHeight = computed(() => {
     if (this.keyboardService.isKeyboardOpen()) {
-      return 'calc(100dvh - 3.5rem)';
+      return 'calc(100dvh - 3.5rem - env(safe-area-inset-top, 0px))';
     }
-    return 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))';
+    return 'calc(100dvh - 7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))';
   });
 
   openGifPicker() {
