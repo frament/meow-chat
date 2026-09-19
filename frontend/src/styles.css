@@ -460,6 +460,9 @@ img {
   font-size: 13px;
   line-height: 1.5;
 }
+.chat-message-outgoing .md a {
+  color: #fff;
+}
 .form-input {
   display: block;
   width: 100%;
