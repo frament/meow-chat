@@ -1196,6 +1196,71 @@ func (h *Handler) MarkMessagesRead(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true})
 }
 
+type unreadEntry struct {
+	ID            int64  `json:"id"`
+	Count         int64  `json:"count"`
+	FirstUnreadAt string `json:"first_unread_at,omitempty"`
+}
+
+// GetUnread returns persistent unread counts + first-unread timestamps for
+// direct chats (keyed by sender) and group chats (keyed by group), so the
+// client can restore badges and the unread divider after push / reload.
+func (h *Handler) GetUnread(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	users := make([]unreadEntry, 0)
+	rows, err := database.DB.Query(`
+		SELECT from_user_id, COUNT(*), MIN(created_at)
+		FROM messages
+		WHERE to_user_id = ? AND COALESCE(is_read, 0) = 0 AND from_user_id != ?
+		GROUP BY from_user_id
+	`, userID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch unread"})
+	}
+	for rows.Next() {
+		var e unreadEntry
+		var earliest sql.NullString
+		if err := rows.Scan(&e.ID, &e.Count, &earliest); err != nil {
+			continue
+		}
+		if earliest.Valid {
+			e.FirstUnreadAt = earliest.String
+		}
+		users = append(users, e)
+	}
+	rows.Close()
+
+	groups := make([]unreadEntry, 0)
+	grows, err := database.DB.Query(`
+		SELECT m.group_chat_id, COUNT(*), MIN(m.created_at)
+		FROM group_messages m
+		JOIN group_chat_members gm ON gm.group_chat_id = m.group_chat_id AND gm.user_id = ?
+		WHERE m.id > COALESCE(gm.last_read_message_id, 0) AND m.from_user_id != ?
+		GROUP BY m.group_chat_id
+	`, userID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch group unread"})
+	}
+	for grows.Next() {
+		var e unreadEntry
+		var earliest sql.NullString
+		if err := grows.Scan(&e.ID, &e.Count, &earliest); err != nil {
+			continue
+		}
+		if earliest.Valid {
+			e.FirstUnreadAt = earliest.String
+		}
+		groups = append(groups, e)
+	}
+	grows.Close()
+
+	return c.JSON(fiber.Map{
+		"users":  users,
+		"groups": groups,
+	})
+}
+
 func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 

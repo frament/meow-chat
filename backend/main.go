@@ -241,6 +241,7 @@ func main() {
 	api.Get("/messages", h.GetMessages)
 	api.Post("/messages", h.SendMessage)
 	api.Post("/messages/read", h.MarkMessagesRead)
+	api.Get("/unread", h.GetUnread)
 
 	api.Post("/group-chats", h.CreateGroupChat)
 	api.Get("/group-chats", h.GetGroupChats)
@@ -255,6 +256,7 @@ func main() {
 	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)
 	api.Get("/group-chat-messages/:groupId", h.GetGroupMessages)
 	api.Post("/group-chat-messages", h.SendGroupMessage)
+	api.Post("/group-chats/:groupId/read", h.MarkGroupRead)
 
 	api.Post("/polls/:id/vote", h.CastVote)
 

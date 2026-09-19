@@ -94,6 +94,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             [style.background]="selectedGroup?.id === group.id ? 'var(--accent-light)' : 'transparent'"
             [class.hover-bg]="selectedGroup?.id !== group.id">
             <span class="flex-1 text-sm truncate" style="color:var(--text-primary);">{{ group.name }}</span>
+            @if (api.groupUnreadCounts()[group.id]) {
+              <span class="badge-user">{{ api.groupUnreadCounts()[group.id] }}</span>
+            }
             <span class="text-xs opacity-50">{{ group.member_count }}</span>
           </div>
         }
@@ -447,6 +450,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             <div (click)="selectGroup(group)"
               class="card flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover-bg">
               <span class="flex-1 text-sm font-medium truncate" style="color:var(--text-primary);">{{ group.name }}</span>
+              @if (api.groupUnreadCounts()[group.id]) {
+                <span class="badge-user">{{ api.groupUnreadCounts()[group.id] }}</span>
+              }
               <span class="text-xs opacity-50">{{ group.member_count }}</span>
             </div>
           }
@@ -1048,6 +1054,12 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.messages = [...this.messages];
           this.persistCache(this.selectedUser.id);
           this.scrollToBottom();
+          if (data.id && !document.hidden) {
+            this.api.markMessagesRead([data.id], this.selectedUser.id).subscribe({
+              next: () => { msg.is_read = true; },
+              error: () => {},
+            });
+          }
         }
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
           // Skip own messages (already handled via optimistic send + API response)
@@ -1076,6 +1088,11 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.messages.push(msg);
           this.messages = [...this.messages];
           this.scrollToBottom();
+          if (!document.hidden) {
+            const gid = this.selectedGroup.id;
+            this.api.markGroupRead(gid).subscribe({ error: () => {} });
+            this.api.clearGroupUnread(gid);
+          }
         }
         if (data.type === 'poll_update') {
           const pollId = data.poll_id;
@@ -1136,6 +1153,14 @@ export class ChatComponent implements OnInit, OnDestroy {
               this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
               this.persistCache(user.id);
               this.scrollToBottom();
+            }
+            const unreadIds = this.messages.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
+            if (unreadIds.length > 0) {
+              this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
+                for (const m of this.messages) {
+                  if (unreadIds.includes(m.id)) m.is_read = true;
+                }
+              });
             }
           });
         }
@@ -1249,7 +1274,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       this.persistCache(user.id);
       if (boundary) {
-        const idx = msgs.findIndex(m => new Date(m.created_at) >= new Date(boundary));
+        const idx = this.messages.findIndex(m => new Date(m.created_at) >= new Date(boundary));
         this.unreadDividerIdx = idx >= 0 ? idx : -1;
         if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
         this.boundaryTimer = setTimeout(() => {
@@ -1674,6 +1699,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.api.chatHeaderInfo.set({ type: 'group', id: group.id, name: group.name });
     this.router.navigate(['/chat', 'group', group.id]);
 
+    const boundary = this.api.groupUnreadBoundaries()[group.id] ?? null;
+    this.api.clearGroupUnread(group.id);
+    this.api.markGroupRead(group.id).subscribe({ error: () => {} });
+
     // Ensure we have the group key and distribute to members without shares
     if (this.e2eeReady) {
       const groupKey = await this.crypto.getGroupKey(group.id);
@@ -1696,6 +1725,17 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
       this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       this.messages = [...this.messages];
+      if (boundary) {
+        const idx = this.messages.findIndex(m => new Date(m.created_at) >= new Date(boundary));
+        this.unreadDividerIdx = idx >= 0 ? idx : -1;
+        if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
+        this.boundaryTimer = setTimeout(() => {
+          this.api.clearGroupUnreadBoundary(group.id);
+          this.boundaryTimer = null;
+        }, 30000);
+      } else {
+        this.unreadDividerIdx = -1;
+      }
       this.scrollToBottom();
     });
   }

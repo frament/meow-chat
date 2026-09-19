@@ -42,7 +42,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS push_copies (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE, for_user_id INTEGER NOT NULL REFERENCES users(id), server_encrypted_content TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token_id TEXT UNIQUE NOT NULL, expires_at DATETIME NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS group_chats (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS group_chat_members (group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), joined_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (group_chat_id, user_id))`,
+		`CREATE TABLE IF NOT EXISTS group_chat_members (group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), joined_at DATETIME DEFAULT CURRENT_TIMESTAMP, last_read_message_id INTEGER DEFAULT 0, PRIMARY KEY (group_chat_id, user_id))`,
 		`CREATE TABLE IF NOT EXISTS group_chat_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, token TEXT UNIQUE NOT NULL, max_uses INTEGER DEFAULT 0, use_count INTEGER DEFAULT 0, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS group_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, from_user_id INTEGER NOT NULL REFERENCES users(id), content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', encrypted_content TEXT DEFAULT '', encrypted_iv TEXT DEFAULT '', sticker_url TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS group_message_images (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (message_id) REFERENCES group_messages(id) ON DELETE CASCADE)`,
@@ -132,6 +132,8 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Put("/profile", AuthRequired, h.UpdateProfile)
 	app.Get("/messages", AuthRequired, h.GetMessages)
 	app.Post("/messages", AuthRequired, h.SendMessage)
+	app.Post("/messages/read", AuthRequired, h.MarkMessagesRead)
+	app.Get("/unread", AuthRequired, h.GetUnread)
 	app.Post("/posts", AuthRequired, h.CreatePost)
 	app.Delete("/posts/:id", AuthRequired, h.DeletePost)
 	app.Post("/posts/:id/react", AuthRequired, h.ToggleReaction)
@@ -148,6 +150,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/group-chat-invites/:token/join", AuthRequired, h.JoinGroupViaInvite)
 	app.Get("/group-chat-messages/:groupId", AuthRequired, h.GetGroupMessages)
 	app.Post("/group-chat-messages", AuthRequired, h.SendGroupMessage)
+	app.Post("/group-chats/:groupId/read", AuthRequired, h.MarkGroupRead)
 
 	admin := app.Group("/admin")
 	admin.Use(AuthRequired)

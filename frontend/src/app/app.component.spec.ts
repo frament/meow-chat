@@ -40,15 +40,21 @@ describe('App', () => {
 
     mockApi = jasmine.createSpyObj('ApiService', [
       'connectWebSocket', 'incrementUnread', 'clearUnread',
+      'incrementGroupUnread', 'clearGroupUnread', 'markGroupRead',
+      'getUnread', 'hydrateUnread', 'pushUnsubscribe',
       'checkHealth', 'getVapidPublicKey', 'pushSubscribe',
       'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
     ], {
       currentUser: signal(null),
       totalUnread: computed(() => 0),
+      unreadCounts: signal<Record<number, number>>({}),
+      groupUnreadCounts: signal<Record<number, number>>({}),
       wsMessages$: wsMessages$,
       accessToken: signal(''),
       wsConnected: signal(false),
     });
+
+    localStorage.removeItem('pushVapidKey');
 
     mockNotif = jasmine.createSpyObj('NotificationService', [
       'requestPermission', 'show',
@@ -58,6 +64,8 @@ describe('App', () => {
 
     (mockApi.checkUpdate as jasmine.Spy).and.returnValue(of({ update_available: false }));
     (mockApi.checkHealth as jasmine.Spy).and.returnValue(of({ status: 'ok' }));
+    (mockApi.getUnread as jasmine.Spy).and.returnValue(of({ users: [], groups: [] }));
+    (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
 
     mockCrypto = jasmine.createSpyObj('CryptoService', [
       'init', 'syncPublicKey', 'hasIdentityKey',
@@ -252,6 +260,7 @@ describe('App', () => {
       (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo({
         toJSON: () => makeSubJSON('https://existing.push'),
       });
+      localStorage.setItem('pushVapidKey', 'test-vapid-key');
 
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
@@ -262,6 +271,37 @@ describe('App', () => {
       expect(mockReg.pushManager.getSubscription).toHaveBeenCalled();
       expect(mockReg.pushManager.subscribe).not.toHaveBeenCalled();
       expect(mockApi.pushSubscribe).toHaveBeenCalledWith(makeSubJSON('https://existing.push'));
+    }));
+
+    it('re-subscribes when the VAPID key rotated', fakeAsync(async () => {
+      mockSW = makeMockSW({ postMessage: jasmine.createSpy('postMessage') });
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => mockSW,
+      });
+      const unsub = jasmine.createSpy('unsubscribe').and.resolveTo(true);
+      (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo({
+        endpoint: 'https://stale.push',
+        toJSON: () => makeSubJSON('https://stale.push'),
+        unsubscribe: unsub,
+      });
+      (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({
+        toJSON: () => makeSubJSON('https://fresh.push'),
+      });
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.pushUnsubscribe as jasmine.Spy).and.returnValue(of({}));
+      localStorage.setItem('pushVapidKey', 'old-vapid-key');
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+      tick();
+
+      expect(unsub).toHaveBeenCalled();
+      expect(mockApi.pushUnsubscribe).toHaveBeenCalledWith('https://stale.push');
+      expect(mockReg.pushManager.subscribe).toHaveBeenCalled();
+      expect(mockApi.pushSubscribe).toHaveBeenCalledWith(makeSubJSON('https://fresh.push'));
     }));
 
     it('does nothing when navigator has no serviceWorker', fakeAsync(async () => {

@@ -192,13 +192,28 @@ export interface Sticker {
 	sort_order: number;
 }
 
+export interface UnreadEntry {
+  id: number;
+  count: number;
+  first_unread_at?: string;
+}
+
+export interface UnreadResponse {
+  users: UnreadEntry[];
+  groups: UnreadEntry[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
   readonly accessToken = signal<string | null>(null);
   readonly unreadCounts = signal<Record<number, number>>({});
-  readonly totalUnread = computed(() => Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0));
+  readonly totalUnread = computed(() =>
+    Object.values(this.unreadCounts()).reduce((a, b) => a + b, 0) +
+    Object.values(this.groupUnreadCounts()).reduce((a, b) => a + b, 0));
   readonly unreadBoundaries = signal<Record<number, string>>({});
+  readonly groupUnreadCounts = signal<Record<number, number>>({});
+  readonly groupUnreadBoundaries = signal<Record<number, string>>({});
   readonly chatHeaderInfo = signal<{ type: 'user' | 'group'; id: number; name: string; avatar_url?: string; is_admin?: boolean } | null>(null);
   readonly groupInfoRequest$ = new Subject<number>();
   private readonly wsOnlineEventSubject = new Subject<{ type: 'user_online' | 'user_offline'; user_id: number }>();
@@ -944,6 +959,60 @@ export class ApiService {
       delete next[userId];
       return next;
     });
+  }
+
+  incrementGroupUnread(groupId: number, createdAt?: string): void {
+    this.groupUnreadCounts.update(c => ({ ...c, [groupId]: (c[groupId] ?? 0) + 1 }));
+    if (createdAt && !this.groupUnreadBoundaries()[groupId]) {
+      this.groupUnreadBoundaries.update(b => ({ ...b, [groupId]: createdAt }));
+    }
+  }
+
+  clearGroupUnread(groupId: number): void {
+    this.groupUnreadCounts.update(c => {
+      if (!c[groupId]) return c;
+      const next = { ...c };
+      delete next[groupId];
+      return next;
+    });
+  }
+
+  clearGroupUnreadBoundary(groupId: number): void {
+    this.groupUnreadBoundaries.update(b => {
+      if (!b[groupId]) return b;
+      const next = { ...b };
+      delete next[groupId];
+      return next;
+    });
+  }
+
+  getUnread() {
+    return this.http.get<UnreadResponse>(`${this.baseUrl}/unread`);
+  }
+
+  markGroupRead(groupId: number) {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/group-chats/${groupId}/read`, {});
+  }
+
+  hydrateUnread(res: UnreadResponse): void {
+    const counts: Record<number, number> = {};
+    const boundaries: Record<number, string> = {};
+    for (const e of res.users ?? []) {
+      if (!e.count) continue;
+      counts[e.id] = e.count;
+      if (e.first_unread_at) boundaries[e.id] = e.first_unread_at;
+    }
+    const groupCounts: Record<number, number> = {};
+    const groupBoundaries: Record<number, string> = {};
+    for (const e of res.groups ?? []) {
+      if (!e.count) continue;
+      groupCounts[e.id] = e.count;
+      if (e.first_unread_at) groupBoundaries[e.id] = e.first_unread_at;
+    }
+    this.unreadCounts.set(counts);
+    this.unreadBoundaries.set(boundaries);
+    this.groupUnreadCounts.set(groupCounts);
+    this.groupUnreadBoundaries.set(groupBoundaries);
   }
 
   // E2EE keys

@@ -1,7 +1,7 @@
-import { Component, inject, signal, ViewChild, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, effect, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
-import { interval, fromEvent, merge, filter, tap, map, switchMap, Subscription } from 'rxjs';
+import { interval, fromEvent, merge, filter, tap, map, switchMap, Subscription, firstValueFrom } from 'rxjs';
 import { ApiService } from './services/api.service';
 import { PwaInstallService } from './services/pwa-install.service';
 import { NotificationService } from './services/notification.service';
@@ -285,8 +285,8 @@ export class App implements OnInit, OnDestroy {
   readonly gitHubDownloadUrl = signal('');
   #maintenanceSub: Subscription | null = null;
   #toastTimer: ReturnType<typeof setTimeout> | null = null;
-  #badgeCount = 0;
   #deviceAuthInitDone = false;
+  #lastUnreadUser: number | null = null;
   #pullStartY = 0;
   #pulling = false;
   #offlineDismissed = false;
@@ -321,10 +321,31 @@ export class App implements OnInit, OnDestroy {
         )
       ).subscribe(() => {
         this.#sw.checkForUpdate();
-        this.#clearBadge();
+        this.refreshUnread();
         this.tryReSubscribePush();
       })
     );
+
+    // App icon badge always mirrors server-backed unread total
+    effect(() => {
+      const count = this.#api.totalUnread();
+      if (count > 0) {
+        this.#setBadge(count);
+      } else {
+        this.#clearBadge();
+      }
+    });
+
+    // Load persistent unread state whenever the signed-in user changes (login/reload)
+    effect(() => {
+      const id = this.#api.currentUser()?.id ?? null;
+      if (id !== null && id !== this.#lastUnreadUser) {
+        this.#lastUnreadUser = id;
+        this.refreshUnread();
+      } else if (id === null) {
+        this.#lastUnreadUser = null;
+      }
+    });
 
     // Periodic GitHub update check (only for logged-in users, once per 6 hours)
     this.#sub.add(
@@ -375,9 +396,13 @@ export class App implements OnInit, OnDestroy {
     this.#sub.add(
       this.#router.events.subscribe(() => {
         if (this.#router.url.startsWith('/chat')) {
-          this.#clearBadge();
-          const m = this.#router.url.match(/\/chat\/(\d+)/);
-          if (m) this.#api.clearUnread(Number(m[1]));
+          const groupMatch = this.#router.url.match(/\/chat\/group\/(\d+)/);
+          const userMatch = this.#router.url.match(/\/chat\/(\d+)/);
+          if (groupMatch) {
+            this.#api.clearGroupUnread(Number(groupMatch[1]));
+          } else if (userMatch) {
+            this.#api.clearUnread(Number(userMatch[1]));
+          }
         }
       })
     );
@@ -411,7 +436,9 @@ export class App implements OnInit, OnDestroy {
         const chatPath = isGroup ? `/chat/group/${msg.group_id}` : `/chat/${msg.from}`;
         const isCorrectChat = this.#router.url.startsWith(chatPath);
         if (isHidden || !isCorrectChat) {
-          if (!isGroup) {
+          if (isGroup) {
+            this.#api.incrementGroupUnread(msg.group_id, msg.created_at);
+          } else {
             this.#api.incrementUnread(msg.from, msg.created_at);
           }
           const notifTitle = isGroup
@@ -429,15 +456,13 @@ export class App implements OnInit, OnDestroy {
             tag: isGroup ? `group-${msg.group_id}` : `chat-${msg.from}`,
             data: { url: chatPath, senderId: msg.from, groupId: msg.group_id },
           });
-          this.#badgeCount++;
-          this.#setBadge(this.#badgeCount);
 
           if (n) {
             n.onclick = () => {
-              this.#clearBadge();
               window.focus();
               if (isGroup) {
                 this.#router.navigate(['/chat/group', msg.group_id]);
+                this.#api.clearGroupUnread(msg.group_id);
               } else {
                 this.#router.navigate(['/chat', msg.from]);
                 this.#api.clearUnread(msg.from);
@@ -501,31 +526,43 @@ export class App implements OnInit, OnDestroy {
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     if (!reg) { this.schedulePushRetry(); return; }
 
-    const existingSub = await reg.pushManager?.getSubscription().catch(() => null);
+    const keys = await firstValueFrom(this.#api.getVapidPublicKey()).catch(() => null);
+    if (!keys?.publicKey) { this.schedulePushRetry(); return; }
+
+    const storedKey = localStorage.getItem('pushVapidKey');
+    let existingSub = await reg.pushManager?.getSubscription().catch(() => null);
+
+    // VAPID keys rotated (or a legacy subscription predates key tracking):
+    // drop the stale subscription, otherwise push services reject it with 403.
+    if (existingSub && storedKey !== keys.publicKey) {
+      const staleEndpoint = existingSub.endpoint;
+      await existingSub.unsubscribe().catch(() => {});
+      this.#api.pushUnsubscribe(staleEndpoint).subscribe({ error: () => {} });
+      existingSub = null;
+    }
+
     if (existingSub) {
       this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
         error: () => this.schedulePushRetry(),
       });
+      localStorage.setItem('pushVapidKey', keys.publicKey);
       return;
     }
 
-    this.#api.getVapidPublicKey().subscribe({
-      next: (keys) => {
-        const key = this.urlBase64ToUint8Array(keys.publicKey);
-        reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: key,
-        })
-          .then(sub => this.#api.pushSubscribe(sub.toJSON()).subscribe({
-            error: () => this.schedulePushRetry(),
-          }))
-          .catch((err) => {
-            console.warn('Push subscribe failed:', err);
-            this.schedulePushRetry();
-          });
-      },
-      error: () => this.schedulePushRetry(),
-    });
+    try {
+      const key = this.urlBase64ToUint8Array(keys.publicKey);
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      });
+      this.#api.pushSubscribe(sub.toJSON()).subscribe({
+        next: () => localStorage.setItem('pushVapidKey', keys.publicKey),
+        error: () => this.schedulePushRetry(),
+      });
+    } catch (err) {
+      console.warn('Push subscribe failed:', err);
+      this.schedulePushRetry();
+    }
   }
 
   private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -559,10 +596,17 @@ export class App implements OnInit, OnDestroy {
   }
 
   openChat(userId: number) {
-    this.#clearBadge();
     this.toast.set(null);
     if (this.#toastTimer) clearTimeout(this.#toastTimer);
     this.#router.navigate(['/chat', userId]);
+  }
+
+  refreshUnread(): void {
+    if (!this.#api.currentUser()) return;
+    this.#api.getUnread().subscribe({
+      next: (res) => this.#api.hydrateUnread(res),
+      error: () => {},
+    });
   }
 
   async #setBadge(count: number): Promise<void> {
@@ -574,7 +618,6 @@ export class App implements OnInit, OnDestroy {
   }
 
   async #clearBadge(): Promise<void> {
-    this.#badgeCount = 0;
     try {
       if ('clearAppBadge' in navigator) {
         await (navigator as any).clearAppBadge();

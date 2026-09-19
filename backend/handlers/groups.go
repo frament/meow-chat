@@ -169,8 +169,9 @@ func (h *Handler) AddGroupMember(c *fiber.Ctx) error {
 	}
 
 	_, err = database.DB.Exec(
-		"INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (?, ?)",
-		groupID, targetID,
+		`INSERT INTO group_chat_members (group_chat_id, user_id, last_read_message_id)
+		 VALUES (?, ?, COALESCE((SELECT MAX(id) FROM group_messages WHERE group_chat_id = ?), 0))`,
+		groupID, targetID, groupID,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to add member"})
@@ -325,8 +326,9 @@ func (h *Handler) JoinGroupViaInvite(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	_, err = tx.Exec(
-		"INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (?, ?)",
-		inv.GroupChatID, userID,
+		`INSERT INTO group_chat_members (group_chat_id, user_id, last_read_message_id)
+		 VALUES (?, ?, COALESCE((SELECT MAX(id) FROM group_messages WHERE group_chat_id = ?), 0))`,
+		inv.GroupChatID, userID, inv.GroupChatID,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to join group"})
@@ -430,6 +432,30 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(messages)
+}
+
+// MarkGroupRead advances the caller's last_read_message_id for a group to the
+// newest message, clearing unread state for that group.
+func (h *Handler) MarkGroupRead(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	groupID, err := strconv.ParseInt(c.Params("groupId"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+	if !isGroupMember(groupID, userID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	_, err = database.DB.Exec(`
+		UPDATE group_chat_members
+		SET last_read_message_id = COALESCE((SELECT MAX(id) FROM group_messages WHERE group_chat_id = ?), 0)
+		WHERE group_chat_id = ? AND user_id = ?
+	`, groupID, groupID, userID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to mark group as read"})
+	}
+
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 func (h *Handler) DeleteGroupChat(c *fiber.Ctx) error {

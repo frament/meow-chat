@@ -149,7 +149,8 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 		}
 		resp.Body.Close()
 
-		if resp.StatusCode == 410 || resp.StatusCode == 404 {
+		if resp.StatusCode == 410 || resp.StatusCode == 404 || resp.StatusCode == 403 {
+			log.Printf("Removing dead push subscription (status %d) for user %d", resp.StatusCode, toUserID)
 			database.DB.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
 		}
 	}
