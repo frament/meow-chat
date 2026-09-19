@@ -130,6 +130,47 @@ func TestCheckUpdate_UpToDate(t *testing.T) {
 	}
 }
 
+func TestCheckUpdate_DescribeVersionNoFalseUpdate(t *testing.T) {
+	updateCacheMu.Lock()
+	updateCache = nil
+	updateCacheMu.Unlock()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]string{
+			"tag_name": "v1.1.1",
+			"html_url": "https://github.com/frament/my-chat/releases/tag/v1.1.1",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	origRepo := version.GitHubRepo
+	origBase := version.GitHubAPIBase
+	origVersion := version.Version
+	version.GitHubRepo = "test/repo"
+	version.GitHubAPIBase = ts.URL
+	version.Version = "v1.1.1-7-g068306b"
+	defer func() {
+		version.GitHubRepo = origRepo
+		version.GitHubAPIBase = origBase
+		version.Version = origVersion
+	}()
+
+	app, h, _ := setupTestApp(t)
+	app.Get("/check-update", h.CheckUpdate)
+
+	req := httptest.NewRequest("GET", "/check-update", nil)
+	resp, _ := app.Test(req)
+
+	var result UpdateCheckResult
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.UpdateAvailable {
+		t.Errorf("expected no update for describe version on same tag, got update_available=true")
+	}
+}
+
 func TestCheckUpdate_NewerVersion(t *testing.T) {
 	updateCacheMu.Lock()
 	updateCache = nil

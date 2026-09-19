@@ -1,10 +1,15 @@
 .PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password
 
+# Version baked into the backend at build time and shown in the UI.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 1.1.1)
+
 update:
-	git pull && docker compose build && docker compose up -d
+	git pull
+	VERSION="$$(git describe --tags --always --dirty 2>/dev/null || echo 1.1.1)" docker compose build
+	docker compose up -d
 
 build:
-	docker compose build
+	VERSION="$(VERSION)" docker compose build
 
 up:
 	docker compose up -d
@@ -16,7 +21,7 @@ logs:
 	docker compose logs -f
 
 restart-backend:
-	docker compose build backend && docker compose up -d --no-deps backend
+	VERSION="$(VERSION)" docker compose build backend && docker compose up -d --no-deps backend
 
 test-backend:
 	cd backend && GOMEMLIMIT=12GiB go test -count=1 -p=2 -parallel=2 ./...

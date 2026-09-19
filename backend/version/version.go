@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-const Version = "1.1.0"
+// Version is overridable at build time with:
+//   -ldflags "-X my-chat-backend/version.Version=v1.2.3"
+// It must be a var (not const) for -X to work.
+var Version = "1.1.1"
 
 // GitHubRepo is the GitHub repository path for update checks.
 var (

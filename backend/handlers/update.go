@@ -107,19 +107,9 @@ func fetchLatestRelease() UpdateCheckResult {
 
 	updateAvailable := false
 	if release.TagName != "" {
-		// If local is a dev version, always consider a release an update
-		if version.IsDev(version.Version) {
-			// Strip -dev from local to compare base versions
-			baseVersion := version.Version
-			if idx := indexOf(baseVersion, "-"); idx >= 0 {
-				baseVersion = baseVersion[:idx]
-			}
-			if version.Compare(release.TagName, baseVersion) >= 0 {
-				updateAvailable = true
-			}
-		} else {
-			updateAvailable = version.Compare(release.TagName, version.Version) > 0
-		}
+		// Compare ignores "v" prefix, pre-release suffixes and git-describe
+		// metadata ("v1.1.1-7-gabc"), so this also handles dev builds correctly.
+		updateAvailable = version.Compare(release.TagName, version.Version) > 0
 	}
 
 	return UpdateCheckResult{
@@ -129,13 +119,4 @@ func fetchLatestRelease() UpdateCheckResult {
 		DownloadURL:     fmt.Sprintf("https://github.com/%s/releases/tag/%s", version.GitHubRepo, release.TagName),
 		ReleaseNotesURL: release.HTMLURL,
 	}
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

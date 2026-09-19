@@ -4,6 +4,7 @@ services:
       context: ./backend
       args:
         HOME: /tmp
+        VERSION: ${VERSION:-1.1.1}
     ports:
       - "8080:8080"
     environment:

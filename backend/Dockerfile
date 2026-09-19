@@ -8,7 +8,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -o server .
+ARG VERSION=1.1.1
+RUN CGO_ENABLED=1 go build -ldflags="-X my-chat-backend/version.Version=${VERSION}" -o server .
 
 FROM alpine:3.19
 

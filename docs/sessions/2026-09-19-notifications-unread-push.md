@@ -39,3 +39,19 @@
 ## TBD
 - Полная серверная пагинация истории (>100) всё ещё не сделана.
 - Групповые непрочитанные считаются от `last_read_message_id`, а не от реального «прочитано до сообщения N».
+
+## Дополнение (2026-09-19): оффлайн-плашка и версия в UI
+
+### 1. «Нет соединения» мигало при старте
+Плашка показывалась сразу по `!api.wsConnected()`, пока WS ещё устанавливался. Добавлен grace-период 5 с: сигнал `showOffline` + `effect` в `app.ts`; при успешном коннекте плашка и флаг dismiss сбрасываются.
+
+### 2. Неверная версия в настройках
+Корень: `version.Version` был `const`, а `-X` ldflags переопределяет только `var` — поэтому override тихо игнорировался; Dockerfile вообще собирал без ldflags. Итог — всегда 1.1.0 (при релизе 1.1.1).
+- `version.go`: `const` → `var Version = "1.1.1"`.
+- `Dockerfile`: `ARG VERSION=1.1.1` + `-ldflags "-X my-chat-backend/version.Version=${VERSION}"`.
+- `docker-compose.yml`: build arg `VERSION: ${VERSION:-1.1.1}`.
+- `Makefile`: `VERSION=$(git describe --tags --always --dirty)`, прокидывается в `build`/`update`/`restart-backend`.
+- `update.go`: убран спец-кейс `IsDev` (`>=`), дававший ложное «есть обновление» для git-describe-версий (`v1.1.1-7-g...`); теперь просто `version.Compare(release, Version) > 0`.
+- Тест `TestCheckUpdate_DescribeVersionNoFalseUpdate`.
+
+Проверено: backend `go build` + тесты handlers (релевантные) — зелёные; frontend build + спеки App/Settings — 24 SUCCESS.
