@@ -260,7 +260,7 @@ describe('App', () => {
       (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo({
         toJSON: () => makeSubJSON('https://existing.push'),
       });
-      localStorage.setItem('pushVapidKey', 'test-vapid-key');
+      localStorage.setItem('pushVapidKey', 'v2:test-vapid-key');
 
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();

@@ -546,12 +546,14 @@ export class App implements OnInit, OnDestroy {
     const keys = await firstValueFrom(this.#api.getVapidPublicKey()).catch(() => null);
     if (!keys?.publicKey) { this.schedulePushRetry(); return; }
 
+    // Fingerprint includes a scheme version so that bumping it forces a single
+    // clean re-subscription for all clients (e.g. after the keyless-subscription
+    // bug that some push services accept with 201 but never deliver).
+    const fingerprint = 'v2:' + keys.publicKey;
     const storedKey = localStorage.getItem('pushVapidKey');
     let existingSub = await reg.pushManager?.getSubscription().catch(() => null);
 
-    // VAPID keys rotated (or a legacy subscription predates key tracking):
-    // drop the stale subscription, otherwise push services reject it with 403.
-    if (existingSub && storedKey && storedKey !== keys.publicKey) {
+    if (existingSub && storedKey !== fingerprint) {
       const staleEndpoint = existingSub.endpoint;
       await existingSub.unsubscribe().catch(() => {});
       this.#api.pushUnsubscribe(staleEndpoint).subscribe({ error: () => {} });
@@ -562,7 +564,7 @@ export class App implements OnInit, OnDestroy {
       this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
         error: () => this.schedulePushRetry(),
       });
-      localStorage.setItem('pushVapidKey', keys.publicKey);
+      localStorage.setItem('pushVapidKey', fingerprint);
       return;
     }
 
@@ -573,7 +575,7 @@ export class App implements OnInit, OnDestroy {
         applicationServerKey: key,
       });
       this.#api.pushSubscribe(sub.toJSON()).subscribe({
-        next: () => localStorage.setItem('pushVapidKey', keys.publicKey),
+        next: () => localStorage.setItem('pushVapidKey', fingerprint),
         error: () => this.schedulePushRetry(),
       });
     } catch (err) {
