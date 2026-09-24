@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
@@ -212,4 +212,18 @@ describe('ChatComponent', () => {
     const seps = (component.displayMessages as any[]).filter(i => i._dateSep);
     expect(seps.length).toBe(1);
   });
+
+  it('blocks sending when encryption is impossible (no peer key)', fakeAsync(async () => {
+    (mockCrypto as any).init = jasmine.createSpy().and.returnValue(Promise.resolve());
+    (mockCrypto as any).encrypt = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
+    component.messageContent = 'secret text';
+    component.messageType = 'text';
+
+    await component.sendMessage();
+    tick();
+
+    expect(component.sendError()).toContain('зашифровать');
+    expect(mockApi.sendMessage).not.toHaveBeenCalled();
+  }));
 });

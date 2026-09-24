@@ -315,6 +315,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             </div>
             } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (sendError()) {
+                <div style="position:absolute;top:-30px;left:16px;right:16px;padding:5px 10px;border-radius:8px;background:#e74c3c;color:#fff;font-size:12px;text-align:center;">{{ sendError() }}</div>
+              }
 
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
@@ -651,6 +654,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             </div>
             } @else {
             <div class="chat-input" style="border-top:1px solid var(--divider);padding:12px 16px;display:flex;gap:8px;position:relative;">
+              @if (sendError()) {
+                <div style="position:absolute;top:-30px;left:16px;right:16px;padding:5px 10px;border-radius:8px;background:#e74c3c;color:#fff;font-size:12px;text-align:center;">{{ sendError() }}</div>
+              }
 
               <div class="type-menu-container" style="position:relative;">
                 <button (click)="showTypeMenu = !showTypeMenu"
@@ -939,6 +945,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
   uploading = signal(false);
   uploadProgress = signal(0);
+  sendError = signal('');
 
   @ViewChild('scrollContainerDesktop', { read: ElementRef }) scrollContainerDesktop?: ElementRef<HTMLElement>;
   @ViewChild('scrollContainerMobile', { read: ElementRef }) scrollContainerMobile?: ElementRef<HTMLElement>;
@@ -1452,21 +1459,30 @@ export class ChatComponent implements OnInit, OnDestroy {
     const content = rawContent;      // local/optimistic display (never sent when encrypted)
     let wireContent = rawContent;    // what actually goes to the server
 
+    this.sendError.set('');
+
     // Only user-typed text is encrypted; structural types (sticker id, gif url,
     // poll question) stay in `content` because the server/rendering needs them.
     const encryptable = (type === 'text' || type === 'image') && !!rawContent;
-    if (this.e2eeReady && encryptable) {
+    if (encryptable) {
+      await this.crypto.init();
       const result = this.selectedUser
         ? await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent)
         : this.selectedGroup
           ? await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent)
           : null;
-      if (result) {
-        encryptedContent = result.encrypted;
-        encryptedIV = result.iv;
-        pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
-        wireContent = '';
+      if (!result) {
+        // Never fall back to plaintext: block and tell the user why.
+        this.sending = false;
+        this.sendError.set(this.selectedUser
+          ? 'Не удалось зашифровать: у собеседника нет ключа шифрования'
+          : 'Не удалось зашифровать: нет ключа группового чата');
+        return;
       }
+      encryptedContent = result.encrypted;
+      encryptedIV = result.iv;
+      pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
+      wireContent = '';
     }
 
       if (this.selectedGroup) {
