@@ -118,6 +118,44 @@ func (h *Handler) Close() {
 	h.wg.Wait()
 }
 
+// buildPushPreview picks the push body text. The client sends an explicit
+// plaintext preview for encrypted text messages; for structural message types
+// (sticker/gif/poll/image) we derive a human label instead of raw payload.
+func buildPushPreview(msgType, content, pushPreview string, hasImages bool) string {
+	if pushPreview != "" {
+		return pushPreview
+	}
+	switch msgType {
+	case "sticker":
+		return "[Стикер]"
+	case "gif":
+		return "[GIF]"
+	case "poll":
+		if content != "" {
+			return content
+		}
+		return "[Опрос]"
+	case "image":
+		if content != "" {
+			return content
+		}
+		if hasImages {
+			return "[Изображение]"
+		}
+		return ""
+	default:
+		return content
+	}
+}
+
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "..."
+}
+
 func (h *Handler) runHub() {
 	defer h.wg.Done()
 	for {
@@ -235,6 +273,9 @@ func (h *Handler) runHub() {
 				if msg.stickerURL != "" {
 					payload["sticker_url"] = msg.stickerURL
 				}
+				if msg.pushPreview != "" {
+					payload["preview"] = msg.pushPreview
+				}
 				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					err := conn.WriteJSON(payload)
 					if err != nil {
@@ -252,27 +293,7 @@ func (h *Handler) runHub() {
 			}
 			if !delivered && msg.messageID > 0 {
 				log.Printf("Message %d: WS delivery failed for user %d, sending push", msg.messageID, msg.to)
-				preview := msg.pushPreview
-				if preview == "" {
-					preview = msg.content
-				}
-				if len(preview) > 120 {
-					preview = preview[:120] + "..."
-				}
-				if preview == "" && len(msg.images) > 0 {
-					preview = "[Image]"
-				}
-				if preview != "" {
-					encrypted, err := database.ServerEncrypt([]byte(preview))
-					if err == nil {
-						expiresAt := time.Now().Add(7 * 24 * time.Hour)
-						database.DB.Exec(
-							"INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (?, ?, ?, ?)",
-							msg.messageID, msg.to, encrypted, expiresAt,
-						)
-						log.Printf("Push-copy created for user %d (message %d)", msg.to, msg.messageID)
-					}
-				}
+				preview := truncateRunes(buildPushPreview(msg.msgType, msg.content, msg.pushPreview, len(msg.images) > 0), 120)
 				h.sendPushNotification(msg.to,
 					"New message from "+msg.fromName,
 					preview,
@@ -321,6 +342,9 @@ func (h *Handler) runHub() {
 			if msg.stickerURL != "" {
 				payload["sticker_url"] = msg.stickerURL
 			}
+			if msg.pushPreview != "" {
+				payload["preview"] = msg.pushPreview
+			}
 
 			for _, memberID := range memberIDs {
 				delivered := false
@@ -338,13 +362,7 @@ func (h *Handler) runHub() {
 					}
 				}
 				if !delivered {
-					preview := msg.content
-					if len(preview) > 120 {
-						preview = preview[:120] + "..."
-					}
-					if preview == "" && len(msg.images) > 0 {
-						preview = "[Image]"
-					}
+					preview := truncateRunes(buildPushPreview(msg.msgType, msg.content, msg.pushPreview, len(msg.images) > 0), 120)
 					var groupName string
 					database.DB.QueryRow("SELECT name FROM group_chats WHERE id = ?", msg.groupID).Scan(&groupName)
 					h.sendPushNotification(memberID,

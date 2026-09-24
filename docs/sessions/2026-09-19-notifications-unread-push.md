@@ -93,3 +93,22 @@ Wedge (user 9) отправил в группу 1 («Old school») сообще�
 - UI: вкладка «Push» в админке (desktop + mobile), авто-обновление раз в 10 c, таблица подписок и логов.
 
 Проверено: backend `go build` + тесты (`TestPushClientLog`, `TestPushAck`, `TestAdminPushEndpoints*`) — зелёные; frontend build + спеки App/Admin/Chat — 28 SUCCESS.
+
+## Дополнение (2026-09-24): честный E2EE и preview для push
+
+### Проблема
+При E2EE клиент отправлял `content` (полный plaintext) + `encrypted_content` + `push_preview`. Сервер хранил полный открытый текст любого «зашифрованного» сообщения — шифрование было косметическим.
+
+### Сделали E2EE честным
+- `chat.ts`: для текстовых сообщений и подписей к картинкам при успешном шифровании на сервер уходит **пустой `content`**, а текст — только в `encrypted_content` и в короткий `push_preview`. Локально (optimistic/cache) показывается открытый текст.
+- Структурные типы (стикер-id, gif-url, вопрос опроса) не шифруются — сервер/рендер их используют.
+- Рендер: если `encrypted_content` есть, а расшифровать не удалось (нет ключа/новое устройство), показывается `[Зашифрованное сообщение]` вместо пустоты или plaintext. Обновлены `decryptMsg`/`decryptGroupMsg`, обработчики WS и catch-up по `visibilitychange`.
+- `push_preview` намеренно остаётся открытым — это цена за текст в push.
+
+### Preview для push
+- Серверный `buildPushPreview`: `push_preview` (если задан) → иначе ярлыки по типу (`[Стикер]`, `[GIF]`, `[Изображение]`, вопрос для опроса, иначе `content`). Групповой push теперь тоже использует `push_preview`, а не только `content`.
+- Обрезка превью по рунам (`truncateRunes`), эмодзи больше не режутся.
+- WS-пейлоад несёт `preview`, чтобы in-app уведомление/тост для зашифрованного текста не были пустыми (`app.ts #messagePreview`).
+- Удалён мёртвый `push_copies` (серверно-зашифрованные копии превью нигде не читались); убраны запись и cleanup, связанные тесты.
+
+Проверено: backend `go build` + полный `go test ./handlers/` (37 c) — зелёные; frontend build + спеки App/Admin/Chat — 28 SUCCESS.

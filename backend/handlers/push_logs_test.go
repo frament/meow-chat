@@ -102,3 +102,40 @@ func TestAdminPushEndpoints_ForbiddenForNonAdmin(t *testing.T) {
 		t.Fatalf("expected 403, got %d", resp.StatusCode)
 	}
 }
+
+func TestBuildPushPreview(t *testing.T) {
+	cases := []struct {
+		msgType   string
+		content   string
+		preview   string
+		hasImages bool
+		want      string
+	}{
+		{"text", "", "hello", false, "hello"},
+		{"text", "hello", "", false, "hello"},
+		{"sticker", "42", "", false, "[Стикер]"},
+		{"gif", "https://x/y.gif", "", false, "[GIF]"},
+		{"poll", "Question?", "", false, "Question?"},
+		{"image", "", "", true, "[Изображение]"},
+		{"image", "caption", "", true, "caption"},
+	}
+	for _, c := range cases {
+		got := buildPushPreview(c.msgType, c.content, c.preview, c.hasImages)
+		if got != c.want {
+			t.Errorf("buildPushPreview(%q,%q,%q,%v) = %q, want %q", c.msgType, c.content, c.preview, c.hasImages, got, c.want)
+		}
+	}
+}
+
+func TestTruncateRunes(t *testing.T) {
+	if got := truncateRunes("hello", 10); got != "hello" {
+		t.Errorf("expected unchanged, got %q", got)
+	}
+	if got := truncateRunes("приветмир", 6); got != "привет..." {
+		t.Errorf("expected 'привет...', got %q", got)
+	}
+	// must not split emoji
+	if got := truncateRunes("😀😀😀😀", 2); got != "😀😀..." {
+		t.Errorf("expected '😀😀...', got %q", got)
+	}
+}

@@ -76,8 +76,8 @@ export interface PollOption {
 }
 
 export type WsServerMessage =
-  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; poll?: Poll }
-  | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string }
+  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; poll?: Poll; preview?: string }
+  | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; preview?: string }
   | { type: 'user_online'; user_id: number }
   | { type: 'user_offline'; user_id: number }
   | { type: 'device_auth_request'; from_device_id: string; device_name?: string }

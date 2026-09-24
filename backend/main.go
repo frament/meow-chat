@@ -24,10 +24,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func cleanupExpiredPushCopies() {
-	database.DB.Exec("DELETE FROM push_copies WHERE expires_at < datetime('now')")
-}
-
 func cleanupOldPushLogs() {
 	database.DB.Exec("DELETE FROM push_logs WHERE created_at < datetime('now', '-14 days')")
 }
@@ -66,14 +62,12 @@ func main() {
 		log.Println("Restore applied successfully")
 	}
 
-	cleanupExpiredPushCopies()
 	cleanupOldPushLogs()
 
-	// Periodic cleanup of expired push copies / old push logs (every hour)
+	// Periodic cleanup of old push logs (every hour)
 	go func() {
 		for {
 			time.Sleep(1 * time.Hour)
-			cleanupExpiredPushCopies()
 			cleanupOldPushLogs()
 		}
 	}()

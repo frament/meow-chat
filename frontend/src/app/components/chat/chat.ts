@@ -1062,9 +1062,12 @@ export class ChatComponent implements OnInit, OnDestroy {
             return;
           }
           let content = data.content;
-          if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
-            const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
-            if (decrypted !== null) content = decrypted;
+          if (data.encrypted_content && data.encrypted_iv) {
+            if (this.e2eeReady) {
+              const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
+              if (decrypted !== null) content = decrypted;
+            }
+            if (!content) content = '[Зашифрованное сообщение]';
           }
           const msg: Message = {
             id: data.id || Date.now(),
@@ -1097,9 +1100,12 @@ export class ChatComponent implements OnInit, OnDestroy {
             return;
           }
           let content = data.content;
-          if (data.encrypted_content && data.encrypted_iv && this.e2eeReady) {
-            const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
-            if (decrypted !== null) content = decrypted;
+          if (data.encrypted_content && data.encrypted_iv) {
+            if (this.e2eeReady) {
+              const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
+              if (decrypted !== null) content = decrypted;
+            }
+            if (!content) content = '[Зашифрованное сообщение]';
           }
           const msg: Message = {
             id: data.id || Date.now(),
@@ -1171,7 +1177,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             const existingIds = new Set(this.messages.map(m => m.id));
             for (const msg of msgs) {
               if (!existingIds.has(msg.id)) {
-                this.messages.push(msg);
+                this.messages.push(await this.decryptMsg(msg, user.id));
               } else {
                 const existing = this.messages.find(m => m.id === msg.id);
                 if (existing) existing.is_read = msg.is_read;
@@ -1256,6 +1262,8 @@ export class ChatComponent implements OnInit, OnDestroy {
       const decrypted = await this.crypto.decrypt(this.currentUserId, peerId, msg.encrypted_content, msg.encrypted_iv);
       if (decrypted !== null) {
         msg.content = decrypted;
+      } else if (!msg.content) {
+        msg.content = '[Зашифрованное сообщение]';
       }
     }
     return msg;
@@ -1441,29 +1449,27 @@ export class ChatComponent implements OnInit, OnDestroy {
     let encryptedContent: string | undefined;
     let encryptedIV: string | undefined;
     let pushPreview: string | undefined;
-    let content = rawContent;
+    const content = rawContent;      // local/optimistic display (never sent when encrypted)
+    let wireContent = rawContent;    // what actually goes to the server
 
-    if (this.selectedUser && this.e2eeReady) {
-      const result = await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent);
+    // Only user-typed text is encrypted; structural types (sticker id, gif url,
+    // poll question) stay in `content` because the server/rendering needs them.
+    const encryptable = (type === 'text' || type === 'image') && !!rawContent;
+    if (this.e2eeReady && encryptable) {
+      const result = this.selectedUser
+        ? await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent)
+        : this.selectedGroup
+          ? await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent)
+          : null;
       if (result) {
         encryptedContent = result.encrypted;
         encryptedIV = result.iv;
         pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
-        content = rawContent;
+        wireContent = '';
       }
     }
 
       if (this.selectedGroup) {
-        if (this.e2eeReady && rawContent) {
-          const result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent);
-          if (result) {
-            encryptedContent = result.encrypted;
-            encryptedIV = result.iv;
-            pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
-            content = rawContent;
-          }
-        }
-
         // Optimistic: add message immediately
         const tempId = Date.now();
         const optimisticMsg: Message = {
@@ -1489,7 +1495,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
+        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -1506,7 +1512,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendGroupMessage(this.selectedGroup.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
+        this.api.sendGroupMessage(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });
@@ -1537,7 +1543,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendMessageWithProgress(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
+        this.api.sendMessageWithProgress(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -1554,7 +1560,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendMessage(this.selectedUser.id, content, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
+        this.api.sendMessage(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });
@@ -1793,6 +1799,8 @@ export class ChatComponent implements OnInit, OnDestroy {
       const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv);
       if (decrypted !== null) {
         msg.content = decrypted;
+      } else if (!msg.content) {
+        msg.content = '[Зашифрованное сообщение]';
       }
     }
     return msg;

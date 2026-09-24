@@ -365,28 +365,6 @@ func TestWS_GracePeriod_Reconnect(t *testing.T) {
 	}
 }
 
-// T5: Push copies created when recipient is offline
-func TestWS_PushCopy_Offline(t *testing.T) {
-	_, userID, baseURL := setupWSTest(t)
-	_ = userID
-
-	conn := wsDialDrain(t, baseURL, 1, false)
-
-	msg := map[string]interface{}{"to": 3, "content": "offline msg"}
-	wsWrite(t, conn, msg)
-
-	echo := wsRead(t, conn)
-	msgID := int64(echo["id"].(float64))
-
-	time.Sleep(200 * time.Millisecond)
-
-	var copyCount int
-	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
-	if copyCount != 1 {
-		t.Errorf("expected 1 push_copy for offline recipient, got %d", copyCount)
-	}
-}
-
 // T5b: No push copy when recipient is online and receives delivery
 func TestWS_PushCopy_NoCopyWhenOnline(t *testing.T) {
 	_, userID, baseURL := setupWSTest(t)
@@ -754,42 +732,6 @@ func TestWS_PushCopy_ReconnectWithinGrace(t *testing.T) {
 	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
 	if copyCount != 0 {
 		t.Errorf("expected 0 push_copies when recipient reconnected within grace, got %d", copyCount)
-	}
-}
-
-// T5d: Push copy encrypted content matches the push_preview sent by client
-func TestWS_PushCopy_EncryptedPreview(t *testing.T) {
-	_, userID, baseURL := setupWSTest(t)
-	_ = userID
-
-	conn := wsDialDrain(t, baseURL, 1, false)
-
-	msg := map[string]interface{}{
-		"to":           3,
-		"content":      "original content",
-		"push_preview": "preview for push",
-	}
-	wsWrite(t, conn, msg)
-
-	echo := wsRead(t, conn)
-	msgID := int64(echo["id"].(float64))
-
-	time.Sleep(200 * time.Millisecond)
-
-	var serverEncrypted string
-	err := database.DB.QueryRow(
-		"SELECT server_encrypted_content FROM push_copies WHERE message_id = ?", msgID,
-	).Scan(&serverEncrypted)
-	if err != nil {
-		t.Fatalf("expected push_copy row: %v", err)
-	}
-
-	decrypted, err := database.ServerDecrypt(serverEncrypted)
-	if err != nil {
-		t.Fatalf("failed to decrypt push_copy content: %v", err)
-	}
-	if string(decrypted) != "preview for push" {
-		t.Errorf("expected decrypted preview 'preview for push', got '%s'", string(decrypted))
 	}
 }
 

@@ -462,12 +462,7 @@ export class App implements OnInit, OnDestroy {
           const notifTitle = isGroup
             ? `New message in group`
             : `New message from ${msg.from_name || 'Someone'}`;
-          const notifBody = msg.content
-            || (msg.msg_type === 'image' || msg.images?.length ? '[Image]' : '')
-            || (msg.msg_type === 'sticker' ? '[Sticker]' : '')
-            || (msg.msg_type === 'gif' ? '[GIF]' : '')
-            || (msg.msg_type === 'poll' ? '[Poll]' : '')
-            || '';
+          const notifBody = this.#messagePreview(msg);
           const n = this.#notif.show(notifTitle, {
             body: notifBody,
             icon: '/favicon.png',
@@ -489,12 +484,7 @@ export class App implements OnInit, OnDestroy {
             };
           } else if (!document.hidden) {
             if (this.#toastTimer) clearTimeout(this.#toastTimer);
-            const toastBody = msg.content
-              || (msg.msg_type === 'image' || msg.images?.length ? '[Image]' : '')
-              || (msg.msg_type === 'sticker' ? '[Sticker]' : '')
-              || (msg.msg_type === 'gif' ? '[GIF]' : '')
-              || (msg.msg_type === 'poll' ? '[Poll]' : '')
-              || '';
+            const toastBody = this.#messagePreview(msg);
             this.toast.set({
               from: msg.from,
               from_name: isGroup ? `Group: ${msg.from_name}` : (msg.from_name || 'Someone'),
@@ -591,6 +581,15 @@ export class App implements OnInit, OnDestroy {
 
   #logPush(kind: string, endpoint = '', detail = ''): void {
     this.#api.pushLog({ kind, endpoint, detail }).subscribe({ error: () => {} });
+  }
+
+  #messagePreview(msg: any): string {
+    if (msg.msg_type === 'sticker') return '[Стикер]';
+    if (msg.msg_type === 'gif') return '[GIF]';
+    return msg.preview || msg.content
+      || (msg.msg_type === 'poll' ? '[Опрос]' : '')
+      || (msg.msg_type === 'image' || msg.images?.length ? '[Изображение]' : '')
+      || '';
   }
 
   private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;
