@@ -60,6 +60,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS pinned_users (user_id INTEGER NOT NULL, pinned_user_id INTEGER NOT NULL, PRIMARY KEY (user_id, pinned_user_id), FOREIGN KEY (user_id) REFERENCES users(id), FOREIGN KEY (pinned_user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS push_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, UNIQUE(user_id, endpoint))`,
 		`CREATE TABLE IF NOT EXISTS push_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, source TEXT NOT NULL DEFAULT 'server', kind TEXT NOT NULL, endpoint TEXT DEFAULT '', title TEXT DEFAULT '', body TEXT DEFAULT '', status TEXT DEFAULT '', detail TEXT DEFAULT '', ack_id TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
 		`CREATE TABLE IF NOT EXISTS webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, credential_id BLOB NOT NULL UNIQUE, public_key BLOB NOT NULL, attestation_type TEXT NOT NULL, aaguid BLOB NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS user_devices (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, device_name TEXT NOT NULL, device_public_key TEXT NOT NULL, device_id TEXT NOT NULL UNIQUE, last_seen DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS device_auth_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, device_name TEXT NOT NULL, device_public_key TEXT NOT NULL, device_id TEXT NOT NULL, status TEXT DEFAULT 'pending', encrypted_key TEXT, iv TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME DEFAULT (datetime('now', '+15 minutes')))`,
@@ -139,6 +140,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Delete("/posts/:id", AuthRequired, h.DeletePost)
 	app.Post("/posts/:id/react", AuthRequired, h.ToggleReaction)
 	app.Get("/feed", AuthRequired, h.GetFeed)
+	app.Get("/giphy/status", AuthRequired, h.GiphyStatus)
 	app.Post("/push/log", AuthRequired, h.PushClientLog)
 	app.Post("/push/ack", h.PushAck)
 

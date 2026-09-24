@@ -663,6 +663,10 @@ export class ApiService {
     });
   }
 
+  getGiphyStatus() {
+    return this.http.get<{ has_key: boolean }>(`${this.baseUrl}/giphy/status`);
+  }
+
   getGiphyKey() {
     return this.http.get<GiphyKeyResponse>(`${this.baseUrl}/admin/settings/giphy-key`);
   }

@@ -53,6 +53,7 @@ describe('ChatComponent', () => {
     getUnread: jasmine.createSpy().and.returnValue(of({ users: [], groups: [] })),
     hydrateUnread: jasmine.createSpy(),
     getGiphyKey: jasmine.createSpy().and.returnValue(of({ has_key: false, key: '' })),
+    getGiphyStatus: jasmine.createSpy().and.returnValue(of({ has_key: false })),
     searchUsers: jasmine.createSpy().and.returnValue(of([])),
     sendFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     getFriendRequests: jasmine.createSpy().and.returnValue(of([])),

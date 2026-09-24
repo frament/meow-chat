@@ -103,6 +103,27 @@ func TestAdminPushEndpoints_ForbiddenForNonAdmin(t *testing.T) {
 	}
 }
 
+func TestGiphyStatus(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	req, _ := http.NewRequest("GET", "/giphy/status", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var res struct {
+		HasKey bool `json:"has_key"`
+	}
+	json.NewDecoder(resp.Body).Decode(&res)
+	if res.HasKey {
+		t.Error("expected has_key=false when no giphy key configured")
+	}
+}
+
 func TestBuildPushPreview(t *testing.T) {
 	cases := []struct {
 		msgType   string

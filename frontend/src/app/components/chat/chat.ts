@@ -1006,8 +1006,9 @@ export class ChatComponent implements OnInit, OnDestroy {
     private keyboardService: KeyboardService,
   ) {
     this.msgTypes = this.buildMsgTypes();
-    this.api.getGiphyKey().subscribe({
+    this.api.getGiphyStatus().subscribe({
       next: (res) => this.giphyHasKey = res.has_key,
+      error: () => { this.giphyHasKey = false; },
     });
   }
 

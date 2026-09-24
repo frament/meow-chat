@@ -304,6 +304,7 @@ func main() {
 	giphy := api.Group("/giphy", handlers.AuthRequired)
 	giphy.Get("/search", h.SearchGiphy)
 	giphy.Get("/trending", h.TrendingGiphy)
+	giphy.Get("/status", h.GiphyStatus)
 
 	bak := api.Group("/admin/backup", handlers.AdminRequired)
 	bak.Get("/settings", h.GetBackupSettings)

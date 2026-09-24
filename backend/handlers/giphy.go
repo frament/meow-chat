@@ -13,6 +13,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// GiphyStatus reports whether a Giphy API key is configured. Available to any
+// authenticated user (unlike the admin-only key endpoint).
+func (h *Handler) GiphyStatus(c *fiber.Ctx) error {
+	apiKey, err := database.GetSetting("giphy_api_key")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to read Giphy key"})
+	}
+	return c.JSON(fiber.Map{"has_key": apiKey != ""})
+}
+
 func (h *Handler) SearchGiphy(c *fiber.Ctx) error {
 	apiKey, err := database.GetSetting("giphy_api_key")
 	if err != nil {
