@@ -28,6 +28,10 @@ func cleanupExpiredPushCopies() {
 	database.DB.Exec("DELETE FROM push_copies WHERE expires_at < datetime('now')")
 }
 
+func cleanupOldPushLogs() {
+	database.DB.Exec("DELETE FROM push_logs WHERE created_at < datetime('now', '-14 days')")
+}
+
 func main() {
 	database.InitDB()
 	database.SeedAdmin()
@@ -63,12 +67,14 @@ func main() {
 	}
 
 	cleanupExpiredPushCopies()
+	cleanupOldPushLogs()
 
-	// Periodic cleanup of expired push copies (every hour)
+	// Periodic cleanup of expired push copies / old push logs (every hour)
 	go func() {
 		for {
 			time.Sleep(1 * time.Hour)
 			cleanupExpiredPushCopies()
+			cleanupOldPushLogs()
 		}
 	}()
 
@@ -125,6 +131,7 @@ func main() {
 	api.Get("/version", h.GetVersion)
 	api.Get("/check-update", h.CheckUpdate)
 	api.Get("/push/vapid-public-key", h.VAPIDPublicKey)
+	api.Post("/push/ack", h.PushAck)
 	api.Get("/invite/:token", h.CheckInvite)
 	api.Get("/friend-invite/:token", h.CheckFriendInvite)
 
@@ -205,6 +212,7 @@ func main() {
 
 	api.Post("/push/subscribe", h.SubscribePush)
 	api.Delete("/push/subscribe", h.UnsubscribePush)
+	api.Post("/push/log", h.PushClientLog)
 
 	api.Post("/webauthn/begin-registration", h.WebAuthnBeginRegistration)
 	api.Post("/webauthn/finish-registration", h.WebAuthnFinishRegistration)
@@ -288,6 +296,8 @@ func main() {
 	admin.Post("/federation/servers/:id/sync-stickers", h.AdminSyncStickerPacks)
 	admin.Get("/settings/giphy-key", h.GetGiphyKey)
 	admin.Put("/settings/giphy-key", h.UpdateGiphyKey)
+	admin.Get("/push/logs", h.AdminPushLogs)
+	admin.Get("/push/status", h.AdminPushStatus)
 
 	api.Get("/sticker-packs", h.GetStickerPacks)
 

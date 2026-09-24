@@ -203,6 +203,35 @@ export interface UnreadResponse {
   groups: UnreadEntry[];
 }
 
+export interface AdminPushLog {
+  id: number;
+  user_id: number;
+  username: string;
+  source: string;
+  kind: string;
+  endpoint: string;
+  title: string;
+  body: string;
+  status: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface AdminPushSubscription {
+  id: number;
+  user_id: number;
+  username: string;
+  endpoint: string;
+}
+
+export interface AdminPushStatus {
+  total_subscriptions: number;
+  users_with_subscriptions: number;
+  last_server_send: string;
+  last_client_event: string;
+  subscriptions: AdminPushSubscription[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
@@ -833,6 +862,19 @@ export class ApiService {
     return this.http.delete(`${this.baseUrl}/push/subscribe`, {
       body: { endpoint },
     });
+  }
+
+  pushLog(event: { kind: string; endpoint?: string; detail?: string }) {
+    return this.http.post(`${this.baseUrl}/push/log`, event);
+  }
+
+  adminPushLogs(limit = 200, source = '') {
+    const q = source ? `?limit=${limit}&source=${source}` : `?limit=${limit}`;
+    return this.http.get<AdminPushLog[]>(`${this.baseUrl}/admin/push/logs${q}`);
+  }
+
+  adminPushStatus() {
+    return this.http.get<AdminPushStatus>(`${this.baseUrl}/admin/push/status`);
   }
 
   connectWebSocket(): void {

@@ -277,6 +277,19 @@ func migrate() {
 			created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at               DATETIME NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS push_logs (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id    INTEGER,
+			source     TEXT NOT NULL DEFAULT 'server',
+			kind       TEXT NOT NULL,
+			endpoint   TEXT DEFAULT '',
+			title      TEXT DEFAULT '',
+			body       TEXT DEFAULT '',
+			status     TEXT DEFAULT '',
+			detail     TEXT DEFAULT '',
+			ack_id     TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS polls (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,

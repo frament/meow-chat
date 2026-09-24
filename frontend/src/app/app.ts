@@ -298,6 +298,7 @@ export class App implements OnInit, OnDestroy {
     // Push subscription change from service worker
     navigator.serviceWorker?.addEventListener('message', (event) => {
       if (event.data?.type === 'push-subscription-changed') {
+        this.#logPush('subscription_changed', '', 'old=' + (event.data.oldEndpoint || ''));
         this.tryReSubscribePush();
       }
     });
@@ -538,7 +539,7 @@ export class App implements OnInit, OnDestroy {
     navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
     const ok = await this.#notif.requestPermission();
-    if (!ok) { console.warn('Push: permission denied'); return; }
+    if (!ok) { console.warn('Push: permission denied'); this.#logPush('permission_denied'); return; }
 
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     if (!reg) { this.schedulePushRetry(); return; }
@@ -557,12 +558,15 @@ export class App implements OnInit, OnDestroy {
       const staleEndpoint = existingSub.endpoint;
       await existingSub.unsubscribe().catch(() => {});
       this.#api.pushUnsubscribe(staleEndpoint).subscribe({ error: () => {} });
+      this.#logPush('rotate', staleEndpoint);
       existingSub = null;
     }
 
     if (existingSub) {
+      const endpoint = existingSub.endpoint;
       this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
-        error: () => this.schedulePushRetry(),
+        next: () => this.#logPush('reuse', endpoint),
+        error: () => { this.schedulePushRetry(); this.#logPush('subscribe_error', endpoint, 'reuse POST failed'); },
       });
       localStorage.setItem('pushVapidKey', fingerprint);
       return;
@@ -575,13 +579,18 @@ export class App implements OnInit, OnDestroy {
         applicationServerKey: key,
       });
       this.#api.pushSubscribe(sub.toJSON()).subscribe({
-        next: () => localStorage.setItem('pushVapidKey', fingerprint),
-        error: () => this.schedulePushRetry(),
+        next: () => { localStorage.setItem('pushVapidKey', fingerprint); this.#logPush('subscribe', sub.endpoint); },
+        error: () => { this.schedulePushRetry(); this.#logPush('subscribe_error', sub.endpoint, 'POST failed'); },
       });
     } catch (err) {
       console.warn('Push subscribe failed:', err);
+      this.#logPush('subscribe_error', '', String(err));
       this.schedulePushRetry();
     }
+  }
+
+  #logPush(kind: string, endpoint = '', detail = ''): void {
+    this.#api.pushLog({ kind, endpoint, detail }).subscribe({ error: () => {} });
   }
 
   private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;

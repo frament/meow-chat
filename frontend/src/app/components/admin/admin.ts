@@ -1,8 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { ApiService, User, StickerPack } from '../../services/api.service';
+import { ApiService, User, StickerPack, AdminPushLog, AdminPushStatus } from '../../services/api.service';
 import { toMemoryFile } from '../../services/upload-utils';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
@@ -69,10 +69,106 @@ interface BackupEntry {
               class="admin-nav-btn" [class.active]="activeTab === 'settings'">
               Настройки
             </button>
+            <button (click)="openPushTab()"
+              class="admin-nav-btn" [class.active]="activeTab === 'push'">
+              Push
+            </button>
           </nav>
         </div>
         <!-- Content -->
         <div class="flex-1 min-w-0 card p-6">
+
+        @if (activeTab === 'push') {
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="font-size:16px;font-weight:600;color:var(--text-primary);">Push-уведомления</h2>
+            <button (click)="loadPush()" class="btn-secondary" style="padding:6px 14px;font-size:13px;">Обновить</button>
+          </div>
+
+          @if (loadingPush && !pushStatus) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+          } @else {
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:20px;">
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Подписок</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ pushStatus?.total_subscriptions ?? 0 }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Пользователей с подпиской</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ pushStatus?.users_with_subscriptions ?? 0 }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Последняя отправка</div>
+                <div style="font-size:13px;color:var(--text-primary);">{{ pushStatus?.last_server_send || '—' }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Активность клиента</div>
+                <div style="font-size:13px;color:var(--text-primary);">{{ pushStatus?.last_client_event || '—' }}</div>
+              </div>
+            </div>
+
+            <h3 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Подписки</h3>
+            <div style="overflow-x:auto;margin-bottom:20px;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Пользователь</th>
+                    <th style="text-align:left;padding:8px 12px;font-weight:500;">Endpoint</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of pushStatus?.subscriptions ?? []; track s.id) {
+                    <tr style="border-bottom:1px solid var(--divider);">
+                      <td style="padding:8px 12px;color:var(--text-primary);">{{ s.username || ('#' + s.user_id) }}</td>
+                      <td style="padding:8px 12px;color:var(--text-tertiary);font-family:monospace;font-size:11px;word-break:break-all;max-width:420px;">{{ s.endpoint }}</td>
+                    </tr>
+                  }
+                  @if ((pushStatus?.subscriptions ?? []).length === 0) {
+                    <tr><td colspan="2" style="padding:10px 12px;color:var(--text-tertiary);">Нет подписок</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <h3 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Логи ({{ pushLogs.length }})</h3>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Время</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Пользователь</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Источник</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Событие</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Статус</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Детали</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (l of pushLogs; track l.id) {
+                    <tr style="border-bottom:1px solid var(--divider);">
+                      <td style="padding:6px 10px;color:var(--text-tertiary);white-space:nowrap;">{{ l.created_at | date:'dd.MM HH:mm:ss' }}</td>
+                      <td style="padding:6px 10px;color:var(--text-primary);">{{ l.username || (l.user_id ? '#' + l.user_id : '—') }}</td>
+                      <td style="padding:6px 10px;color:var(--text-secondary);">{{ l.source }}</td>
+                      <td style="padding:6px 10px;color:var(--text-primary);">{{ l.kind }}</td>
+                      <td style="padding:6px 10px;">
+                        @if (l.status === '201' || l.status === 'ok') {
+                          <span style="color:#34d399;">{{ l.status }}</span>
+                        } @else if (l.status) {
+                          <span style="color:#e74c3c;">{{ l.status }}</span>
+                        } @else {
+                          <span style="color:var(--text-tertiary);">—</span>
+                        }
+                      </td>
+                      <td style="padding:6px 10px;color:var(--text-tertiary);max-width:360px;word-break:break-word;">{{ l.detail || l.title }}</td>
+                    </tr>
+                  }
+                  @if (pushLogs.length === 0) {
+                    <tr><td colspan="6" style="padding:10px 12px;color:var(--text-tertiary);">Пока нет событий</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
 
         @if (activeTab === 'users') {
           @if (loadingUsers) {
@@ -463,7 +559,7 @@ interface BackupEntry {
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-lg font-bold" style="color:var(--text-primary);">Админка</h1>
         <div style="position:relative;">
-          <select (change)="activeTab = $any($event.target).value"
+          <select (change)="onTabChange($any($event.target).value)"
             style="appearance:none;padding:8px 32px 8px 12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-surface);font-size:14px;font-weight:500;color:var(--text-primary);cursor:pointer;font-family:inherit;min-width:160px;">
             <option value="users">Пользователи</option>
             <option value="files">Файлы</option>
@@ -472,10 +568,47 @@ interface BackupEntry {
             <option value="federation">Федерация</option>
             <option value="stickers">Стикеры</option>
             <option value="settings">Настройки</option>
+            <option value="push">Push</option>
           </select>
           <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-tertiary);font-size:10px;">▼</div>
         </div>
       </div>
+
+      @if (activeTab === 'push') {
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold" style="color:var(--text-primary);">Push</h2>
+          <button (click)="loadPush()" class="btn-secondary" style="padding:5px 12px;font-size:12px;">Обновить</button>
+        </div>
+        <div class="card" style="padding:12px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:4px;">
+            <span style="color:var(--text-secondary);">Подписок</span><span>{{ pushStatus?.total_subscriptions ?? 0 }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:4px;">
+            <span style="color:var(--text-secondary);">Пользователей</span><span>{{ pushStatus?.users_with_subscriptions ?? 0 }}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);">Отправка: {{ pushStatus?.last_server_send || '—' }}</div>
+          <div style="font-size:12px;color:var(--text-tertiary);">Клиент: {{ pushStatus?.last_client_event || '—' }}</div>
+        </div>
+        <div class="card" style="padding:0;">
+          @for (l of pushLogs; track l.id) {
+            <div style="padding:8px 12px;border-bottom:1px solid var(--divider);">
+              <div style="display:flex;justify-content:space-between;gap:8px;">
+                <span style="font-size:12px;font-weight:600;color:var(--text-primary);">{{ l.kind }}</span>
+                <span style="font-size:11px;color:var(--text-tertiary);">{{ l.created_at | date:'dd.MM HH:mm:ss' }}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-secondary);">
+                {{ l.username || (l.user_id ? '#' + l.user_id : '—') }} · {{ l.source }}@if (l.status) { · {{ l.status }} }
+              </div>
+              @if (l.detail || l.title) {
+                <div style="font-size:11px;color:var(--text-tertiary);word-break:break-word;">{{ l.detail || l.title }}</div>
+              }
+            </div>
+          }
+          @if (pushLogs.length === 0) {
+            <div style="padding:12px;color:var(--text-tertiary);font-size:13px;">Пока нет событий</div>
+          }
+        </div>
+      }
 
       @if (activeTab === 'users') {
         @if (loadingUsers) {
@@ -781,8 +914,8 @@ interface BackupEntry {
     </div>
   `,
 })
-export class AdminComponent implements OnInit {
-  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'stickers' | 'settings' = 'users';
+export class AdminComponent implements OnInit, OnDestroy {
+  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'stickers' | 'settings' | 'push' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -828,9 +961,58 @@ export class AdminComponent implements OnInit {
   gitHubCheckError = '';
   versionCheckDone = false;
 
+  pushStatus: AdminPushStatus | null = null;
+  pushLogs: AdminPushLog[] = [];
+  loadingPush = false;
+  private pushTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(public api: ApiService) {}
 
   loadFederation() {}
+
+  ngOnDestroy() {
+    this.stopPushRefresh();
+  }
+
+  openPushTab() {
+    this.activeTab = 'push';
+    this.loadPush();
+    this.startPushRefresh();
+  }
+
+  onTabChange(tab: string) {
+    this.activeTab = tab as AdminComponent['activeTab'];
+    if (tab === 'push') {
+      this.loadPush();
+      this.startPushRefresh();
+    } else {
+      this.stopPushRefresh();
+    }
+  }
+
+  private startPushRefresh() {
+    if (this.pushTimer) return;
+    this.pushTimer = setInterval(() => this.loadPush(), 10000);
+  }
+
+  private stopPushRefresh() {
+    if (this.pushTimer) {
+      clearInterval(this.pushTimer);
+      this.pushTimer = null;
+    }
+  }
+
+  loadPush() {
+    this.loadingPush = true;
+    this.api.adminPushStatus().subscribe({
+      next: (s) => { this.pushStatus = s; this.loadingPush = false; },
+      error: () => { this.loadingPush = false; },
+    });
+    this.api.adminPushLogs(200).subscribe({
+      next: (logs) => { this.pushLogs = logs; },
+      error: () => {},
+    });
+  }
 
   ngOnInit() {
     this.loadUsers();

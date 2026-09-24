@@ -78,3 +78,18 @@ Wedge (user 9) отправил в группу 1 («Old school») сообще�
 
 ### Важно для пользователей 9/10
 Подписка появится, когда они откроют обновлённое приложение с разрешёнными уведомлениями (на iOS — только установленная на «Домой» PWA, iOS 16.4+). Без разрешения/установки push работать не будет.
+
+## Дополнение (2026-09-24, вечер): даты в чате и админ-страница push
+
+### 1. Группировка сообщений по датам
+`chat.ts:displayMessages` теперь вставляет разделители дней («Сегодня», «Вчера», «22 сентября», «22 сентября 2025») перед сообщениями другого календарного дня; работает и для личных, и для групповых чатов (оба списка — desktop/mobile). Стиль `.date-separator` в `styles.css`. Раньше у сообщений было только время `HH:mm` без даты.
+
+### 2. Админ-страница Push (статусы + логи)
+- БД: таблица `push_logs` (user_id, source `server|client`, kind, endpoint, title, body, status, detail, ack_id, created_at); чистится старше 14 дней (`cleanupOldPushLogs`).
+- Сервер логирует: `send` (HTTP-статус push-сервиса + тело ответа), `error`, `no_subscription`, `subscribe`, `unsubscribe`.
+- Клиент логирует (auth `POST /api/push/log`): `subscribe`, `subscribe_error`, `reuse`, `rotate`, `permission_denied`, `subscription_changed`.
+- SW подтверждает доставку через неавторизованный `POST /api/push/ack` по случайному `ackId` из payload: `received` (SW получил), `shown` (уведомление показано), `click`, `error`. Это позволяет отделить «APNs/FCM принял» от «устройство реально получило/показало».
+- Админ-API: `GET /api/admin/push/status` (сводка + список подписок) и `GET /api/admin/push/logs?limit=&source=`.
+- UI: вкладка «Push» в админке (desktop + mobile), авто-обновление раз в 10 c, таблица подписок и логов.
+
+Проверено: backend `go build` + тесты (`TestPushClientLog`, `TestPushAck`, `TestAdminPushEndpoints*`) — зелёные; frontend build + спеки App/Admin/Chat — 28 SUCCESS.

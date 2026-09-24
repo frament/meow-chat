@@ -3,10 +3,21 @@ importScripts('./ngsw-worker.js');
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
 
+function ackPush(ackId, kind, detail) {
+  if (!ackId) return;
+  fetch('/api/push/ack', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ackId, kind, detail: detail || '' }),
+  }).catch(() => {});
+}
+
 self.addEventListener('push', (event) => {
   let data;
   try { data = event.data?.json(); } catch {}
   if (!data) return;
+  const ackId = data.data?.ackId;
+  ackPush(ackId, 'received');
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
@@ -14,12 +25,14 @@ self.addEventListener('push', (event) => {
       data: data.data,
       tag: data.data?.tag || 'default',
       requireInteraction: true,
-    })
+    }).then(() => ackPush(ackId, 'shown'))
+      .catch((err) => ackPush(ackId, 'error', String(err)))
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  ackPush(event.notification.data?.ackId, 'click');
   const url = event.notification.data?.url || '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

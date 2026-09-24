@@ -195,6 +195,8 @@ import { toMemoryFile } from '../../services/upload-utils';
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
+                } @else if ($any(item)._dateSep) {
+                  <div class="date-separator"><span>{{ $any(item).label }}</span></div>
                 } @else {
                   <div class="flex" [class.justify-end]="$any(item).from_user_id === currentUserId">
                     <div [class.chat-message-outgoing]="$any(item).from_user_id === currentUserId"
@@ -528,6 +530,8 @@ import { toMemoryFile } from '../../services/upload-utils';
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
+                } @else if ($any(item)._dateSep) {
+                  <div class="date-separator"><span>{{ $any(item).label }}</span></div>
                 } @else {
                   <div class="flex" [class.justify-end]="$any(item).from_user_id === currentUserId">
                     <div [class.chat-message-outgoing]="$any(item).from_user_id === currentUserId"
@@ -939,16 +943,40 @@ export class ChatComponent implements OnInit, OnDestroy {
   @ViewChild('scrollContainerDesktop', { read: ElementRef }) scrollContainerDesktop?: ElementRef<HTMLElement>;
   @ViewChild('scrollContainerMobile', { read: ElementRef }) scrollContainerMobile?: ElementRef<HTMLElement>;
 
-  get displayMessages(): (Message | { _divider: true })[] {
-    if (this.unreadDividerIdx < 0) return this.messages;
-    const items: (Message | { _divider: true })[] = [];
+  get displayMessages(): (Message | { _divider: true } | { _dateSep: true; label: string })[] {
+    const items: (Message | { _divider: true } | { _dateSep: true; label: string })[] = [];
+    let lastDay = '';
     for (let i = 0; i < this.messages.length; i++) {
+      const m = this.messages[i];
+      const day = this.dayKey(m.created_at);
+      if (day !== lastDay) {
+        items.push({ _dateSep: true, label: this.dayLabel(m.created_at) });
+        lastDay = day;
+      }
       if (i === this.unreadDividerIdx) {
         items.push({ _divider: true });
       }
-      items.push(this.messages[i]);
+      items.push(m);
     }
     return items;
+  }
+
+  private dayKey(iso: string): string {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+
+  private dayLabel(iso: string): string {
+    const d = new Date(iso);
+    const now = new Date();
+    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+    if (diffDays === 0) return 'Сегодня';
+    if (diffDays === 1) return 'Вчера';
+    const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear()
+      ? { day: 'numeric', month: 'long' }
+      : { day: 'numeric', month: 'long', year: 'numeric' };
+    return d.toLocaleDateString('ru-RU', opts);
   }
 
   private scrollToBottom(): void {

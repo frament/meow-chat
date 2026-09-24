@@ -41,7 +41,7 @@ describe('App', () => {
     mockApi = jasmine.createSpyObj('ApiService', [
       'connectWebSocket', 'incrementUnread', 'clearUnread',
       'incrementGroupUnread', 'clearGroupUnread', 'markGroupRead',
-      'getUnread', 'hydrateUnread', 'pushUnsubscribe',
+      'getUnread', 'hydrateUnread', 'pushUnsubscribe', 'pushLog',
       'checkHealth', 'getVapidPublicKey', 'pushSubscribe',
       'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
     ], {
@@ -66,6 +66,8 @@ describe('App', () => {
     (mockApi.checkHealth as jasmine.Spy).and.returnValue(of({ status: 'ok' }));
     (mockApi.getUnread as jasmine.Spy).and.returnValue(of({ users: [], groups: [] }));
     (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+    (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
+    (mockApi.pushUnsubscribe as jasmine.Spy).and.returnValue(of({}));
 
     mockCrypto = jasmine.createSpyObj('CryptoService', [
       'init', 'syncPublicKey', 'hasIdentityKey',
@@ -233,7 +235,8 @@ describe('App', () => {
         configurable: true,
         get: () => mockSW,
       });
-          (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+    (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+    (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
       (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
       (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
 

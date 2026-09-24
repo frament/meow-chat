@@ -28,6 +28,8 @@ describe('AdminComponent', () => {
     updateGiphyKey: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     getVersion: jasmine.createSpy().and.returnValue(of({ version: '1.1.0' })),
     checkUpdate: jasmine.createSpy().and.returnValue(of({ has_update: false, latest: '', current: '' })),
+    adminPushStatus: jasmine.createSpy().and.returnValue(of({ total_subscriptions: 0, users_with_subscriptions: 0, last_server_send: '', last_client_event: '', subscriptions: [] })),
+    adminPushLogs: jasmine.createSpy().and.returnValue(of([])),
   };
 
   beforeEach(async () => {
@@ -47,21 +49,29 @@ describe('AdminComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('renders all 7 tab buttons on desktop', () => {
+  it('loads push status and logs when opening the push tab', () => {
+    component.openPushTab();
+    expect(component.activeTab).toBe('push');
+    expect(mockApi.adminPushStatus).toHaveBeenCalled();
+    expect(mockApi.adminPushLogs).toHaveBeenCalled();
+    component.ngOnDestroy();
+  });
+
+  it('renders all 8 tab buttons on desktop', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('nav button');
     const tabTexts = Array.from(buttons)
       .map(b => b.textContent?.trim())
-      .filter(t => t === 'Пользователи' || t === 'Файлы' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Стикеры' || t === 'Настройки');
-    expect(tabTexts.length).toBe(7);
+      .filter(t => t === 'Пользователи' || t === 'Файлы' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Стикеры' || t === 'Настройки' || t === 'Push');
+    expect(tabTexts.length).toBe(8);
     expect(component.activeTab).toBe('users');
   });
 
-  it('renders mobile select with 7 options', () => {
+  it('renders mobile select with 8 options', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const select = compiled.querySelector('select') as HTMLSelectElement;
     expect(select).toBeTruthy();
-    expect(select.options.length).toBe(7);
+    expect(select.options.length).toBe(8);
     expect(select.options[0].value).toBe('users');
     expect(select.options[1].value).toBe('files');
     expect(select.options[2].value).toBe('chats');
@@ -69,6 +79,7 @@ describe('AdminComponent', () => {
     expect(select.options[4].value).toBe('federation');
     expect(select.options[5].value).toBe('stickers');
     expect(select.options[6].value).toBe('settings');
+    expect(select.options[7].value).toBe('push');
   });
 
   it('changes activeTab via mobile select', () => {
