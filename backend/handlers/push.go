@@ -152,6 +152,11 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 		if resp.StatusCode == 410 || resp.StatusCode == 404 || resp.StatusCode == 403 {
 			log.Printf("Removing dead push subscription (status %d) for user %d", resp.StatusCode, toUserID)
 			database.DB.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
+			// VAPID mismatch means the browser holds a subscription created with
+			// a different key. Ask the client to unsubscribe and re-subscribe.
+			if resp.StatusCode == 403 {
+				h.SendToUser(toUserID, fiber.Map{"type": "push_resubscribe"})
+			}
 		}
 	}
 	if !hasSubs {

@@ -435,6 +435,11 @@ export class App implements OnInit, OnDestroy {
           return;
         }
 
+        if (msg.type === 'push_resubscribe') {
+          this.forceResubscribePush();
+          return;
+        }
+
         if (msg.type !== 'message' && msg.type !== 'group_message') {
           return;
         }
@@ -546,7 +551,7 @@ export class App implements OnInit, OnDestroy {
 
     // VAPID keys rotated (or a legacy subscription predates key tracking):
     // drop the stale subscription, otherwise push services reject it with 403.
-    if (existingSub && storedKey !== keys.publicKey) {
+    if (existingSub && storedKey && storedKey !== keys.publicKey) {
       const staleEndpoint = existingSub.endpoint;
       await existingSub.unsubscribe().catch(() => {});
       this.#api.pushUnsubscribe(staleEndpoint).subscribe({ error: () => {} });
@@ -578,6 +583,22 @@ export class App implements OnInit, OnDestroy {
   }
 
   private pushRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Server reported a stale (VAPID-mismatched) subscription: drop it and
+  // create a fresh one with the current key.
+  private async forceResubscribePush(): Promise<void> {
+    try {
+      const reg = await navigator.serviceWorker?.ready.catch(() => null);
+      const existing = await reg?.pushManager?.getSubscription().catch(() => null);
+      if (existing) {
+        const endpoint = existing.endpoint;
+        await existing.unsubscribe().catch(() => {});
+        this.#api.pushUnsubscribe(endpoint).subscribe({ error: () => {} });
+      }
+    } catch {}
+    localStorage.removeItem('pushVapidKey');
+    await this.tryReSubscribePush();
+  }
 
   private schedulePushRetry(): void {
     if (this.pushRetryTimer) return;

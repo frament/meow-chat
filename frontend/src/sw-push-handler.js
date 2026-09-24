@@ -37,30 +37,50 @@ self.addEventListener('notificationclick', (event) => {
 
 let pendingSub = null;
 
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+async function currentVapidKey() {
+  try {
+    const res = await fetch('/api/push/vapid-public-key', { cache: 'no-store' });
+    const data = await res.json();
+    return data.publicKey ? urlBase64ToUint8Array(data.publicKey) : null;
+  } catch {
+    return null;
+  }
+}
+
 self.addEventListener('pushsubscriptionchange', (event) => {
-  event.waitUntil(
-    self.registration.pushManager.subscribe({ userVisibleOnly: true })
-      .then((newSubscription) => {
-        return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-          .then(clients => {
-            if (clients.length > 0) {
-              for (const client of clients) {
-                client.postMessage({
-                  type: 'push-subscription-changed',
-                  oldEndpoint: event.oldSubscription?.endpoint,
-                  newSubscription: JSON.parse(JSON.stringify(newSubscription)),
-                });
-              }
-            } else {
-              pendingSub = {
-                oldEndpoint: event.oldSubscription?.endpoint,
-                newSubscription: JSON.parse(JSON.stringify(newSubscription)),
-              };
-            }
-          });
-      })
-      .catch(() => {})
-  );
+  event.waitUntil((async () => {
+    let newSubscription;
+    try {
+      const key = await currentVapidKey();
+      // Must re-subscribe with the same VAPID key, otherwise the new
+      // subscription is rejected by FCM/APNs with 403 (VAPID mismatch).
+      newSubscription = await self.registration.pushManager.subscribe(
+        key ? { userVisibleOnly: true, applicationServerKey: key } : { userVisibleOnly: true }
+      );
+    } catch {
+      return;
+    }
+    const payload = {
+      type: 'push-subscription-changed',
+      oldEndpoint: event.oldSubscription?.endpoint,
+      newSubscription: JSON.parse(JSON.stringify(newSubscription)),
+    };
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (clients.length > 0) {
+      for (const client of clients) {
+        client.postMessage(payload);
+      }
+    } else {
+      pendingSub = payload;
+    }
+  })());
 });
 
 self.addEventListener('message', (event) => {

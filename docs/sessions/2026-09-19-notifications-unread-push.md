@@ -55,3 +55,26 @@
 - Тест `TestCheckUpdate_DescribeVersionNoFalseUpdate`.
 
 Проверено: backend `go build` + тесты handlers (релевантные) — зелёные; frontend build + спеки App/Settings — 24 SUCCESS.
+
+## Дополнение (2026-09-24): push не пришёл в группе, хотя бейджи верны
+
+### Диагностика по логам прода
+Wedge (user 9) отправил в группу 1 («Old school») сообщения 9/10 (13:29–13:30), frament отправил 11 (14:06):
+```
+13:29:39 Web Push sent to user 1, Apple .../QH9z... status 201
+13:29:39 No push subscriptions found for user 10
+14:06:47 No push subscriptions found for user 9
+14:06:47 No push subscriptions found for user 10
+```
+Вывод: у user 9 и user 10 **нет ни одной push-подписки** на сервере → push невозможен. Бейджи корректны, т.к. считаются серверно и не требуют push.
+
+### Найденный баг
+`sw-push-handler.js` в `pushsubscriptionchange` вызывал `pushManager.subscribe({ userVisibleOnly: true })` **без `applicationServerKey`**. Такая подписка не связана с текущим VAPID-ключом → FCM/APNs отвечают `403`, а после фикса от 19.09 сервер её удаляет → подписка исчезает.
+
+### Фиксы
+- `sw-push-handler.js`: в `pushsubscriptionchange` сначала тянет `/api/push/vapid-public-key` и подписывается с этим ключом; убран дублирующий `.catch`.
+- `push.go`: при удалении подписки на `403` сервер шлёт владельцу WS-событие `{type:"push_resubscribe"}`.
+- `app.ts`: обработка `push_resubscribe` → `forceResubscribePush()` (unsubscribe + `DELETE /push/subscribe` + свежая подписка). Проактивная переподписка по `localStorage` теперь срабатывает только когда ключ известен и реально изменился (не рушит рабочие подписки на первом запуске).
+
+### Важно для пользователей 9/10
+Подписка появится, когда они откроют обновлённое приложение с разрешёнными уведомлениями (на iOS — только установленная на «Домой» PWA, iOS 16.4+). Без разрешения/установки push работать не будет.
