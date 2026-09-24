@@ -188,4 +188,28 @@ describe('ChatComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Выберите чат');
   });
+
+  it('inserts date separators between messages of different days', () => {
+    const today = new Date().toISOString();
+    const older = new Date(Date.now() - 3 * 86400000).toISOString();
+    component.messages = [
+      { id: 1, from_user_id: 2, content: 'old', msg_type: 'text', created_at: older } as any,
+      { id: 2, from_user_id: 2, content: 'today', msg_type: 'text', created_at: today } as any,
+    ];
+    const items: any[] = component.displayMessages;
+    const seps = items.filter(i => i._dateSep);
+    expect(seps.length).toBe(2);
+    expect(seps[1].label).toBe('Сегодня');
+  });
+
+  it('does not insert a separator between messages on the same day', () => {
+    const a = new Date(Date.now() - 3600000).toISOString();
+    const b = new Date().toISOString();
+    component.messages = [
+      { id: 1, from_user_id: 2, content: 'a', msg_type: 'text', created_at: a } as any,
+      { id: 2, from_user_id: 2, content: 'b', msg_type: 'text', created_at: b } as any,
+    ];
+    const seps = (component.displayMessages as any[]).filter(i => i._dateSep);
+    expect(seps.length).toBe(1);
+  });
 });

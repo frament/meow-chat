@@ -237,6 +237,46 @@ func TestSendGroupMessage(t *testing.T) {
 	}
 }
 
+func TestSendGroupMessage_EncryptedStoresNoPlaintext(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	database.DB.Exec("INSERT INTO group_chats (name, created_by) VALUES (?, ?)", "Test Group", userID)
+	database.DB.Exec("INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (?, ?)", 1, userID)
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	w.WriteField("group_chat_id", "1")
+	w.WriteField("content", "")
+	w.WriteField("encrypted_content", "group-cipher")
+	w.WriteField("encrypted_iv", "group-iv")
+	w.WriteField("push_preview", "hi there")
+	w.Close()
+
+	req, _ := http.NewRequest("POST", "/group-chat-messages", &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		respBody := new(bytes.Buffer)
+		respBody.ReadFrom(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, respBody.String())
+	}
+
+	var content, enc string
+	database.DB.QueryRow(
+		"SELECT content, encrypted_content FROM group_messages ORDER BY id DESC LIMIT 1",
+	).Scan(&content, &enc)
+	if content != "" {
+		t.Errorf("expected empty plaintext content, got %q", content)
+	}
+	if enc != "group-cipher" {
+		t.Errorf("expected ciphertext stored, got %q", enc)
+	}
+}
+
 func TestGetGroupMessages(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 

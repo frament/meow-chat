@@ -67,6 +67,42 @@ func TestSendMessage_Encrypted(t *testing.T) {
 	}
 }
 
+func TestSendMessage_EncryptedStoresNoPlaintext(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	w.WriteField("to_user_id", "1")
+	w.WriteField("content", "")
+	w.WriteField("encrypted_content", "cipher-blob")
+	w.WriteField("encrypted_iv", "iv-blob")
+	w.WriteField("push_preview", "hello preview")
+	w.Close()
+
+	req, _ := http.NewRequest("POST", "/messages", &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var content, enc string
+	database.DB.QueryRow(
+		"SELECT content, encrypted_content FROM messages WHERE from_user_id=? ORDER BY id DESC LIMIT 1",
+		userID,
+	).Scan(&content, &enc)
+	if content != "" {
+		t.Errorf("expected empty plaintext content, got %q", content)
+	}
+	if enc != "cipher-blob" {
+		t.Errorf("expected ciphertext stored, got %q", enc)
+	}
+}
+
 func TestSendMessage_Sticker(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
