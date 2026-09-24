@@ -1,11 +1,11 @@
 .PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password
 
 # Version baked into the backend at build time and shown in the UI.
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 1.1.1)
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 1.2.0)
 
 update:
 	git pull
-	VERSION="$$(git describe --tags --always --dirty 2>/dev/null || echo 1.1.1)" docker compose build
+	VERSION="$$(git describe --tags --always --dirty 2>/dev/null || echo 1.2.0)" docker compose build
 	docker compose up -d
 
 build:
