@@ -23,8 +23,9 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: data.icon || '/favicon.png',
       data: data.data,
+      // The server appends the unique ackId to the tag, so each message gets
+      // its own notification and nothing is silently replaced/dropped.
       tag: data.data?.tag || 'default',
-      requireInteraction: true,
     }).then(() => ackPush(ackId, 'shown'))
       .catch((err) => ackPush(ackId, 'error', String(err)))
   );

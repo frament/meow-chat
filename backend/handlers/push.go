@@ -121,6 +121,16 @@ func logPush(userID int64, source, kind, endpoint, title, body, status, detail, 
 	}
 }
 
+// pushTag returns a per-delivery notification tag. Reusing the same tag for
+// consecutive messages makes APNs/WebKit silently replace (and, while the device
+// sleeps, drop) pending notifications, which users perceive as "never arrived".
+func pushTag(baseTag, ackID string) string {
+	if baseTag == "" || ackID == "" {
+		return baseTag
+	}
+	return baseTag + "-" + ackID
+}
+
 func newAckID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -176,6 +186,15 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 	}
 	defer rows.Close()
 
+	// Base notification tag (groups notifications per conversation). It is made
+	// unique per delivery below: reusing a tag makes APNs/WebKit silently replace
+	// (and, while the device sleeps, drop) an earlier pending notification, which
+	// users perceive as "the message never arrived".
+	baseTag := ""
+	if data != nil {
+		baseTag, _ = data["tag"].(string)
+	}
+
 	hasSubs := false
 	for rows.Next() {
 		hasSubs = true
@@ -197,6 +216,9 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			data = map[string]interface{}{}
 		}
 		data["ackId"] = ackID
+		if baseTag != "" {
+			data["tag"] = pushTag(baseTag, ackID)
+		}
 
 		payload, _ := json.Marshal(map[string]interface{}{
 			"title": title,
