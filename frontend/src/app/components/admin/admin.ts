@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { ApiService, User, StickerPack, AdminPushLog, AdminPushStatus } from '../../services/api.service';
+import { ApiService, User, StickerPack, AdminPushLog, AdminPushStatus, AdminDecryptFailures } from '../../services/api.service';
 import { toMemoryFile } from '../../services/upload-utils';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
@@ -72,6 +72,10 @@ interface BackupEntry {
             <button (click)="openPushTab()"
               class="admin-nav-btn" [class.active]="activeTab === 'push'">
               Push
+            </button>
+            <button (click)="openDecryptTab()"
+              class="admin-nav-btn" [class.active]="activeTab === 'decrypt'">
+              Расшифровка
             </button>
           </nav>
         </div>
@@ -163,6 +167,69 @@ interface BackupEntry {
                   }
                   @if (pushLogs.length === 0) {
                     <tr><td colspan="6" style="padding:10px 12px;color:var(--text-tertiary);">Пока нет событий</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+
+        @if (activeTab === 'decrypt') {
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="font-size:16px;font-weight:600;color:var(--text-primary);">Ошибки расшифровки E2EE</h2>
+            <button (click)="loadDecrypt()" class="btn-secondary" style="padding:6px 14px;font-size:13px;">Обновить</button>
+          </div>
+          @if (!decryptData) {
+            <p style="color:var(--text-tertiary);font-size:14px;">Загрузка...</p>
+          } @else {
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;">
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Всего</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ decryptData.total }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">DM</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ decryptData.dm_count }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Группы</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ decryptData.group_count }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Пользователей</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);">{{ decryptData.users }}</div>
+              </div>
+              <div style="padding:12px;border:1px solid var(--border-default);border-radius:10px;">
+                <div style="font-size:12px;color:var(--text-secondary);">Последняя</div>
+                <div style="font-size:13px;color:var(--text-primary);">{{ decryptData.last_at || '—' }}</div>
+              </div>
+            </div>
+
+            <h3 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Последние ({{ decryptData.recent.length }})</h3>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="color:var(--text-secondary);border-bottom:1px solid var(--divider);">
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Время</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Пользователь</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Чат</th>
+                    <th style="text-align:left;padding:6px 10px;font-weight:500;">Причина</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (f of decryptData.recent; track f.id) {
+                    <tr style="border-bottom:1px solid var(--divider);">
+                      <td style="padding:6px 10px;color:var(--text-tertiary);white-space:nowrap;">{{ f.created_at | date:'dd.MM HH:mm:ss' }}</td>
+                      <td style="padding:6px 10px;color:var(--text-primary);">{{ f.username || ('#' + f.user_id) }}</td>
+                      <td style="padding:6px 10px;color:var(--text-secondary);">
+                        @if (f.scope === 'group') { Группа «{{ f.group_name || ('#' + f.group_id) }}» }
+                        @else { Личка · {{ f.peer_username || ('#' + f.peer_id) }} }
+                      </td>
+                      <td style="padding:6px 10px;color:#e74c3c;">{{ f.detail || 'decrypt_failed' }}</td>
+                    </tr>
+                  }
+                  @if (decryptData.recent.length === 0) {
+                    <tr><td colspan="4" style="padding:10px 12px;color:var(--text-tertiary);">Ошибок нет</td></tr>
                   }
                 </tbody>
               </table>
@@ -569,6 +636,7 @@ interface BackupEntry {
             <option value="stickers">Стикеры</option>
             <option value="settings">Настройки</option>
             <option value="push">Push</option>
+            <option value="decrypt">Расшифровка</option>
           </select>
           <div style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-tertiary);font-size:10px;">▼</div>
         </div>
@@ -606,6 +674,43 @@ interface BackupEntry {
           }
           @if (pushLogs.length === 0) {
             <div style="padding:12px;color:var(--text-tertiary);font-size:13px;">Пока нет событий</div>
+          }
+        </div>
+      }
+
+      @if (activeTab === 'decrypt') {
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold" style="color:var(--text-primary);">Расшифровка</h2>
+          <button (click)="loadDecrypt()" class="btn-secondary" style="padding:5px 12px;font-size:12px;">Обновить</button>
+        </div>
+        <div class="card" style="padding:12px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:4px;">
+            <span style="color:var(--text-secondary);">Всего</span><span>{{ decryptData?.total ?? 0 }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:4px;">
+            <span style="color:var(--text-secondary);">DM / Группы</span><span>{{ decryptData?.dm_count ?? 0 }} / {{ decryptData?.group_count ?? 0 }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-primary);margin-bottom:4px;">
+            <span style="color:var(--text-secondary);">Пользователей</span><span>{{ decryptData?.users ?? 0 }}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);">Последняя: {{ decryptData?.last_at || '—' }}</div>
+        </div>
+        <div class="card" style="padding:0;">
+          @for (f of decryptData?.recent ?? []; track f.id) {
+            <div style="padding:8px 12px;border-bottom:1px solid var(--divider);">
+              <div style="display:flex;justify-content:space-between;gap:8px;">
+                <span style="font-size:12px;font-weight:600;color:var(--text-primary);">
+                  @if (f.scope === 'group') { Группа «{{ f.group_name || ('#' + f.group_id) }}» }
+                  @else { Личка · {{ f.peer_username || ('#' + f.peer_id) }} }
+                </span>
+                <span style="font-size:11px;color:var(--text-tertiary);">{{ f.created_at | date:'dd.MM HH:mm' }}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-secondary);">{{ f.username || ('#' + f.user_id) }}</div>
+              <div style="font-size:11px;color:#e74c3c;">{{ f.detail || 'decrypt_failed' }}</div>
+            </div>
+          }
+          @if ((decryptData?.recent ?? []).length === 0) {
+            <div style="padding:12px;color:var(--text-tertiary);font-size:13px;">Ошибок нет</div>
           }
         </div>
       }
@@ -915,7 +1020,7 @@ interface BackupEntry {
   `,
 })
 export class AdminComponent implements OnInit, OnDestroy {
-  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'stickers' | 'settings' | 'push' = 'users';
+  activeTab: 'users' | 'files' | 'chats' | 'backups' | 'federation' | 'stickers' | 'settings' | 'push' | 'decrypt' = 'users';
   users: User[] = [];
   files: FileEntry[] = [];
   diskInfo: { total: number; used: number; free: number; total_gb: number; used_gb: number; free_gb: number; used_pct: number } | null = null;
@@ -966,6 +1071,8 @@ export class AdminComponent implements OnInit, OnDestroy {
   loadingPush = false;
   private pushTimer: ReturnType<typeof setInterval> | null = null;
 
+  decryptData: AdminDecryptFailures | null = null;
+
   constructor(public api: ApiService) {}
 
   loadFederation() {}
@@ -980,6 +1087,11 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.startPushRefresh();
   }
 
+  openDecryptTab() {
+    this.activeTab = 'decrypt';
+    this.loadDecrypt();
+  }
+
   onTabChange(tab: string) {
     this.activeTab = tab as AdminComponent['activeTab'];
     if (tab === 'push') {
@@ -987,6 +1099,9 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.startPushRefresh();
     } else {
       this.stopPushRefresh();
+    }
+    if (tab === 'decrypt') {
+      this.loadDecrypt();
     }
   }
 
@@ -1010,6 +1125,13 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
     this.api.adminPushLogs(200).subscribe({
       next: (logs) => { this.pushLogs = logs; },
+      error: () => {},
+    });
+  }
+
+  loadDecrypt() {
+    this.api.adminDecryptFailures(200).subscribe({
+      next: (d) => { this.decryptData = d; },
       error: () => {},
     });
   }

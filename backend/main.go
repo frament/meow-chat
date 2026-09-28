@@ -26,6 +26,7 @@ import (
 
 func cleanupOldPushLogs() {
 	database.DB.Exec("DELETE FROM push_logs WHERE created_at < datetime('now', '-14 days')")
+	database.DB.Exec("DELETE FROM decrypt_failures WHERE created_at < datetime('now', '-30 days')")
 }
 
 func main() {
@@ -207,6 +208,7 @@ func main() {
 	api.Post("/push/subscribe", h.SubscribePush)
 	api.Delete("/push/subscribe", h.UnsubscribePush)
 	api.Post("/push/log", h.PushClientLog)
+	api.Post("/e2ee/decrypt-failed", h.LogDecryptFailure)
 
 	api.Post("/webauthn/begin-registration", h.WebAuthnBeginRegistration)
 	api.Post("/webauthn/finish-registration", h.WebAuthnFinishRegistration)
@@ -292,6 +294,7 @@ func main() {
 	admin.Get("/settings/giphy-key", h.GetGiphyKey)
 	admin.Put("/settings/giphy-key", h.UpdateGiphyKey)
 	admin.Get("/push/logs", h.AdminPushLogs)
+	admin.Get("/decrypt-failures", h.AdminDecryptFailures)
 	admin.Get("/push/status", h.AdminPushStatus)
 
 	api.Get("/sticker-packs", h.GetStickerPacks)

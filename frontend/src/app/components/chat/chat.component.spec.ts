@@ -61,10 +61,13 @@ describe('ChatComponent', () => {
     getFriendRequests: jasmine.createSpy().and.returnValue(of([])),
     acceptFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     rejectFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    reportDecryptFailure: jasmine.createSpy().and.returnValue(of({ ok: true })),
   };
 
   const mockCrypto = {
     init: jasmine.createSpy().and.returnValue(Promise.resolve()),
+    fetchPeerPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
+    getGroupKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
   };
 
   beforeEach(async () => {
@@ -72,6 +75,7 @@ describe('ChatComponent', () => {
     mockApi.sendGroupMessage.calls.reset();
     mockApi.requestGroupKey.calls.reset();
     mockApi.uploadGroupKeyShare.calls.reset();
+    mockApi.reportDecryptFailure.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
@@ -211,8 +215,11 @@ describe('ChatComponent', () => {
   });
 
   it('does not insert a separator between messages on the same day', () => {
-    const a = new Date(Date.now() - 3600000).toISOString();
-    const b = new Date().toISOString();
+    // Fixed same-day times (not Date.now()-1h) so the test doesn't flip to two
+    // dates when the suite runs just after midnight.
+    const now = new Date();
+    const a = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0).toISOString();
+    const b = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0).toISOString();
     component.messages = [
       { id: 1, from_user_id: 2, content: 'a', msg_type: 'text', created_at: a } as any,
       { id: 2, from_user_id: 2, content: 'b', msg_type: 'text', created_at: b } as any,
@@ -268,6 +275,22 @@ describe('ChatComponent', () => {
     tick();
 
     expect(mockApi.sendGroupMessage).toHaveBeenCalled();
+  }));
+
+  it('reports a group decrypt failure for telemetry', fakeAsync(async () => {
+    (mockCrypto as any).decryptGroupMessage = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    (mockCrypto as any).getGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    (component as any).e2eeReady = true;
+    const msg = {
+      id: 1, from_user_id: 2, to_user_id: 0, group_chat_id: 5, content: '',
+      msg_type: 'text', created_at: '', from_user: '', encrypted_content: 'x', encrypted_iv: 'y',
+    } as any;
+
+    await (component as any).decryptGroupMsg(msg, 5);
+    tick();
+
+    expect(msg.content).toBe('[Зашифрованное сообщение]');
+    expect(mockApi.reportDecryptFailure).toHaveBeenCalled();
   }));
 
   it('shares the group key with a member who requests it', fakeAsync(async () => {

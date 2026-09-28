@@ -30,6 +30,7 @@ describe('AdminComponent', () => {
     checkUpdate: jasmine.createSpy().and.returnValue(of({ has_update: false, latest: '', current: '' })),
     adminPushStatus: jasmine.createSpy().and.returnValue(of({ total_subscriptions: 0, users_with_subscriptions: 0, last_server_send: '', last_client_event: '', subscriptions: [] })),
     adminPushLogs: jasmine.createSpy().and.returnValue(of([])),
+    adminDecryptFailures: jasmine.createSpy().and.returnValue(of({ total: 0, dm_count: 0, group_count: 0, users: 0, groups: 0, last_at: '', recent: [] })),
   };
 
   beforeEach(async () => {
@@ -57,21 +58,27 @@ describe('AdminComponent', () => {
     component.ngOnDestroy();
   });
 
-  it('renders all 8 tab buttons on desktop', () => {
+  it('loads decrypt failures when opening the decrypt tab', () => {
+    component.openDecryptTab();
+    expect(component.activeTab).toBe('decrypt');
+    expect(mockApi.adminDecryptFailures).toHaveBeenCalled();
+  });
+
+  it('renders all 9 tab buttons on desktop', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('nav button');
     const tabTexts = Array.from(buttons)
       .map(b => b.textContent?.trim())
-      .filter(t => t === 'Пользователи' || t === 'Файлы' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Стикеры' || t === 'Настройки' || t === 'Push');
-    expect(tabTexts.length).toBe(8);
+      .filter(t => t === 'Пользователи' || t === 'Файлы' || t === 'Чаты' || t === 'Бэкапы' || t === 'Федерация' || t === 'Стикеры' || t === 'Настройки' || t === 'Push' || t === 'Расшифровка');
+    expect(tabTexts.length).toBe(9);
     expect(component.activeTab).toBe('users');
   });
 
-  it('renders mobile select with 8 options', () => {
+  it('renders mobile select with 9 options', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const select = compiled.querySelector('select') as HTMLSelectElement;
     expect(select).toBeTruthy();
-    expect(select.options.length).toBe(8);
+    expect(select.options.length).toBe(9);
     expect(select.options[0].value).toBe('users');
     expect(select.options[1].value).toBe('files');
     expect(select.options[2].value).toBe('chats');
@@ -80,6 +87,7 @@ describe('AdminComponent', () => {
     expect(select.options[5].value).toBe('stickers');
     expect(select.options[6].value).toBe('settings');
     expect(select.options[7].value).toBe('push');
+    expect(select.options[8].value).toBe('decrypt');
   });
 
   it('changes activeTab via mobile select', () => {

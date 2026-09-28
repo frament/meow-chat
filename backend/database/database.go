@@ -290,6 +290,18 @@ func migrate() {
 			ack_id     TEXT DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS decrypt_failures (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			scope          TEXT NOT NULL,
+			peer_id        INTEGER DEFAULT 0,
+			group_id       INTEGER DEFAULT 0,
+			msg_type       TEXT DEFAULT '',
+			client_version TEXT DEFAULT '',
+			detail         TEXT DEFAULT '',
+			created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_decrypt_failures_created ON decrypt_failures(created_at)`,
 		`CREATE TABLE IF NOT EXISTS polls (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,

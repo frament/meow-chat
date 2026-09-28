@@ -235,6 +235,31 @@ export interface AdminPushStatus {
   subscriptions: AdminPushSubscription[];
 }
 
+export interface AdminDecryptFailure {
+  id: number;
+  user_id: number;
+  username: string;
+  scope: string;
+  peer_id: number;
+  peer_username: string;
+  group_id: number;
+  group_name: string;
+  msg_type: string;
+  client_version: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface AdminDecryptFailures {
+  total: number;
+  dm_count: number;
+  group_count: number;
+  users: number;
+  groups: number;
+  last_at: string;
+  recent: AdminDecryptFailure[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   readonly currentUser = signal<LoginResponse | null>(null);
@@ -882,6 +907,22 @@ export class ApiService {
 
   adminPushStatus() {
     return this.http.get<AdminPushStatus>(`${this.baseUrl}/admin/push/status`);
+  }
+
+  /** Report an E2EE decryption failure for migration telemetry. */
+  reportDecryptFailure(payload: {
+    scope: 'dm' | 'group';
+    peer_id?: number;
+    group_id?: number;
+    msg_type?: string;
+    client_version?: string;
+    detail?: string;
+  }) {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/e2ee/decrypt-failed`, payload);
+  }
+
+  adminDecryptFailures(limit = 200) {
+    return this.http.get<AdminDecryptFailures>(`${this.baseUrl}/admin/decrypt-failures?limit=${limit}`);
   }
 
   connectWebSocket(): void {

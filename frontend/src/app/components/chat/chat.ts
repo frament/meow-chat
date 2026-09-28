@@ -946,6 +946,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   // A group message that failed only because the group key wasn't available yet.
   // Retried automatically once the key arrives (group_key_ready WS event).
   private pendingGroupSend: { content: string; type: MsgType } | null = null;
+  // Telemetry: conversations we already reported as undecryptable this session.
+  private reportedDecryptFailures = new Set<string>();
   uploading = signal(false);
   uploadProgress = signal(0);
   sendError = signal('');
@@ -1074,11 +1076,13 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv) {
+            let decryptedOk = false;
             if (this.e2eeReady) {
               const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
-              if (decrypted !== null) content = decrypted;
+              if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             }
             if (!content) content = '[Зашифрованное сообщение]';
+            if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
           }
           const msg: Message = {
             id: data.id || Date.now(),
@@ -1112,11 +1116,13 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv) {
+            let decryptedOk = false;
             if (this.e2eeReady) {
               const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
-              if (decrypted !== null) content = decrypted;
+              if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             }
             if (!content) content = '[Зашифрованное сообщение]';
+            if (!decryptedOk) this.reportDecryptFailure('group', { group_id: data.group_id, msg_type: data.msg_type });
           }
           const msg: Message = {
             id: data.id || Date.now(),
@@ -1275,13 +1281,30 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
   }
 
+  /** Best-effort telemetry when a message can't be decrypted (migration safety net). */
+  private async reportDecryptFailure(scope: 'dm' | 'group', opts: { peer_id?: number; group_id?: number; msg_type?: string } = {}) {
+    const key = `${scope}:${opts.peer_id ?? 0}:${opts.group_id ?? 0}`;
+    if (this.reportedDecryptFailures.has(key) || this.reportedDecryptFailures.size >= 30) return;
+    this.reportedDecryptFailures.add(key);
+    let detail = 'decrypt_failed';
+    try {
+      if (scope === 'dm' && opts.peer_id) {
+        detail = (await this.crypto.fetchPeerPublicKey(opts.peer_id)) ? 'decrypt_failed' : 'no_peer_key';
+      } else if (scope === 'group' && opts.group_id) {
+        detail = (await this.crypto.getGroupKey(opts.group_id)) ? 'decrypt_failed' : 'no_group_key';
+      }
+    } catch {}
+    this.api.reportDecryptFailure({ scope, ...opts, detail }).subscribe({ error: () => {} });
+  }
+
   private async decryptMsg(msg: Message, peerId: number): Promise<Message> {
     if (msg.encrypted_content && msg.encrypted_iv) {
       const decrypted = await this.crypto.decrypt(this.currentUserId, peerId, msg.encrypted_content, msg.encrypted_iv);
       if (decrypted !== null) {
         msg.content = decrypted;
-      } else if (!msg.content) {
-        msg.content = '[Зашифрованное сообщение]';
+      } else {
+        if (!msg.content) msg.content = '[Зашифрованное сообщение]';
+        this.reportDecryptFailure('dm', { peer_id: peerId, msg_type: msg.msg_type });
       }
     }
     return msg;
@@ -1857,8 +1880,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv);
       if (decrypted !== null) {
         msg.content = decrypted;
-      } else if (!msg.content) {
-        msg.content = '[Зашифрованное сообщение]';
+      } else {
+        if (!msg.content) msg.content = '[Зашифрованное сообщение]';
+        this.reportDecryptFailure('group', { group_id: groupId, msg_type: msg.msg_type });
       }
     }
     return msg;
