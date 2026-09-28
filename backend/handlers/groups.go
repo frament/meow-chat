@@ -140,6 +140,51 @@ func (h *Handler) GetGroupChat(c *fiber.Ctx) error {
 	})
 }
 
+// sendToGroupMembers delivers a WS payload to every member of a group except
+// excludeUserID (pass 0 to include everyone).
+func (h *Handler) sendToGroupMembers(groupID, excludeUserID int64, data fiber.Map) {
+	rows, err := database.DB.Query(
+		"SELECT user_id FROM group_chat_members WHERE group_chat_id = ?", groupID,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid int64
+		if rows.Scan(&uid) != nil {
+			continue
+		}
+		if uid == excludeUserID {
+			continue
+		}
+		h.SendToUser(uid, data)
+	}
+}
+
+// RequestGroupKey lets a member without the group E2EE key ask the other
+// members to share it. Key holders react to the broadcast by re-encrypting the
+// group key for the requester (if they already requested the key, this is a
+// no-op on their side).
+func (h *Handler) RequestGroupKey(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+	if !isGroupMember(groupID, userID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	h.sendToGroupMembers(groupID, userID, fiber.Map{
+		"type":          "group_key_request",
+		"group_chat_id": groupID,
+		"user_id":       userID,
+	})
+
+	return c.JSON(fiber.Map{"message": "Key request sent"})
+}
+
 func (h *Handler) AddGroupMember(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
@@ -184,6 +229,13 @@ func (h *Handler) AddGroupMember(c *fiber.Ctx) error {
 		"type":          "group_joined",
 		"group_chat_id": groupID,
 		"group_name":    groupName,
+	})
+
+	// Ask online key holders to share the group key with the new member.
+	h.sendToGroupMembers(groupID, targetID, fiber.Map{
+		"type":          "group_member_added",
+		"group_chat_id": groupID,
+		"user_id":       targetID,
 	})
 
 	return c.JSON(fiber.Map{"message": "Member added"})
@@ -353,6 +405,13 @@ func (h *Handler) JoinGroupViaInvite(c *fiber.Ctx) error {
 		"type":          "group_joined",
 		"group_chat_id": inv.GroupChatID,
 		"group_name":    groupName,
+	})
+
+	// Ask online key holders to share the group key with the new member.
+	h.sendToGroupMembers(inv.GroupChatID, userID, fiber.Map{
+		"type":          "group_member_added",
+		"group_chat_id": inv.GroupChatID,
+		"user_id":       userID,
 	})
 
 	return c.JSON(fiber.Map{

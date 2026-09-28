@@ -943,6 +943,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   showQR = false;
   private subscriptions: Subscription[] = [];
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
+  // A group message that failed only because the group key wasn't available yet.
+  // Retried automatically once the key arrives (group_key_ready WS event).
+  private pendingGroupSend: { content: string; type: MsgType } | null = null;
   uploading = signal(false);
   uploadProgress = signal(0);
   sendError = signal('');
@@ -1163,6 +1166,13 @@ export class ChatComponent implements OnInit, OnDestroy {
           if (groupId && !this.selectedGroup) {
             this.resolvePendingGroupChat(groupId);
           }
+        }
+        if ((data.type === 'group_member_added' || data.type === 'group_key_request') && data.group_chat_id) {
+          // Someone needs the group key — share it if this client holds it.
+          this.distributeGroupKeyToMember(data.group_chat_id, data.user_id);
+        }
+        if (data.type === 'group_key_ready' && this.selectedGroup && data.group_chat_id === this.selectedGroup.id) {
+          this.retryPendingGroupSend();
         }
         if (data.type === 'mark_read') {
           for (const m of this.messages) {
@@ -1475,9 +1485,15 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (!result) {
         // Never fall back to plaintext: block and tell the user why.
         this.sending = false;
-        this.sendError.set(this.selectedUser
-          ? 'Не удалось зашифровать: у собеседника нет ключа шифрования'
-          : 'Не удалось зашифровать: нет ключа группового чата');
+        if (this.selectedGroup) {
+          // Ask other members to share the group key; retry automatically when it
+          // arrives (see group_key_ready WS event).
+          this.pendingGroupSend = { content: rawContent, type };
+          this.api.requestGroupKey(this.selectedGroup.id).subscribe({ error: () => {} });
+          this.sendError.set('Нет ключа чата. Запросили у участников — отправим автоматически…');
+        } else {
+          this.sendError.set('Не удалось зашифровать: у собеседника нет ключа шифрования');
+        }
         return;
       }
       encryptedContent = result.encrypted;
@@ -1811,6 +1827,31 @@ export class ChatComponent implements OnInit, OnDestroy {
     } catch {}
   }
 
+  /** Encrypt the group key for a single member (used on key requests / member add). */
+  private async distributeGroupKeyToMember(groupId: number, memberId: number) {
+    if (!this.e2eeReady || !memberId || memberId === this.currentUserId) return;
+    try {
+      const raw = await this.crypto.getRawGroupKey(groupId);
+      if (!raw) return; // we don't have the key — someone else will share it
+      const share = await this.crypto.encryptGroupKeyForPeer(raw, memberId);
+      if (share) {
+        this.api.uploadGroupKeyShare(groupId, memberId, share.encrypted_key, share.iv)
+          .subscribe({ error: () => {} });
+      }
+    } catch {}
+  }
+
+  /** Retry a group message that was blocked on a missing key. */
+  private retryPendingGroupSend() {
+    const pending = this.pendingGroupSend;
+    if (!pending || !this.selectedGroup) return;
+    this.pendingGroupSend = null;
+    this.messageContent = pending.content;
+    this.messageType = pending.type;
+    this.sendError.set('');
+    this.sendMessage();
+  }
+
   private async decryptGroupMsg(msg: Message, groupId: number): Promise<Message> {
     if (msg.encrypted_content && msg.encrypted_iv && this.e2eeReady) {
       const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv);
@@ -1886,6 +1927,8 @@ export class ChatComponent implements OnInit, OnDestroy {
           avatar_url: friend.avatar_url || '',
         }];
         this.groupFriendCandidates = this.groupFriendCandidates.filter((f) => f.id !== friend.id);
+        // Share the group E2EE key with the new member right away.
+        this.distributeGroupKeyToMember(this.selectedGroup!.id, friend.id);
       },
       error: () => {
         this.groupFriendCandidates = this.groupFriendCandidates.filter((f) => f.id !== friend.id);

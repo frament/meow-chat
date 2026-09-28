@@ -40,6 +40,8 @@ describe('ChatComponent', () => {
     unpinUser: jasmine.createSpy().and.returnValue(of({})),
     createGroupChat: jasmine.createSpy().and.returnValue(of({ id: 1 })),
     getGroupChat: jasmine.createSpy().and.returnValue(of({ members: [] })),
+    uploadGroupKeyShare: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    requestGroupKey: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     createGroupInvite: jasmine.createSpy().and.returnValue(of({ token: 'abc' })),
     deleteGroupChat: jasmine.createSpy().and.returnValue(of({})),
     sendMessageWithProgress: jasmine.createSpy().and.returnValue(of({})),
@@ -66,6 +68,11 @@ describe('ChatComponent', () => {
   };
 
   beforeEach(async () => {
+    mockApi.sendMessage.calls.reset();
+    mockApi.sendGroupMessage.calls.reset();
+    mockApi.requestGroupKey.calls.reset();
+    mockApi.uploadGroupKeyShare.calls.reset();
+
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
@@ -226,5 +233,52 @@ describe('ChatComponent', () => {
 
     expect(component.sendError()).toContain('зашифровать');
     expect(mockApi.sendMessage).not.toHaveBeenCalled();
+  }));
+
+  it('requests the group key and queues a retry when the group key is missing', fakeAsync(async () => {
+    (mockCrypto as any).init = jasmine.createSpy().and.returnValue(Promise.resolve());
+    (mockCrypto as any).encryptGroupMessage = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    component.selectedGroup = { id: 5, name: 'G' } as any;
+    component.messageContent = 'secret text';
+    component.messageType = 'text';
+
+    await component.sendMessage();
+    tick();
+
+    expect(mockApi.requestGroupKey).toHaveBeenCalledWith(5);
+    expect(component.sendError()).toContain('ключа');
+    expect(mockApi.sendGroupMessage).not.toHaveBeenCalled();
+    expect((component as any).pendingGroupSend).toEqual({ content: 'secret text', type: 'text' });
+  }));
+
+  it('retries the pending group send when the group key becomes ready', fakeAsync(async () => {
+    (mockCrypto as any).init = jasmine.createSpy().and.returnValue(Promise.resolve());
+    (mockCrypto as any).encryptGroupMessage = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    component.selectedGroup = { id: 5, name: 'G' } as any;
+    component.messageContent = 'secret text';
+    component.messageType = 'text';
+    await component.sendMessage();
+    tick();
+    expect(mockApi.sendGroupMessage).not.toHaveBeenCalled();
+
+    // Key arrives: next encryption succeeds and the queued message is retried.
+    (mockCrypto as any).encryptGroupMessage = jasmine.createSpy().and.returnValue(Promise.resolve({ encrypted: 'x', iv: 'y' }));
+    wsMessages$.next({ type: 'group_key_ready', group_chat_id: 5 });
+    tick();
+    tick();
+
+    expect(mockApi.sendGroupMessage).toHaveBeenCalled();
+  }));
+
+  it('shares the group key with a member who requests it', fakeAsync(async () => {
+    (mockCrypto as any).getRawGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(new Uint8Array(32)));
+    (mockCrypto as any).encryptGroupKeyForPeer = jasmine.createSpy().and.returnValue(Promise.resolve({ encrypted_key: 'ek', iv: 'iv' }));
+    component.selectedGroup = { id: 5, name: 'G' } as any;
+    (component as any).e2eeReady = true;
+
+    wsMessages$.next({ type: 'group_key_request', group_chat_id: 5, user_id: 7 });
+    tick();
+
+    expect(mockApi.uploadGroupKeyShare).toHaveBeenCalledWith(5, 7, 'ek', 'iv');
   }));
 });

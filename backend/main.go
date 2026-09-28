@@ -254,6 +254,7 @@ func main() {
 	api.Post("/group-chats/:id/invites", h.CreateGroupInvite)
 	api.Post("/group-chats/:id/keys", h.UploadGroupKeyShare)
 	api.Get("/group-chats/:id/my-key", h.GetMyGroupKeyShare)
+	api.Post("/group-chats/:id/request-key", h.RequestGroupKey)
 	api.Get("/group-chat-invites/:token", h.GetGroupInvite)
 	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)
 	api.Get("/group-chat-messages/:groupId", h.GetGroupMessages)

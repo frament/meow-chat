@@ -86,6 +86,9 @@ export type WsServerMessage =
   | { type: 'friend_request'; from_user: number; username: string }
   | { type: 'friend_request_accepted'; user_id: number }
   | { type: 'group_joined'; group_chat_id: number; group_name: string }
+  | { type: 'group_member_added'; group_chat_id: number; user_id: number }
+  | { type: 'group_key_request'; group_chat_id: number; user_id: number }
+  | { type: 'group_key_ready'; group_chat_id: number }
   | { type: 'error'; message: string };
 
 export interface Poll {
@@ -1081,6 +1084,13 @@ export class ApiService {
   getMyGroupKeyShare(groupId: number) {
     return this.http.get<{ encrypted_key: string; iv: string }>(
       `${this.baseUrl}/group-chats/${groupId}/my-key`,
+    );
+  }
+
+  requestGroupKey(groupId: number) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/group-chats/${groupId}/request-key`,
+      {},
     );
   }
 
