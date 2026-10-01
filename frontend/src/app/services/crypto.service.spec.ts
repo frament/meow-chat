@@ -182,7 +182,7 @@ describe('CryptoService', () => {
     expect(payload!.envelopes.length).toBe(1);
 
     const plain = await service.decryptViaEnvelope(
-      payload!.envelopes, payload!.env_content, payload!.env_iv, 1,
+      payload!.envelopes, payload!.env_content, payload!.env_iv, 1, payload!.sender_device_id,
     );
     expect(plain).toBe('hello envelope');
   });

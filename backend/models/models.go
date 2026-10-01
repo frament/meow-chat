@@ -35,7 +35,9 @@ type Message struct {
 	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
 	EnvContent       string      `json:"env_content,omitempty"`
 	EnvIV            string      `json:"env_iv,omitempty"`
+	SenderDeviceID   string      `json:"sender_device_id,omitempty"`
 	Envelopes        []Envelope  `json:"envelopes,omitempty"`
+	Epoch            int         `json:"epoch,omitempty"`
 	Poll             *Poll       `json:"poll,omitempty"`
 	StickerURL       string      `json:"sticker_url,omitempty"`
 	IsRead           bool        `json:"is_read"`

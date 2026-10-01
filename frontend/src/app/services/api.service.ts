@@ -76,8 +76,8 @@ export interface PollOption {
 }
 
 export type WsServerMessage =
-  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; env_content?: string; env_iv?: string; envelopes?: MessageEnvelope[]; sticker_url?: string; poll?: Poll; preview?: string }
-  | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; preview?: string }
+  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; env_content?: string; env_iv?: string; sender_device_id?: string; envelopes?: MessageEnvelope[]; sticker_url?: string; poll?: Poll; preview?: string }
+  | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; epoch?: number; sticker_url?: string; preview?: string }
   | { type: 'user_online'; user_id: number }
   | { type: 'user_offline'; user_id: number }
   | { type: 'device_auth_request'; from_device_id: string; device_name?: string }
@@ -89,6 +89,7 @@ export type WsServerMessage =
   | { type: 'group_member_added'; group_chat_id: number; user_id: number }
   | { type: 'group_key_request'; group_chat_id: number; user_id: number }
   | { type: 'group_key_ready'; group_chat_id: number }
+  | { type: 'device_revoked'; device_id: string }
   | { type: 'error'; message: string };
 
 export interface Poll {
@@ -110,6 +111,7 @@ export interface MessageEnvelope {
 export interface EnvelopePayload {
   env_content: string;
   env_iv: string;
+  sender_device_id?: string;
   envelopes: MessageEnvelope[];
 }
 
@@ -127,7 +129,9 @@ export interface Message {
   encrypted_iv?: string;
   env_content?: string;
   env_iv?: string;
+  sender_device_id?: string;
   envelopes?: MessageEnvelope[];
+  epoch?: number;
   pending?: boolean;
   is_read?: boolean;
   poll?: Poll;
@@ -501,6 +505,7 @@ export class ApiService {
     if (envelope) {
       formData.append('env_content', envelope.env_content);
       formData.append('env_iv', envelope.env_iv);
+      if (envelope.sender_device_id) formData.append('sender_device_id', envelope.sender_device_id);
       formData.append('envelopes', JSON.stringify(envelope.envelopes));
     }
     if (pushPreview) formData.append('push_preview', pushPreview);
@@ -570,11 +575,12 @@ export class ApiService {
     );
   }
 
-  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
+  sendGroupMessage(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, epoch = 0) {
     const formData = new FormData();
     formData.append('group_chat_id', String(groupId));
     formData.append('content', content);
     formData.append('type', msgType);
+    formData.append('epoch', String(epoch));
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
@@ -604,6 +610,7 @@ export class ApiService {
     if (envelope) {
       formData.append('env_content', envelope.env_content);
       formData.append('env_iv', envelope.env_iv);
+      if (envelope.sender_device_id) formData.append('sender_device_id', envelope.sender_device_id);
       formData.append('envelopes', JSON.stringify(envelope.envelopes));
     }
     if (pushPreview) formData.append('push_preview', pushPreview);
@@ -622,11 +629,12 @@ export class ApiService {
     });
   }
 
-  sendGroupMessageWithProgress(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
+  sendGroupMessageWithProgress(groupId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, epoch = 0) {
     const formData = new FormData();
     formData.append('group_chat_id', String(groupId));
     formData.append('content', content);
     formData.append('type', msgType);
+    formData.append('epoch', String(epoch));
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
     if (pushPreview) formData.append('push_preview', pushPreview);
@@ -1167,10 +1175,14 @@ export class ApiService {
     );
   }
 
-  getMyGroupDeviceKeyShare(groupId: number, deviceId: string) {
+  getMyGroupDeviceKeyShare(groupId: number, deviceId: string, epoch = 0) {
     return this.http.get<{ encrypted_key: string; iv: string; epoch: number; creator_id?: number }>(
-      `${this.baseUrl}/group-chats/${groupId}/my-device-key?device_id=${encodeURIComponent(deviceId)}`,
+      `${this.baseUrl}/group-chats/${groupId}/my-device-key?device_id=${encodeURIComponent(deviceId)}&epoch=${epoch}`,
     );
+  }
+
+  getGroupKeyEpoch(groupId: number) {
+    return this.http.get<{ epoch: number }>(`${this.baseUrl}/group-chats/${groupId}/key-epoch`);
   }
 
   // WebAuthn (FaceID/TouchID)

@@ -260,6 +260,7 @@ func main() {
 	api.Get("/group-chats/:id/my-key", h.GetMyGroupKeyShare)
 	api.Post("/group-chats/:id/device-keys", h.UploadGroupDeviceKeyShare)
 	api.Get("/group-chats/:id/my-device-key", h.GetMyGroupDeviceKeyShare)
+	api.Get("/group-chats/:id/key-epoch", h.GetGroupKeyEpoch)
 	api.Post("/group-chats/:id/request-key", h.RequestGroupKey)
 	api.Get("/group-chat-invites/:token", h.GetGroupInvite)
 	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)

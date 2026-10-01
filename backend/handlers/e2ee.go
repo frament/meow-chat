@@ -155,10 +155,10 @@ func (h *Handler) UploadGroupDeviceKeyShare(c *fiber.Ctx) error {
 	}
 
 	_, err = database.DB.Exec(
-		`INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv, creator_id)
+		`INSERT INTO group_epoch_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv, creator_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(group_chat_id, device_id) DO UPDATE SET
-		   user_id = excluded.user_id, epoch = excluded.epoch,
+		 ON CONFLICT(group_chat_id, device_id, epoch) DO UPDATE SET
+		   user_id = excluded.user_id,
 		   encrypted_key = excluded.encrypted_key, iv = excluded.iv, creator_id = excluded.creator_id`,
 		groupID, body.UserID, body.DeviceID, body.Epoch, body.EncryptedKey, body.IV, userID,
 	)
@@ -188,23 +188,42 @@ func (h *Handler) GetMyGroupDeviceKeyShare(c *fiber.Ctx) error {
 	if deviceID == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "device_id required"})
 	}
+	epoch, _ := strconv.Atoi(c.Query("epoch", "0"))
 
 	var encryptedKey, iv string
-	var epoch int
+	var storedEpoch int
 	var creator sql.NullInt64
 	err = database.DB.QueryRow(
-		"SELECT encrypted_key, iv, COALESCE(epoch, 0), creator_id FROM group_device_key_shares WHERE group_chat_id = ? AND user_id = ? AND device_id = ?",
-		groupID, userID, deviceID,
-	).Scan(&encryptedKey, &iv, &epoch, &creator)
+		"SELECT encrypted_key, iv, epoch, creator_id FROM group_epoch_key_shares WHERE group_chat_id = ? AND user_id = ? AND device_id = ? AND epoch = ?",
+		groupID, userID, deviceID, epoch,
+	).Scan(&encryptedKey, &iv, &storedEpoch, &creator)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Device key share not found"})
 	}
 
-	resp := fiber.Map{"encrypted_key": encryptedKey, "iv": iv, "epoch": epoch}
+	resp := fiber.Map{"encrypted_key": encryptedKey, "iv": iv, "epoch": storedEpoch}
 	if creator.Valid {
 		resp["creator_id"] = creator.Int64
 	}
 	return c.JSON(resp)
+}
+
+// GetGroupKeyEpoch returns the newest group key epoch known to the server.
+func (h *Handler) GetGroupKeyEpoch(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+	if !isGroupMember(groupID, userID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+	var epoch int
+	database.DB.QueryRow(
+		"SELECT COALESCE(MAX(epoch), 0) FROM group_epoch_key_shares WHERE group_chat_id = ?",
+		groupID,
+	).Scan(&epoch)
+	return c.JSON(fiber.Map{"epoch": epoch})
 }
 
 func (h *Handler) GetMyGroupKeyShare(c *fiber.Ctx) error {

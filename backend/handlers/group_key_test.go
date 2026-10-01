@@ -111,7 +111,7 @@ func TestGroupDeviceKeyShare_RoundTrip(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	req, _ = http.NewRequest("GET", "/group-chats/1/my-device-key?device_id=pc-1", nil)
+	req, _ = http.NewRequest("GET", "/group-chats/1/my-device-key?device_id=pc-1&epoch=2", nil)
 	req.Header.Set("Authorization", bearerToken(t, 2, true))
 	resp, err = app.Test(req)
 	if err != nil {

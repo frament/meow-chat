@@ -77,7 +77,9 @@ type wsMessage struct {
 	encryptedIV       string
 	envContent        string
 	envIV             string
+	senderDeviceID    string
 	envelopes         []models.Envelope
+	epoch             int
 	pushPreview       string
 	pollData          fiber.Map
 	stickerURL        string
@@ -274,6 +276,7 @@ func (h *Handler) runHub() {
 					if msg.envContent != "" {
 						payload["env_content"] = msg.envContent
 						payload["env_iv"] = msg.envIV
+						payload["sender_device_id"] = msg.senderDeviceID
 					}
 					if len(msg.envelopes) > 0 {
 						payload["envelopes"] = msg.envelopes
@@ -339,6 +342,7 @@ func (h *Handler) runHub() {
 				"content":    msg.content,
 				"msg_type":   msg.msgType,
 				"created_at": msg.createdAt,
+				"epoch":      msg.epoch,
 			}
 			if len(msg.images) > 0 {
 				payload["images"] = msg.images
@@ -927,7 +931,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 				COALESCE(u.username, fu.username) as from_username,
 				COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
 				COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0),
-				COALESCE(m.env_content, ''), COALESCE(m.env_iv, '')
+				COALESCE(m.env_content, ''), COALESCE(m.env_iv, ''), COALESCE(m.sender_device_id, '')
 			FROM messages m
 			LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
 			LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
@@ -946,7 +950,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	for rows.Next() {
 		var m models.Message
 		var serverID *int64
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead, &m.EnvContent, &m.EnvIV); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead, &m.EnvContent, &m.EnvIV, &m.SenderDeviceID); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -1065,6 +1069,10 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	if vals, ok := form.Value["env_iv"]; ok && len(vals) > 0 {
 		envIV = vals[0]
 	}
+	senderDeviceID := ""
+	if vals, ok := form.Value["sender_device_id"]; ok && len(vals) > 0 {
+		senderDeviceID = vals[0]
+	}
 	var envelopes []models.Envelope
 	if vals, ok := form.Value["envelopes"]; ok && len(vals) > 0 && vals[0] != "" {
 		json.Unmarshal([]byte(vals[0]), &envelopes)
@@ -1115,8 +1123,8 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url, env_content, env_iv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL, envContent, envIV,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url, env_content, env_iv, sender_device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL, envContent, envIV, senderDeviceID,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
@@ -1207,6 +1215,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		encryptedIV:      encryptedIV,
 		envContent:       envContent,
 		envIV:            envIV,
+		senderDeviceID:   senderDeviceID,
 		envelopes:        envelopes,
 		pushPreview:      pushPreview,
 		pollData:         pollData,

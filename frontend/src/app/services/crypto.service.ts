@@ -214,10 +214,41 @@ export class CryptoService {
 
   // ─── Group E2EE ─────────────────────────────────────────────
 
-  private groupKeyCache = new Map<number, CryptoKey>();
+  // Cache is keyed by `${groupId}:${epoch}`.
+  private groupKeyCache = new Map<string, CryptoKey>();
 
-  /** Generate a random AES-256-GCM group key and cache it locally. Returns raw key bytes. */
-  async generateGroupKey(groupId: number): Promise<Uint8Array | null> {
+  private groupKeyStoreKey(groupId: number, epoch: number): string {
+    return `groupKeyRaw_${groupId}__${epoch}`;
+  }
+
+  private async readRawGroupKey(groupId: number, epoch: number): Promise<number[] | null> {
+    const stored = await this.get<number[]>(this.groupKeyStoreKey(groupId, epoch));
+    if (stored) return stored;
+    if (epoch === 0) {
+      // Legacy single-key storage.
+      return await this.get<number[]>(`groupKeyRaw_${groupId}`);
+    }
+    return null;
+  }
+
+  private async writeRawGroupKey(groupId: number, epoch: number, raw: Uint8Array): Promise<void> {
+    await this.set(this.groupKeyStoreKey(groupId, epoch), Array.from(raw));
+    if (epoch === 0) {
+      // Keep the legacy key readable by older code paths.
+      await this.set(`groupKeyRaw_${groupId}`, Array.from(raw));
+    }
+  }
+
+  async getCurrentGroupEpoch(groupId: number): Promise<number> {
+    return (await this.get<number>(`groupEpoch_${groupId}`)) ?? 0;
+  }
+
+  async setCurrentGroupEpoch(groupId: number, epoch: number): Promise<void> {
+    await this.set(`groupEpoch_${groupId}`, epoch);
+  }
+
+  /** Generate a random AES-256-GCM group key for an epoch and store it locally. */
+  async generateGroupKey(groupId: number, epoch = 0): Promise<Uint8Array | null> {
     const raw = crypto.getRandomValues(new Uint8Array(32));
     const key = await crypto.subtle.importKey(
       'raw', raw,
@@ -225,17 +256,20 @@ export class CryptoService {
       false,
       ['encrypt', 'decrypt'],
     );
-    await this.set(`groupKeyRaw_${groupId}`, Array.from(raw));
-    this.groupKeyCache.set(groupId, key);
+    await this.writeRawGroupKey(groupId, epoch, raw);
+    this.groupKeyCache.set(`${groupId}:${epoch}`, key);
+    const current = await this.getCurrentGroupEpoch(groupId);
+    if (epoch >= current) await this.setCurrentGroupEpoch(groupId, epoch);
     return raw;
   }
 
-  /** Get (from cache or derive from server share) the group AES key */
-  async getGroupKey(groupId: number): Promise<CryptoKey | null> {
-    const cached = this.groupKeyCache.get(groupId);
+  /** Get (from cache or derive from server share) the group AES key for an epoch. */
+  async getGroupKey(groupId: number, epoch = 0): Promise<CryptoKey | null> {
+    const cacheKey = `${groupId}:${epoch}`;
+    const cached = this.groupKeyCache.get(cacheKey);
     if (cached) return cached;
 
-    const stored = await this.get<number[]>(`groupKeyRaw_${groupId}`);
+    const stored = await this.readRawGroupKey(groupId, epoch);
     if (stored) {
       const key = await crypto.subtle.importKey(
         'raw', new Uint8Array(stored),
@@ -243,34 +277,25 @@ export class CryptoService {
         false,
         ['encrypt', 'decrypt'],
       );
-      this.groupKeyCache.set(groupId, key);
+      this.groupKeyCache.set(cacheKey, key);
       return key;
     }
 
     // Device-scoped share: self-sufficient, works even when this device has a
     // different identity key than the rest of the account.
-    const deviceKey = await this.tryGetDeviceGroupKey(groupId);
+    const deviceKey = await this.tryGetDeviceGroupKey(groupId, epoch);
     if (deviceKey) return deviceKey;
 
-    // Fetch share from server
+    // Legacy user-level share only exists for epoch 0.
+    if (epoch !== 0) return null;
+
     try {
       const share = await firstValueFrom(this.api.getMyGroupKeyShare(groupId));
       const myId = this.api.currentUser()?.id;
       if (!myId) return null;
 
-      // Find who shared this key (we need the sender's ID)
-      // The share's creator is any group member — we need to try all members
-      // Actually, the share is encrypted with the ECDH key between us and the creator
-      // We don't know the creator from just the endpoint.
-      // We need to try with all group members' public keys
-      // For simplicity, we store the key_creator_id in the share
-      // But our API doesn't return it.
-      //
-      // Option: Use a deterministic approach — always encrypt for user with
-      // the same key pair (the key creator is implicit: the one who uploaded the share)
-      // We don't have that info from our current API.
-      //
-      // Let's try decrypting with every known peer key
+      // The share is encrypted with the ECDH key between us and some member;
+      // try every known member's key.
       const groupInfo = await firstValueFrom(this.api.getGroupChat(groupId));
       for (const member of groupInfo.members) {
         if (member.user_id === myId) continue;
@@ -294,8 +319,8 @@ export class CryptoService {
             false,
             ['encrypt', 'decrypt'],
           );
-          await this.set(`groupKeyRaw_${groupId}`, Array.from(rawBytes));
-          this.groupKeyCache.set(groupId, key);
+          await this.writeRawGroupKey(groupId, 0, rawBytes);
+          this.groupKeyCache.set(cacheKey, key);
           return key;
         } catch {
           continue; // try next member
@@ -332,9 +357,9 @@ export class CryptoService {
     };
   }
 
-  /** Encrypt a group message using the group's AES-256-GCM key */
-  async encryptGroupMessage(groupId: number, plaintext: string): Promise<{ encrypted: string; iv: string } | null> {
-    const key = await this.getGroupKey(groupId);
+  /** Encrypt a group message using the group's AES-256-GCM key for an epoch */
+  async encryptGroupMessage(groupId: number, plaintext: string, epoch = 0): Promise<{ encrypted: string; iv: string } | null> {
+    const key = await this.getGroupKey(groupId, epoch);
     if (!key) return null;
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -355,37 +380,36 @@ export class CryptoService {
     };
   }
 
-  /** Fetch our device-scoped group key share and unwrap it. */
-  private async tryGetDeviceGroupKey(groupId: number): Promise<CryptoKey | null> {
+  /** Fetch our device-scoped group key share for an epoch and unwrap it. */
+  private async tryGetDeviceGroupKey(groupId: number, epoch = 0): Promise<CryptoKey | null> {
     if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
     if (!this.deviceId) return null;
     try {
-      const share = await firstValueFrom(this.api.getMyGroupDeviceKeyShare(groupId, this.deviceId));
+      const share = await firstValueFrom(this.api.getMyGroupDeviceKeyShare(groupId, this.deviceId, epoch));
       if (!share.creator_id || !share.encrypted_key) return null;
       const spki = (await firstValueFrom(this.api.getKey(share.creator_id))).public_key;
       if (!spki) return null;
       const raw = await this.unwrapKeyFromDevice(share.encrypted_key, share.iv, spki);
       if (!raw) return null;
       const key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-      await this.set(`groupKeyRaw_${groupId}`, Array.from(raw));
-      this.groupKeyCache.set(groupId, key);
+      await this.writeRawGroupKey(groupId, epoch, raw);
+      this.groupKeyCache.set(`${groupId}:${epoch}`, key);
       return key;
     } catch {
       return null;
     }
   }
 
-  /** Get raw 32-byte key for a group (for re-encrypting for new members) */
-  async getRawGroupKey(groupId: number): Promise<Uint8Array | null> {
-    const stored = await this.get<number[]>(`groupKeyRaw_${groupId}`);
+  /** Get raw 32-byte key for a group epoch (for re-encrypting for members) */
+  async getRawGroupKey(groupId: number, epoch = 0): Promise<Uint8Array | null> {
+    const stored = await this.readRawGroupKey(groupId, epoch);
     if (stored) return new Uint8Array(stored);
 
     // Try to derive from server share (triggers full getGroupKey flow)
-    const key = await this.getGroupKey(groupId);
+    const key = await this.getGroupKey(groupId, epoch);
     if (!key) return null;
 
-    // Re-fetch after caching
-    const re = await this.get<number[]>(`groupKeyRaw_${groupId}`);
+    const re = await this.readRawGroupKey(groupId, epoch);
     return re ? new Uint8Array(re) : null;
   }
 
@@ -557,8 +581,8 @@ export class CryptoService {
   }
 
   /** Decrypt a group message using the group's AES-256-GCM key */
-  async decryptGroupMessage(groupId: number, encryptedBase64: string, ivBase64: string): Promise<string | null> {
-    const key = await this.getGroupKey(groupId);
+  async decryptGroupMessage(groupId: number, encryptedBase64: string, ivBase64: string, epoch = 0): Promise<string | null> {
+    const key = await this.getGroupKey(groupId, epoch);
     if (!key) return null;
 
     try {
@@ -647,18 +671,44 @@ export class CryptoService {
     }
   }
 
+  /** Wrap a content key with our device private key: ECDH(myDevicePriv, devicePub). */
+  async wrapKeyForDeviceFromDevice(rawKey: Uint8Array, devicePubSPKI: string): Promise<{ wrapped_key: string; iv: string } | null> {
+    if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
+    if (!this.deviceKeyPair) return null;
+    try {
+      const spki = Uint8Array.from(atob(devicePubSPKI), c => c.charCodeAt(0));
+      const devicePub = await crypto.subtle.importKey('spki', spki.buffer, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+      const shared = await crypto.subtle.deriveKey(
+        { name: 'ECDH', public: devicePub }, this.deviceKeyPair.privateKey,
+        { name: 'AES-GCM', length: 256 }, false, ['encrypt'],
+      );
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, shared, rawKey);
+      const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+      combined.set(iv);
+      combined.set(new Uint8Array(ciphertext), iv.length);
+      return { wrapped_key: btoa(String.fromCharCode(...combined)), iv: btoa(String.fromCharCode(...iv)) };
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Build a per-device envelope payload for a DM: encrypt under a fresh content
-   * key and wrap that key for the recipient's devices and our own devices.
+   * key and wrap that key for the recipient's devices and our own devices using
+   * our device key (not the account identity key), so it works per device.
    * Returns null when no device keys are available (caller falls back to legacy).
    */
   async buildEnvelopes(plaintext: string, peerId: number): Promise<{
     env_content: string;
     env_iv: string;
+    sender_device_id: string;
     envelopes: { device_id: string; wrapped_key: string; iv: string }[];
   } | null> {
     const myId = this.api.currentUser()?.id;
     if (!myId) return null;
+    await this.ensureDeviceKeyPair();
+    if (!this.deviceId) return null;
 
     const rawKey = this.randomKey();
     const enc = await this.encryptWithRawKey(rawKey, plaintext);
@@ -678,11 +728,11 @@ export class CryptoService {
     for (const d of targets) {
       if (!d.device_id || !d.device_public_key || seen.has(d.device_id)) continue;
       seen.add(d.device_id);
-      const wrapped = await this.wrapKeyForDevice(rawKey, d.device_public_key);
+      const wrapped = await this.wrapKeyForDeviceFromDevice(rawKey, d.device_public_key);
       if (wrapped) envelopes.push({ device_id: d.device_id, wrapped_key: wrapped.wrapped_key, iv: wrapped.iv });
     }
     if (envelopes.length === 0) return null;
-    return { env_content: enc.encrypted, env_iv: enc.iv, envelopes };
+    return { env_content: enc.encrypted, env_iv: enc.iv, sender_device_id: this.deviceId, envelopes };
   }
 
   /** Decrypt a DM via a per-device envelope; null when not applicable. */
@@ -691,6 +741,7 @@ export class CryptoService {
     envContent: string | undefined,
     envIv: string | undefined,
     senderId: number,
+    senderDeviceId?: string,
   ): Promise<string | null> {
     if (!envelopes?.length || !envContent || !envIv) return null;
     if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
@@ -698,10 +749,19 @@ export class CryptoService {
     if (!mine) return null;
 
     let senderPub: string | null = null;
-    try {
-      senderPub = (await firstValueFrom(this.api.getKey(senderId))).public_key;
-    } catch {
-      return null;
+    if (senderDeviceId) {
+      try {
+        const devices = await firstValueFrom(this.api.getUserDeviceKeys(senderId));
+        senderPub = devices?.find(d => d.device_id === senderDeviceId)?.device_public_key ?? null;
+      } catch { /* fall back to identity key below */ }
+    }
+    if (!senderPub) {
+      // Envelopes created before per-device sender keys used the account identity.
+      try {
+        senderPub = (await firstValueFrom(this.api.getKey(senderId))).public_key;
+      } catch {
+        return null;
+      }
     }
     if (!senderPub) return null;
     const rawKey = await this.unwrapKeyFromDevice(mine.wrapped_key, mine.iv, senderPub);

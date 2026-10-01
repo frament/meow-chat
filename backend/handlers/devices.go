@@ -122,6 +122,11 @@ func (h *Handler) RemoveDevice(c *fiber.Ctx) error {
 	}
 
 	database.DB.Exec("DELETE FROM device_auth_requests WHERE device_id = ? AND user_id = ?", deviceID, userID)
+	// Drop group key material addressed to this device and ask the account's
+	// remaining devices to rotate group keys (revocation for future messages).
+	database.DB.Exec("DELETE FROM group_device_key_shares WHERE device_id = ?", deviceID)
+	database.DB.Exec("DELETE FROM group_epoch_key_shares WHERE device_id = ?", deviceID)
+	h.SendToUser(userID, fiber.Map{"type": "device_revoked", "device_id": deviceID})
 	return c.JSON(fiber.Map{"message": "Device removed"})
 }
 

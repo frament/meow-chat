@@ -1077,7 +1077,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           let content = data.content;
           let decryptedOk = true;
           if (data.env_content && data.envelopes?.length) {
-            const viaEnv = await this.crypto.decryptViaEnvelope(data.envelopes, data.env_content, data.env_iv, data.from);
+            const viaEnv = await this.crypto.decryptViaEnvelope(data.envelopes, data.env_content, data.env_iv, data.from, data.sender_device_id);
             if (viaEnv !== null) content = viaEnv;
           }
           if (!content && data.encrypted_content && data.encrypted_iv) {
@@ -1123,7 +1123,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           if (data.encrypted_content && data.encrypted_iv) {
             let decryptedOk = false;
             if (this.e2eeReady) {
-              const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv);
+              const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv, data.epoch ?? 0);
               if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             }
             if (!content) content = '[Зашифрованное сообщение]';
@@ -1184,6 +1184,9 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
         if (data.type === 'group_key_ready' && this.selectedGroup && data.group_chat_id === this.selectedGroup.id) {
           this.onGroupKeyReady(data.group_chat_id);
+        }
+        if (data.type === 'device_revoked') {
+          this.rotateGroupKeys(data.device_id);
         }
         if (data.type === 'mark_read') {
           for (const m of this.messages) {
@@ -1304,7 +1307,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   private async decryptMsg(msg: Message, peerId: number): Promise<Message> {
     if (msg.env_content && msg.envelopes?.length) {
-      const viaEnv = await this.crypto.decryptViaEnvelope(msg.envelopes, msg.env_content, msg.env_iv, msg.from_user_id);
+      const viaEnv = await this.crypto.decryptViaEnvelope(msg.envelopes, msg.env_content, msg.env_iv, msg.from_user_id, msg.sender_device_id);
       if (viaEnv !== null) {
         msg.content = viaEnv;
         return msg;
@@ -1502,6 +1505,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     let encryptedContent: string | undefined;
     let encryptedIV: string | undefined;
     let envelope: EnvelopePayload | undefined;
+    let groupEpoch = 0;
     let pushPreview: string | undefined;
     const content = rawContent;      // local/optimistic display (never sent when encrypted)
     let wireContent = rawContent;    // what actually goes to the server
@@ -1513,11 +1517,13 @@ export class ChatComponent implements OnInit, OnDestroy {
     const encryptable = (type === 'text' || type === 'image') && !!rawContent;
     if (encryptable) {
       await this.crypto.init();
-      const result = this.selectedUser
-        ? await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent)
-        : this.selectedGroup
-          ? await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent)
-          : null;
+      let result: { encrypted: string; iv: string } | null = null;
+      if (this.selectedUser) {
+        result = await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent);
+      } else if (this.selectedGroup) {
+        groupEpoch = await this.crypto.getCurrentGroupEpoch(this.selectedGroup.id);
+        result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent, groupEpoch);
+      }
       if (!result) {
         // Never fall back to plaintext: block and tell the user why.
         this.sending = false;
@@ -1568,7 +1574,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
+        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, groupEpoch)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -1585,7 +1591,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendGroupMessage(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
+        this.api.sendGroupMessage(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, groupEpoch).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });
@@ -1810,9 +1816,18 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.api.clearGroupUnread(group.id);
     this.api.markGroupRead(group.id).subscribe({ error: () => {} });
 
-    // Ensure we have the group key and distribute to members without shares
+    // Sync the newest key epoch, ensure we have the group key, and distribute.
     if (this.e2eeReady) {
-      const groupKey = await this.crypto.getGroupKey(group.id);
+      try {
+        const { epoch } = await firstValueFrom(this.api.getGroupKeyEpoch(group.id));
+        const localEpoch = await this.crypto.getCurrentGroupEpoch(group.id);
+        if (epoch > localEpoch) {
+          const fetched = await this.crypto.getGroupKey(group.id, epoch);
+          if (fetched) await this.crypto.setCurrentGroupEpoch(group.id, epoch);
+        }
+      } catch {}
+      const epochNow = await this.crypto.getCurrentGroupEpoch(group.id);
+      const groupKey = await this.crypto.getGroupKey(group.id, epochNow);
       if (groupKey) {
         this.distributeGroupKeyToMembers(group.id);
         this.refreshOwnGroupKeyShare(group.id);
@@ -1852,7 +1867,8 @@ export class ChatComponent implements OnInit, OnDestroy {
     try {
       const res = await firstValueFrom(this.api.getGroupChat(groupId));
       const myId = this.currentUserId;
-      const raw = await this.crypto.getRawGroupKey(groupId);
+      const epoch = await this.crypto.getCurrentGroupEpoch(groupId);
+      const raw = await this.crypto.getRawGroupKey(groupId, epoch);
       if (!raw) return;
 
       for (const member of res.members) {
@@ -1864,23 +1880,55 @@ export class ChatComponent implements OnInit, OnDestroy {
             .subscribe({ error: () => {} });
         }
         // Per-device shares (also reach devices that never linked).
-        await this.distributeGroupKeyToMemberDevices(groupId, member.user_id, raw);
+        await this.distributeGroupKeyToMemberDevices(groupId, member.user_id, raw, epoch);
       }
       // Our own other devices.
-      await this.distributeGroupKeyToMemberDevices(groupId, myId, raw);
+      await this.distributeGroupKeyToMemberDevices(groupId, myId, raw, epoch);
     } catch {}
   }
 
   /** Wrap the group key for each device of a user (device-scoped shares). */
-  private async distributeGroupKeyToMemberDevices(groupId: number, userId: number, raw: Uint8Array) {
+  private async distributeGroupKeyToMemberDevices(groupId: number, userId: number, raw: Uint8Array, epoch: number) {
     try {
       const devices = await firstValueFrom(this.api.getUserDeviceKeys(userId));
       for (const d of devices || []) {
         if (!d.device_id || !d.device_public_key) continue;
-        const wrapped = await this.crypto.wrapKeyForDevice(raw, d.device_public_key);
+        const wrapped = await this.crypto.wrapKeyForDeviceFromDevice(raw, d.device_public_key);
         if (wrapped) {
-          this.api.uploadGroupDeviceKeyShare(groupId, userId, d.device_id, wrapped.wrapped_key, wrapped.iv)
+          this.api.uploadGroupDeviceKeyShare(groupId, userId, d.device_id, wrapped.wrapped_key, wrapped.iv, epoch)
             .subscribe({ error: () => {} });
+        }
+      }
+    } catch {}
+  }
+
+  /**
+   * Rotate group keys to a new epoch and distribute them to all remaining
+   * devices, excluding the revoked one. This cryptographically revokes a removed
+   * device from future group messages.
+   */
+  private async rotateGroupKeys(revokedDeviceId: string) {
+    if (!this.e2eeReady) return;
+    try {
+      const groups = await firstValueFrom(this.api.getGroupChats());
+      for (const g of groups) {
+        const currentEpoch = await this.crypto.getCurrentGroupEpoch(g.id);
+        const have = await this.crypto.getRawGroupKey(g.id, currentEpoch);
+        if (!have) continue; // not a key holder for this group
+        const newEpoch = currentEpoch + 1;
+        const newRaw = await this.crypto.generateGroupKey(g.id, newEpoch);
+        if (!newRaw) continue;
+        const info = await firstValueFrom(this.api.getGroupChat(g.id));
+        for (const member of info.members) {
+          const devices = await firstValueFrom(this.api.getUserDeviceKeys(member.user_id));
+          for (const d of devices || []) {
+            if (!d.device_id || !d.device_public_key || d.device_id === revokedDeviceId) continue;
+            const wrapped = await this.crypto.wrapKeyForDeviceFromDevice(newRaw, d.device_public_key);
+            if (wrapped) {
+              this.api.uploadGroupDeviceKeyShare(g.id, member.user_id, d.device_id, wrapped.wrapped_key, wrapped.iv, newEpoch)
+                .subscribe({ error: () => {} });
+            }
+          }
         }
       }
     } catch {}
@@ -1894,7 +1942,8 @@ export class ChatComponent implements OnInit, OnDestroy {
    */
   private async refreshOwnGroupKeyShare(groupId: number) {
     try {
-      const raw = await this.crypto.getRawGroupKey(groupId);
+      const epoch = await this.crypto.getCurrentGroupEpoch(groupId);
+      const raw = await this.crypto.getRawGroupKey(groupId, epoch);
       if (!raw) return;
       const share = await this.crypto.encryptGroupKeyForPeer(raw, this.currentUserId);
       if (share) {
@@ -1908,14 +1957,15 @@ export class ChatComponent implements OnInit, OnDestroy {
   private async distributeGroupKeyToMember(groupId: number, memberId: number) {
     if (!this.e2eeReady || !memberId || memberId === this.currentUserId) return;
     try {
-      const raw = await this.crypto.getRawGroupKey(groupId);
+      const epoch = await this.crypto.getCurrentGroupEpoch(groupId);
+      const raw = await this.crypto.getRawGroupKey(groupId, epoch);
       if (!raw) return; // we don't have the key — someone else will share it
       const share = await this.crypto.encryptGroupKeyForPeer(raw, memberId);
       if (share) {
         this.api.uploadGroupKeyShare(groupId, memberId, share.encrypted_key, share.iv)
           .subscribe({ error: () => {} });
       }
-      await this.distributeGroupKeyToMemberDevices(groupId, memberId, raw);
+      await this.distributeGroupKeyToMemberDevices(groupId, memberId, raw, epoch);
     } catch {}
   }
 
@@ -1926,8 +1976,18 @@ export class ChatComponent implements OnInit, OnDestroy {
    */
   private async onGroupKeyReady(groupId: number) {
     this.retryPendingGroupSend();
+    // Pick up a possibly newer epoch.
+    try {
+      const { epoch } = await firstValueFrom(this.api.getGroupKeyEpoch(groupId));
+      const local = await this.crypto.getCurrentGroupEpoch(groupId);
+      if (epoch > local) {
+        const fetched = await this.crypto.getGroupKey(groupId, epoch);
+        if (fetched) await this.crypto.setCurrentGroupEpoch(groupId, epoch);
+      }
+    } catch {}
     if (!this.messages.some(m => m.content === '[Зашифрованное сообщение]')) return;
-    const key = await this.crypto.getGroupKey(groupId);
+    const epochNow = await this.crypto.getCurrentGroupEpoch(groupId);
+    const key = await this.crypto.getGroupKey(groupId, epochNow);
     if (!key) return;
     this.api.getGroupMessages(groupId).subscribe(async (msgs: Message[]) => {
       for (let i = 0; i < msgs.length; i++) {
@@ -1951,7 +2011,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   private async decryptGroupMsg(msg: Message, groupId: number): Promise<Message> {
     if (msg.encrypted_content && msg.encrypted_iv && this.e2eeReady) {
-      const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv);
+      const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv, msg.epoch ?? 0);
       if (decrypted !== null) {
         msg.content = decrypted;
       } else {

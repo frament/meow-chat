@@ -437,6 +437,18 @@ func migrate() {
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(group_chat_id, device_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS group_epoch_key_shares (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_id     TEXT NOT NULL,
+			epoch         INTEGER NOT NULL DEFAULT 0,
+			encrypted_key TEXT NOT NULL,
+			iv            TEXT NOT NULL,
+			creator_id    INTEGER DEFAULT NULL,
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(group_chat_id, device_id, epoch)
+		)`,
 		`CREATE TABLE IF NOT EXISTS user_keys_backup (
 			user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			encrypted_key      TEXT NOT NULL,
@@ -508,6 +520,14 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='env_iv'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE messages ADD COLUMN env_iv TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sender_device_id'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE messages ADD COLUMN sender_device_id TEXT DEFAULT ''")
+	}
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='epoch'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE group_messages ADD COLUMN epoch INTEGER DEFAULT 0")
 	}
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_content'").Scan(&count)
 	if count == 0 {

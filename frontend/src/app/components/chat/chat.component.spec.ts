@@ -65,6 +65,7 @@ describe('ChatComponent', () => {
     getUserDeviceKeys: jasmine.createSpy().and.returnValue(of([])),
     uploadGroupDeviceKeyShare: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     getMyGroupDeviceKeyShare: jasmine.createSpy().and.returnValue(of({ encrypted_key: '', iv: '', epoch: 0 })),
+    getGroupKeyEpoch: jasmine.createSpy().and.returnValue(of({ epoch: 0 })),
   };
 
   const mockCrypto = {
@@ -74,6 +75,9 @@ describe('ChatComponent', () => {
     buildEnvelopes: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
     decryptViaEnvelope: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
     wrapKeyForDevice: jasmine.createSpy().and.returnValue(Promise.resolve({ wrapped_key: 'wk', iv: 'iv' })),
+    wrapKeyForDeviceFromDevice: jasmine.createSpy().and.returnValue(Promise.resolve({ wrapped_key: 'wk', iv: 'iv' })),
+    getCurrentGroupEpoch: jasmine.createSpy().and.returnValue(Promise.resolve(0)),
+    setCurrentGroupEpoch: jasmine.createSpy().and.returnValue(Promise.resolve()),
   };
 
   beforeEach(async () => {
