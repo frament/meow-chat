@@ -20,6 +20,9 @@ function makeSubJSON(endpoint = 'https://example.push'): PushSubscriptionJSON {
 class MockDeviceAuth {
   showIncomingRequest = jasmine.createSpy('showIncomingRequest');
   startNewDeviceFlow = jasmine.createSpy('startNewDeviceFlow');
+  loadPendingRequests = jasmine.createSpy('loadPendingRequests');
+  handleDeviceApproved = jasmine.createSpy('handleDeviceApproved');
+  decryptIdentityKeyFromDevice = jasmine.createSpy('decryptIdentityKeyFromDevice');
 }
 
 describe('App', () => {
@@ -44,6 +47,7 @@ describe('App', () => {
       'getUnread', 'hydrateUnread', 'pushUnsubscribe', 'pushLog',
       'checkHealth', 'getVapidPublicKey', 'pushSubscribe',
       'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
+      'getAuthRequests', 'getAuthRequest',
     ], {
       currentUser: signal(null),
       totalUnread: computed(() => 0),
@@ -65,6 +69,7 @@ describe('App', () => {
     (mockApi.checkUpdate as jasmine.Spy).and.returnValue(of({ update_available: false }));
     (mockApi.checkHealth as jasmine.Spy).and.returnValue(of({ status: 'ok' }));
     (mockApi.getUnread as jasmine.Spy).and.returnValue(of({ users: [], groups: [] }));
+    (mockApi.getAuthRequests as jasmine.Spy).and.returnValue(of([]));
     (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
     (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
     (mockApi.pushUnsubscribe as jasmine.Spy).and.returnValue(of({}));

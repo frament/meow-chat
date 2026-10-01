@@ -11,6 +11,7 @@ describe('DeviceAuthComponent', () => {
   const mockApi = {
     createAuthRequest: jasmine.createSpy().and.returnValue(of({ id: 1 })),
     getAuthRequest: jasmine.createSpy().and.returnValue(of({ status: 'pending' })),
+    getAuthRequests: jasmine.createSpy().and.returnValue(of([])),
     approveAuthRequest: jasmine.createSpy().and.returnValue(of({})),
     denyAuthRequest: jasmine.createSpy().and.returnValue(of({})),
     recoverKeys: jasmine.createSpy().and.returnValue(of({ identity_key_jwk: '{}' })),
@@ -20,6 +21,7 @@ describe('DeviceAuthComponent', () => {
     ensureDeviceKeyPair: jasmine.createSpy().and.returnValue(Promise.resolve()),
     getDevicePublicKeySPKI: jasmine.createSpy().and.returnValue(Promise.resolve('spki')),
     deviceId: 'dev-1',
+    hasIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
     encryptIdentityKeyForDevice: jasmine.createSpy().and.returnValue(Promise.resolve({ encrypted: 'enc', iv: 'iv' })),
     decryptIdentityKeyFromDevice: jasmine.createSpy().and.returnValue(Promise.resolve('{}')),
     importIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve()),
@@ -75,7 +77,25 @@ describe('DeviceAuthComponent', () => {
     tick();
 
     expect(mockCrypto.encryptIdentityKeyForDevice).toHaveBeenCalledWith('pk');
-    expect(mockApi.approveAuthRequest).toHaveBeenCalledWith(2, 'enc', 'iv');
+    expect(mockApi.approveAuthRequest).toHaveBeenCalledWith(2, 'enc', 'iv', 'spki');
+  }));
+
+  it('shows a pending request from another device via polling', fakeAsync(() => {
+    mockApi.getAuthRequests.and.returnValue(of([
+      { id: 9, device_name: 'Laptop', device_public_key: 'pk9', device_id: 'other-dev' },
+    ]));
+    component.loadPendingRequests();
+    tick();
+    expect(component.incomingRequest()?.id).toBe(9);
+  }));
+
+  it('ignores its own pending request', fakeAsync(() => {
+    mockApi.getAuthRequests.and.returnValue(of([
+      { id: 9, device_name: 'Me', device_public_key: 'pk9', device_id: 'dev-1' },
+    ]));
+    component.loadPendingRequests();
+    tick();
+    expect(component.incomingRequest()).toBeNull();
   }));
 
   it('calls denyAuthRequest on deny', fakeAsync(() => {

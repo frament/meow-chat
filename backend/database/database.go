@@ -413,6 +413,7 @@ func migrate() {
 			status            TEXT DEFAULT 'pending',
 			encrypted_key     TEXT,
 			iv                TEXT,
+			approver_public_key TEXT DEFAULT '',
 			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at        DATETIME DEFAULT (datetime('now', '+15 minutes'))
 		)`,
@@ -509,6 +510,11 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_key_shares') WHERE name='key_creator_id'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
+	}
+
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('device_auth_requests') WHERE name='approver_public_key'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE device_auth_requests ADD COLUMN approver_public_key TEXT DEFAULT ''")
 	}
 
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='is_read'").Scan(&count)

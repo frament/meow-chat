@@ -117,12 +117,12 @@ func (h *Handler) UploadGroupKeyShare(c *fiber.Ctx) error {
 	}
 
 	// Let the recipient know their key is ready so the client can retry/decrypt.
-	if userID != body.UserID {
-		h.SendToUser(body.UserID, fiber.Map{
-			"type":          "group_key_ready",
-			"group_chat_id": groupID,
-		})
-	}
+	// Also notify when a user refreshes their own share, so their other linked
+	// devices (same account, same key) can pick the group key up.
+	h.SendToUser(body.UserID, fiber.Map{
+		"type":          "group_key_ready",
+		"group_chat_id": groupID,
+	})
 
 	return c.JSON(fiber.Map{"message": "Key share saved"})
 }

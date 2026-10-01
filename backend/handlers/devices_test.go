@@ -156,6 +156,54 @@ func TestCreateAuthRequest_MissingFields(t *testing.T) {
 	}
 }
 
+func TestCreateAuthRequest_RelinkAfterRegister(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	// The app registers the device before starting the linking flow.
+	regBody := `{"device_name":"Laptop","device_public_key":"pk-laptop","device_id":"devL"}`
+	req, _ := http.NewRequest("POST", "/devices/register", strings.NewReader(regBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	if resp, err := app.Test(req); err != nil || resp.StatusCode != 201 {
+		t.Fatalf("register: status=%v err=%v", resp.StatusCode, err)
+	}
+
+	authBody := `{"device_name":"Laptop","device_public_key":"pk-laptop","device_id":"devL"}`
+	for attempt := 0; attempt < 2; attempt++ {
+		req, _ := http.NewRequest("POST", "/devices/auth-request", strings.NewReader(authBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", bearerToken(t, userID, false))
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != 201 {
+			t.Fatalf("attempt %d: expected 201, got %d", attempt, resp.StatusCode)
+		}
+	}
+
+	// No duplicate pending requests, and the device registration is preserved.
+	var pending int
+	database.DB.QueryRow(
+		"SELECT COUNT(*) FROM device_auth_requests WHERE user_id=? AND device_id='devL' AND status='pending'", userID,
+	).Scan(&pending)
+	if pending != 1 {
+		t.Fatalf("expected 1 pending request, got %d", pending)
+	}
+	var devices int
+	database.DB.QueryRow("SELECT COUNT(*) FROM user_devices WHERE user_id=? AND device_id='devL'", userID).Scan(&devices)
+	if devices != 1 {
+		t.Fatalf("expected device to remain registered, got %d", devices)
+	}
+	var pk string
+	database.DB.QueryRow(
+		"SELECT device_public_key FROM device_auth_requests WHERE user_id=? AND device_id='devL'", userID,
+	).Scan(&pk)
+	if pk != "pk-laptop" {
+		t.Fatalf("expected public key stored, got %q", pk)
+	}
+}
+
 func TestListAuthRequests_Empty(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 

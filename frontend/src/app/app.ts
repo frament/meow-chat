@@ -8,6 +8,7 @@ import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
 import { DeviceAuthComponent } from './components/device-auth/device-auth';
+import { DeviceLinkService } from './services/device-link.service';
 
 @Component({
   selector: 'app-root',
@@ -274,6 +275,7 @@ export class App implements OnInit, OnDestroy {
   readonly #theme = inject(ThemeService);
   readonly #crypto = inject(CryptoService);
   readonly #pwa = inject(PwaInstallService);
+  readonly #deviceLink = inject(DeviceLinkService);
   readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
@@ -325,8 +327,12 @@ export class App implements OnInit, OnDestroy {
         this.#sw.checkForUpdate();
         this.refreshUnread();
         this.tryReSubscribePush();
+        this.deviceAuth?.loadPendingRequests();
       })
     );
+
+    // Settings can ask to link this device to the account (identity key transfer).
+    this.#sub.add(this.#deviceLink.request$.subscribe(() => this.deviceAuth?.startNewDeviceFlow()));
 
     // App icon badge always mirrors server-backed unread total
     effect(() => {
@@ -402,6 +408,7 @@ export class App implements OnInit, OnDestroy {
       this.#crypto.init().then(() => {
         this.#crypto.syncPublicKey();
         this.checkDeviceAuth();
+        this.deviceAuth?.loadPendingRequests();
       });
     }
     this.#notif.requestPermission();

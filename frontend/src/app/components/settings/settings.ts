@@ -9,6 +9,7 @@ import { ThemeService, ThemeMode } from '../../services/theme.service';
 import { CryptoService } from '../../services/crypto.service';
 import { toMemoryFile } from '../../services/upload-utils';
 import { PwaInstallService } from '../../services/pwa-install.service';
+import { DeviceLinkService } from '../../services/device-link.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -291,6 +292,45 @@ import * as QRCode from 'qrcode';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Устройства</div>
+          <p style="color:var(--text-tertiary);font-size:12px;margin-bottom:8px;">
+            Чтобы читать переписку на этом устройстве, подключите его к аккаунту и подтвердите на телефоне.
+          </p>
+          @if (devices.length > 0) {
+            <div style="border:1px solid var(--border-default);border-radius:8px;overflow:hidden;margin-bottom:8px;">
+              @for (d of devices; track d.device_id) {
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--divider);">
+                  <div style="min-width:0;">
+                    <div style="font-size:13px;color:var(--text-primary);font-weight:500;">
+                      {{ d.device_name }}
+                      @if (d.device_id === thisDeviceId) {
+                        <span style="color:var(--text-tertiary);font-weight:400;">(это устройство)</span>
+                      }
+                    </div>
+                    <div style="font-size:11px;color:var(--text-tertiary);">{{ d.last_seen || '' }}</div>
+                  </div>
+                  @if (d.device_id !== thisDeviceId) {
+                    <button type="button" (click)="removeDevice(d.device_id)"
+                      style="padding:6px 10px;border-radius:8px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">
+                      Отключить
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+          <button type="button" (click)="linkThisDevice()"
+            class="btn-secondary" style="width:100%;padding:12px 20px;">
+            Подключить это устройство к аккаунту
+          </button>
+          @if (deviceMsg) {
+            <p class="mt-2 text-sm text-center" style="color:var(--text-secondary);">{{ deviceMsg }}</p>
+          }
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
 
           <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
@@ -444,14 +484,42 @@ export class SettingsComponent implements OnInit {
 
   e2eeStatus = 'Проверка...';
 
+  devices: { id: number; device_name: string; device_id: string; last_seen: string }[] = [];
+  deviceMsg = '';
+
   constructor(
     private api: ApiService,
     private router: Router,
     private theme: ThemeService,
     private crypto: CryptoService,
     private pwa: PwaInstallService,
+    private deviceLink: DeviceLinkService,
   ) {
     this.selectedTheme = this.theme.currentMode;
+  }
+
+  get thisDeviceId() {
+    return this.crypto.deviceId;
+  }
+
+  async loadDevices() {
+    await this.crypto.ensureDeviceKeyPair();
+    this.api.getDevices().subscribe({
+      next: (d) => { this.devices = d || []; },
+      error: () => {},
+    });
+  }
+
+  linkThisDevice() {
+    this.deviceMsg = 'Подтвердите вход на другом устройстве…';
+    this.deviceLink.start();
+  }
+
+  removeDevice(deviceId: string) {
+    this.api.removeDevice(deviceId).subscribe({
+      next: () => { this.deviceMsg = 'Устройство отключено'; this.loadDevices(); },
+      error: () => { this.deviceMsg = 'Не удалось отключить устройство'; },
+    });
   }
 
   async checkForUpdates() {
@@ -522,6 +590,7 @@ export class SettingsComponent implements OnInit {
     this.loadFriends();
     this.loadBioCreds();
     this.initE2EE();
+    this.loadDevices();
     this.loadVersion();
   }
 

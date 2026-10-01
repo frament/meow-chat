@@ -5,6 +5,7 @@ import { ThemeService } from '../../services/theme.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
+import { DeviceLinkService } from '../../services/device-link.service';
 import { signal, computed } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
@@ -30,6 +31,8 @@ describe('SettingsComponent', () => {
     logout: jasmine.createSpy(),
     getVersion: jasmine.createSpy().and.returnValue(of({ version: '1.1.0' })),
     checkUpdate: jasmine.createSpy().and.returnValue(of({ update_available: false, current_version: '1.1.0', latest_version: '', download_url: '', release_notes_url: '' })),
+    getDevices: jasmine.createSpy().and.returnValue(of([])),
+    removeDevice: jasmine.createSpy().and.returnValue(of({})),
   };
 
   const mockTheme = {
@@ -40,6 +43,8 @@ describe('SettingsComponent', () => {
   const mockCrypto = {
     init: jasmine.createSpy().and.returnValue(Promise.resolve()),
     getPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve('pubkey')),
+    ensureDeviceKeyPair: jasmine.createSpy().and.returnValue(Promise.resolve()),
+    deviceId: 'dev-1',
   };
 
   const mockSwUpdate = {
@@ -194,4 +199,24 @@ describe('SettingsComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('1.1.0');
   });
+
+  it('starts device linking from settings', () => {
+    const link = TestBed.inject(DeviceLinkService);
+    spyOn(link, 'start');
+    component.linkThisDevice();
+    expect(link.start).toHaveBeenCalled();
+  });
+
+  it('loads and removes devices', fakeAsync(() => {
+    mockApi.getDevices.and.returnValue(of([
+      { id: 1, device_name: 'Phone', device_id: 'dev-1', last_seen: '' },
+    ]));
+    component.loadDevices();
+    tick();
+    expect(component.devices.length).toBe(1);
+
+    component.removeDevice('dev-1');
+    tick();
+    expect(mockApi.removeDevice).toHaveBeenCalledWith('dev-1');
+  }));
 });

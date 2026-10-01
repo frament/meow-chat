@@ -1178,7 +1178,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.distributeGroupKeyToMember(data.group_chat_id, data.user_id);
         }
         if (data.type === 'group_key_ready' && this.selectedGroup && data.group_chat_id === this.selectedGroup.id) {
-          this.retryPendingGroupSend();
+          this.onGroupKeyReady(data.group_chat_id);
         }
         if (data.type === 'mark_read') {
           for (const m of this.messages) {
@@ -1798,6 +1798,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       const groupKey = await this.crypto.getGroupKey(group.id);
       if (groupKey) {
         this.distributeGroupKeyToMembers(group.id);
+        this.refreshOwnGroupKeyShare(group.id);
       }
     }
 
@@ -1850,6 +1851,24 @@ export class ChatComponent implements OnInit, OnDestroy {
     } catch {}
   }
 
+  /**
+   * Re-publish our own group-key share for the current identity key. After a new
+   * device is linked (it adopts the same identity key) this is what lets it fetch
+   * and decrypt the group key; the original self-share can be stale after a key
+   * reset. No-op if we don't hold the raw group key.
+   */
+  private async refreshOwnGroupKeyShare(groupId: number) {
+    try {
+      const raw = await this.crypto.getRawGroupKey(groupId);
+      if (!raw) return;
+      const share = await this.crypto.encryptGroupKeyForPeer(raw, this.currentUserId);
+      if (share) {
+        this.api.uploadGroupKeyShare(groupId, this.currentUserId, share.encrypted_key, share.iv)
+          .subscribe({ error: () => {} });
+      }
+    } catch {}
+  }
+
   /** Encrypt the group key for a single member (used on key requests / member add). */
   private async distributeGroupKeyToMember(groupId: number, memberId: number) {
     if (!this.e2eeReady || !memberId || memberId === this.currentUserId) return;
@@ -1862,6 +1881,25 @@ export class ChatComponent implements OnInit, OnDestroy {
           .subscribe({ error: () => {} });
       }
     } catch {}
+  }
+
+  /**
+   * A group key became available (e.g. another linked device just published the
+   * self-share): retry any blocked send and re-decrypt history that was shown
+   * as encrypted.
+   */
+  private async onGroupKeyReady(groupId: number) {
+    this.retryPendingGroupSend();
+    if (!this.messages.some(m => m.content === '[Зашифрованное сообщение]')) return;
+    const key = await this.crypto.getGroupKey(groupId);
+    if (!key) return;
+    this.api.getGroupMessages(groupId).subscribe(async (msgs: Message[]) => {
+      for (let i = 0; i < msgs.length; i++) {
+        msgs[i] = await this.decryptGroupMsg(msgs[i], groupId);
+      }
+      this.messages = msgs;
+      this.scrollToBottom();
+    });
   }
 
   /** Retry a group message that was blocked on a missing key. */

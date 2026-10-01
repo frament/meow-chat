@@ -1302,15 +1302,16 @@ export class ApiService {
   }
 
   getAuthRequest(id: number) {
-    return this.http.get<{ status: string; encrypted_key: string; iv: string }>(
+    return this.http.get<{ status: string; encrypted_key: string; iv: string; approver_public_key: string }>(
       `${this.baseUrl}/devices/auth/${id}`
     );
   }
 
-  approveAuthRequest(id: number, encryptedKey: string, iv: string) {
+  approveAuthRequest(id: number, encryptedKey: string, iv: string, approverPublicKey: string) {
     return this.http.post(`${this.baseUrl}/devices/auth/${id}/approve`, {
       encrypted_key: encryptedKey,
       iv,
+      approver_public_key: approverPublicKey,
     });
   }
 

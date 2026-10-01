@@ -434,11 +434,15 @@ func (h *Handler) SendToUser(userID int64, data fiber.Map) {
 	}
 }
 
-func (h *Handler) BroadcastDeviceAuthRequest(userID int64, reqID int64, deviceName string) {
+func (h *Handler) BroadcastDeviceAuthRequest(userID int64, reqID int64, deviceName, devicePublicKey, deviceID string) {
+	// device_public_key is required by the trusted device to wrap the identity
+	// key for the new device; without it approval cannot happen.
 	h.SendToUser(userID, fiber.Map{
-		"type":        "device_auth_request",
-		"id":          reqID,
-		"device_name": deviceName,
+		"type":              "device_auth_request",
+		"id":                reqID,
+		"device_name":       deviceName,
+		"device_public_key": devicePublicKey,
+		"device_id":         deviceID,
 	})
 }
 

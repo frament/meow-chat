@@ -8,6 +8,7 @@ interface IncomingRequest {
   id: number;
   device_name: string;
   device_public_key: string;
+  device_id?: string;
 }
 
 @Component({
@@ -48,6 +49,9 @@ interface IncomingRequest {
           <p style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">
             Устройство <strong>{{ req.device_name }}</strong> запрашивает доступ к вашей учётной записи.
           </p>
+          @if (approvalError) {
+            <p style="font-size:13px;color:#e74c3c;margin-bottom:12px;">{{ approvalError }}</p>
+          }
           <div style="display:flex;gap:8px;justify-content:flex-end;">
             <button (click)="denyRequest()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--divider);background:transparent;cursor:pointer;font-size:13px;color:var(--text-secondary);">
               Отклонить
@@ -103,6 +107,7 @@ export class DeviceAuthComponent {
   recoveryMethod: 'password' | 'phrase' = 'password';
   recoveryInput = '';
   recoveryError = '';
+  approvalError = '';
 
   constructor(
     private api: ApiService,
@@ -110,9 +115,10 @@ export class DeviceAuthComponent {
   ) {}
 
   async startNewDeviceFlow() {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-    this.deviceName = 'Device ' + Array.from({length: 4}, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    const platform = (navigator as any).userAgentData?.platform || navigator.platform || 'Устройство';
+    this.deviceName = String(platform).slice(0, 40);
     this.status.set('waiting');
+    this.approvalError = '';
 
     await this.crypto.ensureDeviceKeyPair();
     const pubKey = await this.crypto.getDevicePublicKeySPKI();
@@ -135,7 +141,7 @@ export class DeviceAuthComponent {
         if (res.status === 'approved' && res.encrypted_key) {
           this.status.set('approved');
           this.pollSub?.unsubscribe();
-          this.processApprovedKey(res.encrypted_key, res.iv);
+          this.processApprovedKey(res.encrypted_key, res.iv, res.approver_public_key);
         } else if (res.status === 'denied' || res.status === 'expired') {
           this.status.set('failed');
           this.pollSub?.unsubscribe();
@@ -150,15 +156,17 @@ export class DeviceAuthComponent {
         if (res.status === 'approved' && res.encrypted_key) {
           this.status.set('approved');
           this.pollSub?.unsubscribe();
-          this.processApprovedKey(res.encrypted_key, res.iv);
+          this.processApprovedKey(res.encrypted_key, res.iv, res.approver_public_key);
         }
       });
     }
   }
 
-  private async processApprovedKey(encryptedB64: string, ivB64: string) {
-    const deviceSPKI = await this.crypto.getDevicePublicKeySPKI();
-    const jwk = await this.crypto.decryptIdentityKeyFromDevice(encryptedB64, ivB64, deviceSPKI);
+  private async processApprovedKey(encryptedB64: string, ivB64: string, approverPublicKey: string) {
+    if (!approverPublicKey) return;
+    // The identity key was wrapped for us by the trusted device: derive the
+    // shared secret from our device private key and the approver's public key.
+    const jwk = await this.crypto.decryptIdentityKeyFromDevice(encryptedB64, ivB64, approverPublicKey);
     if (jwk) {
       await this.crypto.importIdentityKey(jwk);
       await this.crypto.syncPublicKey();
@@ -166,20 +174,60 @@ export class DeviceAuthComponent {
     }
   }
 
+  /**
+   * Show a pending link request. Used on a trusted device when the live WS
+   * event was missed (e.g. it was offline when the request was created).
+   */
+  async loadPendingRequests() {
+    if (!(await this.crypto.hasIdentityKey())) return;
+    this.api.getAuthRequests().subscribe({
+      next: (reqs) => {
+        if (this.incomingRequest() || this.status() !== 'idle') return;
+        const req = (reqs || []).find(
+          (r: any) => r.device_id && r.device_id !== this.crypto.deviceId && r.device_public_key,
+        );
+        if (req) {
+          this.showIncomingRequest({
+            id: req.id,
+            device_name: req.device_name,
+            device_public_key: req.device_public_key,
+            device_id: req.device_id,
+          });
+        }
+      },
+      error: () => {},
+    });
+  }
+
   // Called when this trusted device receives a WS event
   showIncomingRequest(req: IncomingRequest) {
+    // Never surface our own request, and only approve when we can wrap the key.
+    if (!req.device_public_key || (req.device_id && req.device_id === this.crypto.deviceId)) return;
+    this.approvalError = '';
     this.incomingRequest.set(req);
   }
 
   async approveRequest() {
     const req = this.incomingRequest();
-    if (!req) return;
-    const result = await this.crypto.encryptIdentityKeyForDevice(req.device_public_key);
-    if (!result) return;
-
-    this.api.approveAuthRequest(req.id, result.encrypted, result.iv).subscribe({
-      next: () => this.incomingRequest.set(null),
-    });
+    if (!req || !req.device_public_key) {
+      this.approvalError = 'Нет ключа устройства для подтверждения';
+      return;
+    }
+    this.approvalError = '';
+    try {
+      const result = await this.crypto.encryptIdentityKeyForDevice(req.device_public_key);
+      const myPublicKey = await this.crypto.getDevicePublicKeySPKI();
+      if (!result || !myPublicKey) {
+        this.approvalError = 'Не удалось зашифровать ключ';
+        return;
+      }
+      this.api.approveAuthRequest(req.id, result.encrypted, result.iv, myPublicKey).subscribe({
+        next: () => this.incomingRequest.set(null),
+        error: () => { this.approvalError = 'Ошибка подтверждения'; },
+      });
+    } catch {
+      this.approvalError = 'Ошибка подтверждения';
+    }
   }
 
   denyRequest() {

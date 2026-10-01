@@ -102,11 +102,13 @@ func (h *Handler) CreateAuthRequest(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "device_name, device_public_key, device_id required"})
 	}
 
-	var count int
-	database.DB.QueryRow("SELECT COUNT(*) FROM user_devices WHERE device_id = ? AND user_id = ?", req.DeviceID, userID).Scan(&count)
-	if count > 0 {
-		return c.Status(409).JSON(fiber.Map{"error": "Device already registered"})
-	}
+	// Linking must work even when the device already registered itself (the app
+	// registers before starting the flow). Drop only stale pending requests so
+	// repeated attempts don't pile up; the device registration stays intact.
+	database.DB.Exec(
+		"DELETE FROM device_auth_requests WHERE device_id = ? AND user_id = ? AND status = 'pending'",
+		req.DeviceID, userID,
+	)
 
 	result, err := database.DB.Exec(
 		`INSERT INTO device_auth_requests (user_id, device_name, device_public_key, device_id, status)
@@ -118,7 +120,7 @@ func (h *Handler) CreateAuthRequest(c *fiber.Ctx) error {
 	}
 
 	reqID, _ := result.LastInsertId()
-	h.BroadcastDeviceAuthRequest(userID, reqID, req.DeviceName)
+	h.BroadcastDeviceAuthRequest(userID, reqID, req.DeviceName, req.PublicKey, req.DeviceID)
 	return c.Status(201).JSON(fiber.Map{"id": reqID})
 }
 
@@ -159,11 +161,11 @@ func (h *Handler) GetAuthRequest(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request ID"})
 	}
 
-	var status, encryptedKey, iv, deviceID, expiresAt string
+	var status, encryptedKey, iv, deviceID, expiresAt, approverKey string
 	err = database.DB.QueryRow(
-		"SELECT status, COALESCE(encrypted_key, ''), COALESCE(iv, ''), device_id, expires_at FROM device_auth_requests WHERE id = ? AND user_id = ?",
+		"SELECT status, COALESCE(encrypted_key, ''), COALESCE(iv, ''), device_id, expires_at, COALESCE(approver_public_key, '') FROM device_auth_requests WHERE id = ? AND user_id = ?",
 		reqID, userID,
-	).Scan(&status, &encryptedKey, &iv, &deviceID, &expiresAt)
+	).Scan(&status, &encryptedKey, &iv, &deviceID, &expiresAt, &approverKey)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Auth request not found"})
 	}
@@ -179,10 +181,11 @@ func (h *Handler) GetAuthRequest(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"status":        status,
-		"encrypted_key": encryptedKey,
-		"iv":            iv,
-		"device_id":     deviceID,
+		"status":             status,
+		"encrypted_key":      encryptedKey,
+		"iv":                 iv,
+		"device_id":          deviceID,
+		"approver_public_key": approverKey,
 	})
 }
 
@@ -205,8 +208,9 @@ func (h *Handler) ApproveAuthRequest(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		EncryptedKey string `json:"encrypted_key"`
-		IV           string `json:"iv"`
+		EncryptedKey    string `json:"encrypted_key"`
+		IV              string `json:"iv"`
+		ApproverKey     string `json:"approver_public_key"`
 	}
 	if err := c.BodyParser(&req); err != nil || req.EncryptedKey == "" || req.IV == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "encrypted_key and iv required"})
@@ -222,8 +226,8 @@ func (h *Handler) ApproveAuthRequest(c *fiber.Ctx) error {
 	}
 
 	_, err = database.DB.Exec(
-		"UPDATE device_auth_requests SET status = 'approved', encrypted_key = ?, iv = ? WHERE id = ?",
-		req.EncryptedKey, req.IV, reqID,
+		"UPDATE device_auth_requests SET status = 'approved', encrypted_key = ?, iv = ?, approver_public_key = ? WHERE id = ?",
+		req.EncryptedKey, req.IV, req.ApproverKey, reqID,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to approve request"})
