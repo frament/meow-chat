@@ -69,6 +69,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 		`CREATE TABLE IF NOT EXISTS user_keys (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, public_key TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS user_keys_backup (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, encrypted_key TEXT NOT NULL, iv TEXT NOT NULL, salt TEXT NOT NULL, hash_iterations INTEGER DEFAULT 100000, recovery_phrase_encrypted TEXT, recovery_phrase_salt TEXT, recovery_phrase_iv TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS group_key_shares (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id), encrypted_key TEXT NOT NULL, iv TEXT NOT NULL, key_creator_id INTEGER DEFAULT NULL REFERENCES users(id), created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(group_chat_id, user_id))`,
+		`CREATE TABLE IF NOT EXISTS group_device_key_shares (id INTEGER PRIMARY KEY AUTOINCREMENT, group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, device_id TEXT NOT NULL, epoch INTEGER DEFAULT 0, encrypted_key TEXT NOT NULL, iv TEXT NOT NULL, creator_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(group_chat_id, device_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, base_url TEXT NOT NULL UNIQUE, server_token TEXT NOT NULL, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS federation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL REFERENCES federation_servers(id), remote_id INTEGER NOT NULL, username TEXT NOT NULL, avatar_url TEXT DEFAULT '', email TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_id, remote_id))`,
 		`CREATE TABLE IF NOT EXISTS federation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL REFERENCES federation_servers(id), endpoint TEXT NOT NULL, body TEXT NOT NULL, headers TEXT DEFAULT '', priority INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, max_attempts INTEGER DEFAULT 3, last_error TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
@@ -156,6 +157,8 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/group-chats/:id/invites", AuthRequired, h.CreateGroupInvite)
 	app.Post("/group-chats/:id/keys", AuthRequired, h.UploadGroupKeyShare)
 	app.Get("/group-chats/:id/my-key", AuthRequired, h.GetMyGroupKeyShare)
+	app.Post("/group-chats/:id/device-keys", AuthRequired, h.UploadGroupDeviceKeyShare)
+	app.Get("/group-chats/:id/my-device-key", AuthRequired, h.GetMyGroupDeviceKeyShare)
 	app.Post("/group-chats/:id/request-key", AuthRequired, h.RequestGroupKey)
 	app.Get("/group-chat-invites/:token", AuthRequired, h.GetGroupInvite)
 	app.Post("/group-chat-invites/:token/join", AuthRequired, h.JoinGroupViaInvite)
@@ -230,6 +233,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	devices.Post("/recovery/generate", h.GenerateRecoveryPhrase)
 	devices.Post("/recovery/set", h.SetRecoveryPhraseBackup)
 	devices.Get("/recovery/status", h.GetRecoveryPhraseStatus)
+	devices.Get("/backup-status", h.GetKeyBackupStatus)
 
 	return app, h, userID
 }

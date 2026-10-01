@@ -127,6 +127,86 @@ func (h *Handler) UploadGroupKeyShare(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Key share saved"})
 }
 
+// UploadGroupDeviceKeyShare stores a group key wrapped for one specific device.
+// Unlike the user-level share this works even when that device has a different
+// identity key (it only needs the device keypair + the sharer's identity key).
+func (h *Handler) UploadGroupDeviceKeyShare(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+	if !isGroupMember(groupID, userID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	var body struct {
+		UserID       int64  `json:"user_id"`
+		DeviceID     string `json:"device_id"`
+		EncryptedKey string `json:"encrypted_key"`
+		IV           string `json:"iv"`
+		Epoch        int    `json:"epoch"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.DeviceID == "" || body.EncryptedKey == "" || body.IV == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "device_id, encrypted_key and iv required"})
+	}
+	if !isGroupMember(groupID, body.UserID) {
+		return c.Status(400).JSON(fiber.Map{"error": "User is not a group member"})
+	}
+
+	_, err = database.DB.Exec(
+		`INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv, creator_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(group_chat_id, device_id) DO UPDATE SET
+		   user_id = excluded.user_id, epoch = excluded.epoch,
+		   encrypted_key = excluded.encrypted_key, iv = excluded.iv, creator_id = excluded.creator_id`,
+		groupID, body.UserID, body.DeviceID, body.Epoch, body.EncryptedKey, body.IV, userID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save device key share"})
+	}
+
+	// Notify the target user's devices so an unlinked device can pick it up.
+	h.SendToUser(body.UserID, fiber.Map{
+		"type":          "group_key_ready",
+		"group_chat_id": groupID,
+	})
+
+	return c.JSON(fiber.Map{"message": "Device key share saved"})
+}
+
+func (h *Handler) GetMyGroupDeviceKeyShare(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid group ID"})
+	}
+	if !isGroupMember(groupID, userID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+	deviceID := c.Query("device_id")
+	if deviceID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "device_id required"})
+	}
+
+	var encryptedKey, iv string
+	var epoch int
+	var creator sql.NullInt64
+	err = database.DB.QueryRow(
+		"SELECT encrypted_key, iv, COALESCE(epoch, 0), creator_id FROM group_device_key_shares WHERE group_chat_id = ? AND user_id = ? AND device_id = ?",
+		groupID, userID, deviceID,
+	).Scan(&encryptedKey, &iv, &epoch, &creator)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Device key share not found"})
+	}
+
+	resp := fiber.Map{"encrypted_key": encryptedKey, "iv": iv, "epoch": epoch}
+	if creator.Valid {
+		resp["creator_id"] = creator.Int64
+	}
+	return c.JSON(resp)
+}
+
 func (h *Handler) GetMyGroupKeyShare(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	groupID, err := strconv.ParseInt(c.Params("id"), 10, 64)

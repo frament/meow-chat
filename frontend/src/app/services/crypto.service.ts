@@ -72,7 +72,8 @@ export class CryptoService {
     );
 
     const jwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey!);
-    await this.set('identityKeyJWK', jwk);
+    // Stored as a JSON string (consistent with importIdentityKey and backups).
+    await this.set('identityKeyJWK', JSON.stringify(jwk));
 
     const spki = await crypto.subtle.exportKey('spki', keyPair.publicKey);
     const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(spki)));
@@ -91,9 +92,21 @@ export class CryptoService {
     return this.get<string>('publicKeySPKI');
   }
 
+  /** Identity JWK as a JSON string (handles the legacy object form too). */
+  private async getIdentityJWKString(): Promise<string | null> {
+    const stored = await this.get<string | JsonWebKey>('identityKeyJWK');
+    if (!stored) return null;
+    return typeof stored === 'string' ? stored : JSON.stringify(stored);
+  }
+
+  async exportIdentityJWK(): Promise<string | null> {
+    return this.getIdentityJWKString();
+  }
+
   private async getMyPrivateKey(): Promise<CryptoKey | null> {
-    const jwk = await this.get<JsonWebKey>('identityKeyJWK');
-    if (!jwk) return null;
+    const raw = await this.getIdentityJWKString();
+    if (!raw) return null;
+    const jwk = JSON.parse(raw) as JsonWebKey;
     return crypto.subtle.importKey(
       'jwk', jwk,
       { name: 'ECDH', namedCurve: 'P-256' },
@@ -234,6 +247,11 @@ export class CryptoService {
       return key;
     }
 
+    // Device-scoped share: self-sufficient, works even when this device has a
+    // different identity key than the rest of the account.
+    const deviceKey = await this.tryGetDeviceGroupKey(groupId);
+    if (deviceKey) return deviceKey;
+
     // Fetch share from server
     try {
       const share = await firstValueFrom(this.api.getMyGroupKeyShare(groupId));
@@ -337,6 +355,26 @@ export class CryptoService {
     };
   }
 
+  /** Fetch our device-scoped group key share and unwrap it. */
+  private async tryGetDeviceGroupKey(groupId: number): Promise<CryptoKey | null> {
+    if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
+    if (!this.deviceId) return null;
+    try {
+      const share = await firstValueFrom(this.api.getMyGroupDeviceKeyShare(groupId, this.deviceId));
+      if (!share.creator_id || !share.encrypted_key) return null;
+      const spki = (await firstValueFrom(this.api.getKey(share.creator_id))).public_key;
+      if (!spki) return null;
+      const raw = await this.unwrapKeyFromDevice(share.encrypted_key, share.iv, spki);
+      if (!raw) return null;
+      const key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      await this.set(`groupKeyRaw_${groupId}`, Array.from(raw));
+      this.groupKeyCache.set(groupId, key);
+      return key;
+    } catch {
+      return null;
+    }
+  }
+
   /** Get raw 32-byte key for a group (for re-encrypting for new members) */
   async getRawGroupKey(groupId: number): Promise<Uint8Array | null> {
     const stored = await this.get<number[]>(`groupKeyRaw_${groupId}`);
@@ -430,7 +468,7 @@ export class CryptoService {
       ['encrypt'],
     );
 
-    const identityJWK = await this.get<string>('identityKeyJWK');
+    const identityJWK = await this.getIdentityJWKString();
     if (!identityJWK) return null;
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -669,5 +707,41 @@ export class CryptoService {
     const rawKey = await this.unwrapKeyFromDevice(mine.wrapped_key, mine.iv, senderPub);
     if (!rawKey) return null;
     return this.decryptWithRawKey(rawKey, envContent, envIv);
+  }
+
+  // ─── Key backup / recovery (Phase 4) ───────────────────────────
+
+  private async deriveKek(secret: string, saltBytes: Uint8Array, iterations: number): Promise<CryptoKey> {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
+      base,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+  }
+
+  /**
+   * Encrypt our identity key with a password/phrase-derived key. Matches the
+   * server recovery scheme: PBKDF2-HMAC-SHA256 + AES-256-GCM, with the salt's
+   * UTF-8 bytes (the salt itself is transmitted as a string) as PBKDF2 salt.
+   */
+  async createKeyBackup(secret: string, iterations = 100000): Promise<{ encrypted_key: string; iv: string; salt: string; hash_iterations: number } | null> {
+    await this.init();
+    const jwk = await this.getIdentityJWKString();
+    if (!jwk) return null;
+
+    const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    const kek = await this.deriveKek(secret, new TextEncoder().encode(salt), iterations);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, new TextEncoder().encode(jwk));
+
+    return {
+      encrypted_key: btoa(String.fromCharCode(...new Uint8Array(ct))),
+      iv: btoa(String.fromCharCode(...iv)),
+      salt,
+      hash_iterations: iterations,
+    };
   }
 }

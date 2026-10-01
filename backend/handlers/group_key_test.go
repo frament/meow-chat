@@ -92,6 +92,46 @@ func TestGroupKeyShare_RoundTripForOtherMember(t *testing.T) {
 	}
 }
 
+func TestGroupDeviceKeyShare_RoundTrip(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	database.DB.Exec("INSERT INTO group_chats (name, created_by) VALUES (?, ?)", "G", userID)
+	database.DB.Exec("INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (?, ?)", 1, userID)
+	database.DB.Exec("INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (?, ?)", 1, 2)
+
+	body := `{"user_id":2,"device_id":"pc-1","encrypted_key":"dev-cipher","iv":"dev-iv","epoch":2}`
+	req, _ := http.NewRequest("POST", "/group-chats/1/device-keys", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest("GET", "/group-chats/1/my-device-key?device_id=pc-1", nil)
+	req.Header.Set("Authorization", bearerToken(t, 2, true))
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200 fetching device share, got %d", resp.StatusCode)
+	}
+	var out struct {
+		EncryptedKey string `json:"encrypted_key"`
+		IV           string `json:"iv"`
+		Epoch        int    `json:"epoch"`
+		CreatorID    int64  `json:"creator_id"`
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	if out.EncryptedKey != "dev-cipher" || out.IV != "dev-iv" || out.Epoch != 2 || out.CreatorID != userID {
+		t.Fatalf("unexpected device share: %+v", out)
+	}
+}
+
 func TestAddGroupMember_RequestsKeyBroadcast(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 

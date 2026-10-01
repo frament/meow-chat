@@ -421,6 +421,25 @@ func (h *Handler) SetRecoveryPhraseBackup(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Recovery phrase backup saved"})
 }
 
+// GetKeyBackupStatus reports whether a password backup and/or recovery phrase
+// backup exists for the account.
+func (h *Handler) GetKeyBackupStatus(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	var hasPassword, hasPhrase int
+	database.DB.QueryRow(
+		"SELECT COUNT(*) FROM user_keys_backup WHERE user_id = ? AND encrypted_key IS NOT NULL AND encrypted_key != ''",
+		userID,
+	).Scan(&hasPassword)
+	database.DB.QueryRow(
+		"SELECT COUNT(*) FROM user_keys_backup WHERE user_id = ? AND recovery_phrase_encrypted IS NOT NULL AND recovery_phrase_encrypted != ''",
+		userID,
+	).Scan(&hasPhrase)
+	return c.JSON(fiber.Map{
+		"has_password_backup": hasPassword > 0,
+		"has_recovery_phrase": hasPhrase > 0,
+	})
+}
+
 func (h *Handler) GetRecoveryPhraseStatus(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	var count int

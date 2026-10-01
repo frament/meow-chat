@@ -1160,6 +1160,19 @@ export class ApiService {
     );
   }
 
+  uploadGroupDeviceKeyShare(groupId: number, userId: number, deviceId: string, encryptedKey: string, iv: string, epoch = 0) {
+    return this.http.post<{ message: string }>(
+      `${this.baseUrl}/group-chats/${groupId}/device-keys`,
+      { user_id: userId, device_id: deviceId, encrypted_key: encryptedKey, iv, epoch },
+    );
+  }
+
+  getMyGroupDeviceKeyShare(groupId: number, deviceId: string) {
+    return this.http.get<{ encrypted_key: string; iv: string; epoch: number; creator_id?: number }>(
+      `${this.baseUrl}/group-chats/${groupId}/my-device-key?device_id=${encodeURIComponent(deviceId)}`,
+    );
+  }
+
   // WebAuthn (FaceID/TouchID)
   webauthnHasCredentials(username: string) {
     return this.http.post<{ has_credentials: boolean }>(
@@ -1386,6 +1399,12 @@ export class ApiService {
   getRecoveryPhraseStatus() {
     return this.http.get<{ has_recovery_phrase: boolean }>(
       `${this.baseUrl}/devices/recovery-phrase`
+    );
+  }
+
+  getKeyBackupStatus() {
+    return this.http.get<{ has_password_backup: boolean; has_recovery_phrase: boolean }>(
+      `${this.baseUrl}/devices/backup-status`
     );
   }
 

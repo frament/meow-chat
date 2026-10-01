@@ -1857,11 +1857,29 @@ export class ChatComponent implements OnInit, OnDestroy {
 
       for (const member of res.members) {
         if (member.user_id === myId) continue;
-        // Check if share already exists (we can't know without asking server)
-        // Just try to upload — server upserts
+        // Legacy user-level share (reaches all linked devices of the member).
         const share = await this.crypto.encryptGroupKeyForPeer(raw, member.user_id);
         if (share) {
           this.api.uploadGroupKeyShare(groupId, member.user_id, share.encrypted_key, share.iv)
+            .subscribe({ error: () => {} });
+        }
+        // Per-device shares (also reach devices that never linked).
+        await this.distributeGroupKeyToMemberDevices(groupId, member.user_id, raw);
+      }
+      // Our own other devices.
+      await this.distributeGroupKeyToMemberDevices(groupId, myId, raw);
+    } catch {}
+  }
+
+  /** Wrap the group key for each device of a user (device-scoped shares). */
+  private async distributeGroupKeyToMemberDevices(groupId: number, userId: number, raw: Uint8Array) {
+    try {
+      const devices = await firstValueFrom(this.api.getUserDeviceKeys(userId));
+      for (const d of devices || []) {
+        if (!d.device_id || !d.device_public_key) continue;
+        const wrapped = await this.crypto.wrapKeyForDevice(raw, d.device_public_key);
+        if (wrapped) {
+          this.api.uploadGroupDeviceKeyShare(groupId, userId, d.device_id, wrapped.wrapped_key, wrapped.iv)
             .subscribe({ error: () => {} });
         }
       }
@@ -1897,6 +1915,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.api.uploadGroupKeyShare(groupId, memberId, share.encrypted_key, share.iv)
           .subscribe({ error: () => {} });
       }
+      await this.distributeGroupKeyToMemberDevices(groupId, memberId, raw);
     } catch {}
   }
 

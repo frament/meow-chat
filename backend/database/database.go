@@ -425,6 +425,18 @@ func migrate() {
 			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at        DATETIME DEFAULT (datetime('now', '+15 minutes'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS group_device_key_shares (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_id     TEXT NOT NULL,
+			epoch         INTEGER DEFAULT 0,
+			encrypted_key TEXT NOT NULL,
+			iv            TEXT NOT NULL,
+			creator_id    INTEGER DEFAULT NULL,
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(group_chat_id, device_id)
+		)`,
 		`CREATE TABLE IF NOT EXISTS user_keys_backup (
 			user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			encrypted_key      TEXT NOT NULL,

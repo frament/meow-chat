@@ -17,6 +17,7 @@ describe('CryptoService', () => {
       'getMyGroupKeyShare',
       'getGroupChat',
       'getUserDeviceKeys',
+      'getMyGroupDeviceKeyShare',
     ]);
     apiMock.putKey.and.returnValue(of({ message: 'ok' }));
     apiMock.getKey.and.returnValue(of({ public_key: '' }));

@@ -331,6 +331,47 @@ import * as QRCode from 'qrcode';
         <div class="divider"></div>
 
         <div>
+          <div class="section-label">Резервная копия ключа</div>
+          <p style="color:var(--text-tertiary);font-size:12px;margin-bottom:8px;">
+            Сохраните копию ключа шифрования, чтобы восстановить переписку, если потеряете все устройства.
+          </p>
+          <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="color:var(--text-secondary);">Копия по паролю</span>
+              <span [style.color]="backupStatus.has_password_backup ? '#27ae60' : 'var(--text-tertiary)'">
+                {{ backupStatus.has_password_backup ? 'Сохранена' : 'Нет' }}
+              </span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+              <span style="color:var(--text-secondary);">Фраза восстановления</span>
+              <span [style.color]="backupStatus.has_recovery_phrase ? '#27ae60' : 'var(--text-tertiary)'">
+                {{ backupStatus.has_recovery_phrase ? 'Создана' : 'Нет' }}
+              </span>
+            </div>
+          </div>
+          <input type="password" [(ngModel)]="backupPassword" placeholder="Пароль учётной записи"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border-default);border-radius:8px;font-size:14px;margin-bottom:8px;background:var(--bg-surface);color:var(--text-primary);">
+          <button type="button" (click)="createPasswordBackup()" [disabled]="backupBusy"
+            class="btn-secondary" style="width:100%;padding:12px 20px;margin-bottom:8px;">
+            Сохранить копию по паролю
+          </button>
+          <button type="button" (click)="createRecoveryPhraseBackup()" [disabled]="backupBusy"
+            class="btn-secondary" style="width:100%;padding:12px 20px;">
+            Создать фразу восстановления
+          </button>
+          @if (recoveryPhrase) {
+            <div style="margin-top:8px;padding:10px;border-radius:8px;border:1px solid var(--accent);background:var(--bg-surface);font-family:monospace;font-size:13px;color:var(--text-primary);word-break:break-all;">
+              {{ recoveryPhrase }}
+            </div>
+          }
+          @if (backupMsg) {
+            <p class="mt-2 text-sm text-center" style="color:var(--text-secondary);">{{ backupMsg }}</p>
+          }
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
           <div class="section-label">Обновления</div>
 
           <div style="padding:10px;border-radius:8px;border:1px solid var(--border-default);font-size:13px;margin-bottom:12px;">
@@ -486,6 +527,11 @@ export class SettingsComponent implements OnInit {
 
   devices: { id: number; device_name: string; device_id: string; last_seen: string }[] = [];
   deviceMsg = '';
+  backupStatus = { has_password_backup: false, has_recovery_phrase: false };
+  backupPassword = '';
+  backupMsg = '';
+  recoveryPhrase = '';
+  backupBusy = false;
 
   constructor(
     private api: ApiService,
@@ -519,6 +565,63 @@ export class SettingsComponent implements OnInit {
     this.api.removeDevice(deviceId).subscribe({
       next: () => { this.deviceMsg = 'Устройство отключено'; this.loadDevices(); },
       error: () => { this.deviceMsg = 'Не удалось отключить устройство'; },
+    });
+  }
+
+  loadBackupStatus() {
+    this.api.getKeyBackupStatus().subscribe({
+      next: (s) => { this.backupStatus = s; },
+      error: () => {},
+    });
+  }
+
+  async createPasswordBackup() {
+    if (!this.backupPassword) {
+      this.backupMsg = 'Введите пароль учётной записи';
+      return;
+    }
+    this.backupBusy = true;
+    this.backupMsg = '';
+    const backup = await this.crypto.createKeyBackup(this.backupPassword);
+    if (!backup) {
+      this.backupBusy = false;
+      this.backupMsg = 'Не удалось создать копию';
+      return;
+    }
+    this.api.uploadKeyBackup(backup.encrypted_key, backup.iv, backup.salt, backup.hash_iterations).subscribe({
+      next: () => {
+        this.backupBusy = false;
+        this.backupPassword = '';
+        this.backupMsg = 'Резервная копия сохранена';
+        this.loadBackupStatus();
+      },
+      error: () => { this.backupBusy = false; this.backupMsg = 'Ошибка сохранения копии'; },
+    });
+  }
+
+  async createRecoveryPhraseBackup() {
+    this.backupBusy = true;
+    this.backupMsg = '';
+    this.recoveryPhrase = '';
+    this.api.generateRecoveryPhrase().subscribe({
+      next: async (res) => {
+        const backup = await this.crypto.createKeyBackup(res.phrase, 100000);
+        if (!backup) {
+          this.backupBusy = false;
+          this.backupMsg = 'Не удалось создать фразу';
+          return;
+        }
+        this.api.setRecoveryPhraseBackup(backup.encrypted_key, backup.iv, backup.salt).subscribe({
+          next: () => {
+            this.backupBusy = false;
+            this.recoveryPhrase = res.phrase;
+            this.backupMsg = 'Сохраните фразу — она показывается один раз';
+            this.loadBackupStatus();
+          },
+          error: () => { this.backupBusy = false; this.backupMsg = 'Ошибка сохранения фразы'; },
+        });
+      },
+      error: () => { this.backupBusy = false; this.backupMsg = 'Ошибка генерации фразы'; },
     });
   }
 
@@ -591,6 +694,7 @@ export class SettingsComponent implements OnInit {
     this.loadBioCreds();
     this.initE2EE();
     this.loadDevices();
+    this.loadBackupStatus();
     this.loadVersion();
   }
 

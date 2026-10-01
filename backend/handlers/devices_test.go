@@ -10,6 +10,40 @@ import (
 	"my-chat-backend/database"
 )
 
+func TestGetKeyBackupStatus(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	req, _ := http.NewRequest("GET", "/devices/backup-status", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		HasPassword bool `json:"has_password_backup"`
+		HasPhrase   bool `json:"has_recovery_phrase"`
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	if out.HasPassword || out.HasPhrase {
+		t.Fatalf("expected no backups, got %+v", out)
+	}
+
+	database.DB.Exec(
+		"INSERT INTO user_keys_backup (user_id, encrypted_key, iv, salt, recovery_phrase_encrypted, recovery_phrase_iv, recovery_phrase_salt) VALUES (?, 'ek', 'iv', 's', 'pe', 'piv', 'ps')",
+		userID,
+	)
+	req, _ = http.NewRequest("GET", "/devices/backup-status", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	if !out.HasPassword || !out.HasPhrase {
+		t.Fatalf("expected both backups, got %+v", out)
+	}
+}
+
 func TestGetUserDeviceKeys(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 

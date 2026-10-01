@@ -203,6 +203,7 @@ func main() {
 	dev.Post("/recovery-phrase", h.GenerateRecoveryPhrase)
 	dev.Post("/recovery-phrase/set", h.SetRecoveryPhraseBackup)
 	dev.Get("/recovery-phrase", h.GetRecoveryPhraseStatus)
+	dev.Get("/backup-status", h.GetKeyBackupStatus)
 
 	api.Put("/keys", h.PutKey)
 
@@ -257,6 +258,8 @@ func main() {
 	api.Post("/group-chats/:id/invites", h.CreateGroupInvite)
 	api.Post("/group-chats/:id/keys", h.UploadGroupKeyShare)
 	api.Get("/group-chats/:id/my-key", h.GetMyGroupKeyShare)
+	api.Post("/group-chats/:id/device-keys", h.UploadGroupDeviceKeyShare)
+	api.Get("/group-chats/:id/my-device-key", h.GetMyGroupDeviceKeyShare)
 	api.Post("/group-chats/:id/request-key", h.RequestGroupKey)
 	api.Get("/group-chat-invites/:token", h.GetGroupInvite)
 	api.Post("/group-chat-invites/:token/join", h.JoinGroupViaInvite)

@@ -33,6 +33,10 @@ describe('SettingsComponent', () => {
     checkUpdate: jasmine.createSpy().and.returnValue(of({ update_available: false, current_version: '1.1.0', latest_version: '', download_url: '', release_notes_url: '' })),
     getDevices: jasmine.createSpy().and.returnValue(of([])),
     removeDevice: jasmine.createSpy().and.returnValue(of({})),
+    getKeyBackupStatus: jasmine.createSpy().and.returnValue(of({ has_password_backup: false, has_recovery_phrase: false })),
+    uploadKeyBackup: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+    generateRecoveryPhrase: jasmine.createSpy().and.returnValue(of({ phrase: 'aaaa-bbbb', phrase_hash: 'h' })),
+    setRecoveryPhraseBackup: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
   };
 
   const mockTheme = {
@@ -45,6 +49,7 @@ describe('SettingsComponent', () => {
     getPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve('pubkey')),
     ensureDeviceKeyPair: jasmine.createSpy().and.returnValue(Promise.resolve()),
     deviceId: 'dev-1',
+    createKeyBackup: jasmine.createSpy().and.returnValue(Promise.resolve({ encrypted_key: 'ek', iv: 'iv', salt: 's', hash_iterations: 100000 })),
   };
 
   const mockSwUpdate = {
