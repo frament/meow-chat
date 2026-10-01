@@ -3,7 +3,7 @@
 ## Stack
 - **Backend**: Go 1.23 + Fiber v2 + SQLite (go-webauthn for biometric auth) (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
 - **Frontend**: Angular 20 (standalone components, new `@if`/`@for` control flow) + Tailwind v4 (`@import "tailwindcss"` in CSS) + PWA (`@angular/service-worker`)
-- **Infra**: Docker Compose (primary run-and-go), nginx reverse-proxy in frontend container
+- **Infra**: Docker Compose (primary run-and-go), nginx reverse-proxy in frontend container (planned removal in `v2.0.0` — single binary serves the SPA; see `ROADMAP.md`)
 
 ## Project structure
 ```
@@ -32,6 +32,12 @@ frontend/
 ## Preferences
 - **Execution style**: Inline (execute tasks in current session, not subagent-driven)
 - **TODO**: See `TODO.md` in repo root for remaining tasks
+- **Roadmap**: See `ROADMAP.md` for the versioned plan (milestones per release)
+
+## Positioning & roadmap
+- **Product**: home chat server for a family — one instance ≈ one household, target scale **up to ~100 users**. Federation joins families into a mesh.
+- **Priorities**: reliability → update simplicity → new features.
+- **Non-goals**: horizontal scaling, multi-instance, Kubernetes, pub/sub (Redis/NATS) for WS/online status, SaaS/multi-tenant.
 
 ## Commands
 ```sh
@@ -53,12 +59,13 @@ cd frontend && npm run build   # production build with service-worker
 
 ## Key quirks
 - **CGO required**: Backend Dockerfile installs `gcc musl-dev` for sqlite3. Local dev needs `CGO_ENABLED=1` (default).
+- **Versioning (three independent versions)**: App SemVer (`version/version.go` → `version.Version`) is the product release shown by `/api/version`. Schema version (`database.CurrentMajor`, currently `1`) gates DB startup — MAJOR mismatch is fatal. Federation handshake compares **schema MAJOR**, NOT the app version (`federation/handler.go`, `handlers/admin_federation.go`). Consequence: bumping the app MAJOR does not break federation unless the schema MAJOR changes.
 - **Auth**: JWT access/refresh tokens. Login returns `{ access_token, refresh_token, user }`. Access token (15min) sent via `Authorization: Bearer` header. Refresh token (7 days) stored in localStorage, auto-refreshed via HTTP interceptor on 401. Backend enforces via `handlers.AuthRequired` middleware. Endpoints without auth: `/api/register`, `/api/login`, `/api/refresh`.
 - **WebSocket**: In-memory hub per process. Does not scale beyond one instance. WS endpoint at `/api/ws?token=` (access token as query param).
 - **PWA**: Service worker registers only in production build (`!isDevMode()`). Dev mode has no SW.
 - **Tailwind v4**: Configured via `@import "tailwindcss"` in `styles.css`. No `tailwind.config.js`. Requires `frontend/.postcssrc.json` with `{ "plugins": { "@tailwindcss/postcss": {} } }` — Angular's Vite builder does NOT auto-detect `@tailwindcss/postcss` without it.
 - **No linter/formatter**: Neither backend nor frontend has lint/format config beyond Angular CLI defaults.
-- **Tests**: Angular has Karma/Jasmine setup (`ng test`), backend has zero test files. Use `make test-backend` to run Go tests — CGO + parallel compilation kills RAM on Intel Macs (16GB), flags limit it.
+- **Tests**: Angular has Karma/Jasmine setup (`ng test`); backend has a Go test suite (`make test-backend`). CGO + parallel compilation kills RAM on Intel Macs (16GB) — the Makefile flags limit parallelism.
 - **DB auto-migrates** on startup. Schema: `users`, `messages`, `posts`, `post_images` with foreign keys. SQLite WAL mode enabled.
 - **Frontend uses Angular standalone components** and new `@if/@for` control flow. Do NOT add `CommonModule` imports.
 - **Avatars**: Uploaded via `POST /api/upload-avatar` (multipart), stored in `./uploads/avatars/`, served via `/uploads/`. Profile update via `PUT /api/profile`. Users table has `avatar_url TEXT`. Login/GetUsers/GetFeed all return `avatar_url`.
@@ -86,8 +93,10 @@ leankg query "federation" --kind file  # search session docs
 
 ## TBD (Future work)
 
-- **Multi-device encryption**: Currently E2EE keys are stored in IndexedDB per-device. No key sync between devices. Solution: export/import key via QR code or password-encrypted backup, or use WebAuthn credential ID as a key wrapping mechanism.
-- **Multi-server collaboration**: The WebSocket hub is in-memory per-process. Horizontal scaling requires a pub/sub layer (Redis/NATS) for WebSocket events, push state, and online status across instances.
-- **Federation `AdminConnectFederation`**: Handler currently returns stub — needs full invite token validation + server-to-server handshake.
-- **Federation `HandleForwardPostImages`**: Not yet implemented — needed for image proxying to federated peers.
-- **UI fixes**: Various UI polish items — PWA install prompt, chat list virtualization for large groups, optimistic message sending with proper rollback, image upload progress indicators.
+See `ROADMAP.md` for the versioned plan (milestones per release). Highlights:
+
+- **Multi-device encryption** (ROADMAP v2.5.0): E2EE keys are stored in IndexedDB per-device — no key sync between devices. Solution: export/import key via QR code or password-encrypted backup, or use WebAuthn credential ID as a key wrapping mechanism.
+- **Multi-server collaboration**: The WebSocket hub is in-memory per-process. Horizontal scaling would need a pub/sub layer — but this is an **explicit non-goal** (target scale: one household, ≤100 users).
+- **Federation `AdminConnectFederation`** (ROADMAP v2.4.0): Handler currently returns stub — needs full invite token validation + server-to-server handshake.
+- **Federation `HandleForwardPostImages`** (ROADMAP v2.4.0): Not yet implemented — needed for image proxying to federated peers.
+- **UI fixes** (ROADMAP v1.5.0 / v2.6.0): PWA install prompt, chat list virtualization, optimistic message sending with rollback, image upload progress.

@@ -5,12 +5,12 @@
 <h1 align="center">MeowChat</h1>
 
 <p align="center">
-  <b>Чат в реальном времени с федеративной mesh-сетью</b><br>
+  <b>Домашний чат-сервер для семьи с федеративной mesh-сетью</b><br>
   Go + Angular · WebSocket · E2EE · Federation · Docker
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.23-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
@@ -171,6 +171,14 @@ frontend/         # Angular 20 standalone + Tailwind v4
 contrib/          # systemd unit, nginx config, env template
 install.bat       # установка на Windows
 ```
+
+## 🗺️ Roadmap и позиционирование
+
+**MeowChat — домашний чат-сервер для семьи** (один инстанс ≈ один дом, ориентир — до ~100 пользователей) с возможностью объединять семьи через федерацию. Проект сознательно **не** нацелен на горизонтальное масштабирование и SaaS.
+
+Приоритеты развития: **надёжность → простота обновления → новые функции**. План по версиям и вехам — в [`ROADMAP.md`](ROADMAP.md).
+
+Ближайшее крупное направление — **v2.0.0 «Single-artifact distribution»**: один статический бинарь и один образ, фронтенд раздаётся самим сервером (без nginx), единый порт `8080`. На текущий момент (v1.x) актуальна описанная выше nginx-схема.
 
 ## 🤖 AI-Assisted Development
 
