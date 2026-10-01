@@ -380,9 +380,11 @@ export class CryptoService {
       return;
     }
 
+    // Extractable is required: the private JWK is persisted to IndexedDB and the
+    // public SPKI is used for wrapping keys to this device.
     const keyPair = await crypto.subtle.generateKey(
       { name: 'ECDH', namedCurve: 'P-256' },
-      false,
+      true,
       ['deriveKey', 'deriveBits'],
     ) as CryptoKeyPair;
 
@@ -534,5 +536,138 @@ export class CryptoService {
     } catch {
       return null;
     }
+  }
+
+  // ─── Per-device envelopes (DM) ─────────────────────────────────
+
+  private randomKey(): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(32));
+  }
+
+  /** Encrypt text with a raw AES-256-GCM key. */
+  async encryptWithRawKey(rawKey: Uint8Array, plaintext: string): Promise<{ encrypted: string; iv: string }> {
+    const key = await crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+    return { encrypted: btoa(String.fromCharCode(...combined)), iv: btoa(String.fromCharCode(...iv)) };
+  }
+
+  async decryptWithRawKey(rawKey: Uint8Array, encryptedBase64: string, ivBase64: string): Promise<string | null> {
+    try {
+      const key = await crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
+      const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+      const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+      const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, combined.subarray(12));
+      return new TextDecoder().decode(plaintext);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Wrap a content key for a recipient device: ECDH(myIdentityPriv, devicePub). */
+  async wrapKeyForDevice(rawKey: Uint8Array, devicePubSPKI: string): Promise<{ wrapped_key: string; iv: string } | null> {
+    const myPriv = await this.getMyPrivateKey();
+    if (!myPriv) return null;
+    try {
+      const spki = Uint8Array.from(atob(devicePubSPKI), c => c.charCodeAt(0));
+      const devicePub = await crypto.subtle.importKey('spki', spki.buffer, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+      const shared = await crypto.subtle.deriveKey(
+        { name: 'ECDH', public: devicePub }, myPriv,
+        { name: 'AES-GCM', length: 256 }, false, ['encrypt'],
+      );
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, shared, rawKey);
+      const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+      combined.set(iv);
+      combined.set(new Uint8Array(ciphertext), iv.length);
+      return { wrapped_key: btoa(String.fromCharCode(...combined)), iv: btoa(String.fromCharCode(...iv)) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Unwrap a content key: ECDH(myDevicePriv, senderIdentityPub). */
+  async unwrapKeyFromDevice(wrappedB64: string, ivB64: string, senderIdentitySPKI: string): Promise<Uint8Array | null> {
+    if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
+    if (!this.deviceKeyPair) return null;
+    try {
+      const spki = Uint8Array.from(atob(senderIdentitySPKI), c => c.charCodeAt(0));
+      const senderPub = await crypto.subtle.importKey('spki', spki.buffer, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+      const shared = await crypto.subtle.deriveKey(
+        { name: 'ECDH', public: senderPub }, this.deviceKeyPair.privateKey,
+        { name: 'AES-GCM', length: 256 }, false, ['decrypt'],
+      );
+      const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+      const combined = Uint8Array.from(atob(wrappedB64), c => c.charCodeAt(0));
+      const raw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, shared, combined.subarray(12));
+      return new Uint8Array(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Build a per-device envelope payload for a DM: encrypt under a fresh content
+   * key and wrap that key for the recipient's devices and our own devices.
+   * Returns null when no device keys are available (caller falls back to legacy).
+   */
+  async buildEnvelopes(plaintext: string, peerId: number): Promise<{
+    env_content: string;
+    env_iv: string;
+    envelopes: { device_id: string; wrapped_key: string; iv: string }[];
+  } | null> {
+    const myId = this.api.currentUser()?.id;
+    if (!myId) return null;
+
+    const rawKey = this.randomKey();
+    const enc = await this.encryptWithRawKey(rawKey, plaintext);
+
+    const targets: { device_id: string; device_public_key: string }[] = [];
+    try {
+      const [peerDevices, myDevices] = await Promise.all([
+        firstValueFrom(this.api.getUserDeviceKeys(peerId)),
+        firstValueFrom(this.api.getUserDeviceKeys(myId)),
+      ]);
+      targets.push(...(peerDevices || []), ...(myDevices || []));
+    } catch { /* no devices available */ }
+    if (targets.length === 0) return null;
+
+    const envelopes: { device_id: string; wrapped_key: string; iv: string }[] = [];
+    const seen = new Set<string>();
+    for (const d of targets) {
+      if (!d.device_id || !d.device_public_key || seen.has(d.device_id)) continue;
+      seen.add(d.device_id);
+      const wrapped = await this.wrapKeyForDevice(rawKey, d.device_public_key);
+      if (wrapped) envelopes.push({ device_id: d.device_id, wrapped_key: wrapped.wrapped_key, iv: wrapped.iv });
+    }
+    if (envelopes.length === 0) return null;
+    return { env_content: enc.encrypted, env_iv: enc.iv, envelopes };
+  }
+
+  /** Decrypt a DM via a per-device envelope; null when not applicable. */
+  async decryptViaEnvelope(
+    envelopes: { device_id: string; wrapped_key: string; iv: string }[] | undefined,
+    envContent: string | undefined,
+    envIv: string | undefined,
+    senderId: number,
+  ): Promise<string | null> {
+    if (!envelopes?.length || !envContent || !envIv) return null;
+    if (!this.deviceKeyPair || !this.deviceId) await this.ensureDeviceKeyPair();
+    const mine = envelopes.find(e => e.device_id === this.deviceId);
+    if (!mine) return null;
+
+    let senderPub: string | null = null;
+    try {
+      senderPub = (await firstValueFrom(this.api.getKey(senderId))).public_key;
+    } catch {
+      return null;
+    }
+    if (!senderPub) return null;
+    const rawKey = await this.unwrapKeyFromDevice(mine.wrapped_key, mine.iv, senderPub);
+    if (!rawKey) return null;
+    return this.decryptWithRawKey(rawKey, envContent, envIv);
   }
 }

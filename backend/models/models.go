@@ -14,6 +14,13 @@ type User struct {
 	IsOnline  bool      `json:"is_online"`
 }
 
+// Envelope is a per-device wrapped copy of a message's content key.
+type Envelope struct {
+	DeviceID   string `json:"device_id"`
+	WrappedKey string `json:"wrapped_key"`
+	IV         string `json:"iv"`
+}
+
 type Message struct {
 	ID               int64       `json:"id"`
 	FromUserID       int64       `json:"from_user_id"`
@@ -26,6 +33,9 @@ type Message struct {
 	Images           []PostImage `json:"images,omitempty"`
 	EncryptedContent string      `json:"encrypted_content,omitempty"`
 	EncryptedIV      string      `json:"encrypted_iv,omitempty"`
+	EnvContent       string      `json:"env_content,omitempty"`
+	EnvIV            string      `json:"env_iv,omitempty"`
+	Envelopes        []Envelope  `json:"envelopes,omitempty"`
 	Poll             *Poll       `json:"poll,omitempty"`
 	StickerURL       string      `json:"sticker_url,omitempty"`
 	IsRead           bool        `json:"is_read"`

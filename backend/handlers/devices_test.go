@@ -2,12 +2,38 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"my-chat-backend/database"
 )
+
+func TestGetUserDeviceKeys(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	database.DB.Exec("INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, ?, ?, ?)", userID, "Phone", "pk1", "d1")
+	database.DB.Exec("INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, ?, ?, ?)", userID, "PC", "pk2", "d2")
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/users/%d/device-keys", userID), nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var keys []struct {
+		DeviceID  string `json:"device_id"`
+		PublicKey string `json:"device_public_key"`
+	}
+	json.NewDecoder(resp.Body).Decode(&keys)
+	if len(keys) != 2 || keys[0].PublicKey != "pk1" {
+		t.Fatalf("unexpected device keys: %+v", keys)
+	}
+}
 
 func TestRegisterDevice_Success(t *testing.T) {
 	app, _, userID := setupTestApp(t)

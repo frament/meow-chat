@@ -16,9 +16,11 @@ describe('CryptoService', () => {
       'getKey',
       'getMyGroupKeyShare',
       'getGroupChat',
+      'getUserDeviceKeys',
     ]);
     apiMock.putKey.and.returnValue(of({ message: 'ok' }));
     apiMock.getKey.and.returnValue(of({ public_key: '' }));
+    apiMock.getUserDeviceKeys.and.returnValue(of([]));
 
     (apiMock as any).currentUser = () => ({ id: 1, username: 'test' });
 
@@ -140,5 +142,47 @@ describe('CryptoService', () => {
     apiMock.getKey.and.throwError('Not found');
     const result = await service.encrypt(1, 99, 'test');
     expect(result).toBeNull();
+  });
+
+  it('wraps and unwraps a content key for a device', async () => {
+    await service.init();
+    await service.ensureDeviceKeyPair();
+    const identityPub = (await service.getPublicKey())!;
+    const devicePub = await service.getDevicePublicKeySPKI();
+    expect(devicePub).toBeTruthy();
+
+    const rawKey = crypto.getRandomValues(new Uint8Array(32));
+    const enc = await service.encryptWithRawKey(rawKey, 'envelope secret');
+
+    const wrapped = await service.wrapKeyForDevice(rawKey, devicePub);
+    expect(wrapped).not.toBeNull();
+
+    const unwrapped = await service.unwrapKeyFromDevice(wrapped!.wrapped_key, wrapped!.iv, identityPub);
+    expect(unwrapped).not.toBeNull();
+    expect(Array.from(unwrapped!)).toEqual(Array.from(rawKey));
+
+    const plain = await service.decryptWithRawKey(unwrapped!, enc.encrypted, enc.iv);
+    expect(plain).toBe('envelope secret');
+  });
+
+  it('builds and reads a DM envelope roundtrip', async () => {
+    await service.init();
+    await service.ensureDeviceKeyPair();
+    const devicePub = await service.getDevicePublicKeySPKI();
+    const identityPub = (await service.getPublicKey())!;
+
+    apiMock.getUserDeviceKeys.and.returnValue(of([
+      { device_id: service.deviceId, device_public_key: devicePub, device_name: 'self' },
+    ]));
+    apiMock.getKey.and.returnValue(of({ public_key: identityPub }));
+
+    const payload = await service.buildEnvelopes('hello envelope', 2);
+    expect(payload).not.toBeNull();
+    expect(payload!.envelopes.length).toBe(1);
+
+    const plain = await service.decryptViaEnvelope(
+      payload!.envelopes, payload!.env_content, payload!.env_iv, 1,
+    );
+    expect(plain).toBe('hello envelope');
   });
 });

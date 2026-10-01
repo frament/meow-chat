@@ -192,6 +192,7 @@ func main() {
 	dev.Post("/register", h.RegisterDevice)
 	dev.Get("/", h.ListDevices)
 	dev.Delete("/:deviceId", h.RemoveDevice)
+	api.Get("/users/:userId/device-keys", h.GetUserDeviceKeys)
 	dev.Post("/auth-request", h.CreateAuthRequest)
 	dev.Get("/auth-requests", h.ListAuthRequests)
 	dev.Get("/auth/:id", h.GetAuthRequest)

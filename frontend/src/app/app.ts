@@ -407,6 +407,7 @@ export class App implements OnInit, OnDestroy {
       this.#api.connectWebSocket();
       this.#crypto.init().then(() => {
         this.#crypto.syncPublicKey();
+        this.registerThisDevice();
         this.checkDeviceAuth();
         this.deviceAuth?.loadPendingRequests();
       });
@@ -672,6 +673,18 @@ export class App implements OnInit, OnDestroy {
       if ('clearAppBadge' in navigator) {
         await (navigator as any).clearAppBadge();
       }
+    } catch {}
+  }
+
+  /** Keep this device's key registered so senders can wrap keys for it. */
+  private async registerThisDevice() {
+    try {
+      await this.#crypto.ensureDeviceKeyPair();
+      const pubKey = await this.#crypto.getDevicePublicKeySPKI();
+      if (!pubKey || !this.#crypto.deviceId) return;
+      this.#api
+        .registerDevice(navigator.platform || 'Unknown device', pubKey, this.#crypto.deviceId)
+        .subscribe({ error: () => {} });
     } catch {}
   }
 

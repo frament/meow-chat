@@ -76,7 +76,7 @@ export interface PollOption {
 }
 
 export type WsServerMessage =
-  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; poll?: Poll; preview?: string }
+  | { type: 'message'; id?: number; from: number; to?: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; env_content?: string; env_iv?: string; envelopes?: MessageEnvelope[]; sticker_url?: string; poll?: Poll; preview?: string }
   | { type: 'group_message'; group_id: number; id?: number; from: number; from_name: string; content: string; msg_type: MsgType; images?: string[]; created_at: string; encrypted_content?: string; encrypted_iv?: string; sticker_url?: string; preview?: string }
   | { type: 'user_online'; user_id: number }
   | { type: 'user_offline'; user_id: number }
@@ -101,6 +101,18 @@ export interface Poll {
   created_at: string;
 }
 
+export interface MessageEnvelope {
+  device_id: string;
+  wrapped_key: string;
+  iv: string;
+}
+
+export interface EnvelopePayload {
+  env_content: string;
+  env_iv: string;
+  envelopes: MessageEnvelope[];
+}
+
 export interface Message {
   id: number;
   from_user_id: number;
@@ -113,6 +125,9 @@ export interface Message {
   images?: { id: number; image_url: string }[];
   encrypted_content?: string;
   encrypted_iv?: string;
+  env_content?: string;
+  env_iv?: string;
+  envelopes?: MessageEnvelope[];
   pending?: boolean;
   is_read?: boolean;
   poll?: Poll;
@@ -476,13 +491,18 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
+  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
     formData.append('type', msgType);
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (envelope) {
+      formData.append('env_content', envelope.env_content);
+      formData.append('env_iv', envelope.env_iv);
+      formData.append('envelopes', JSON.stringify(envelope.envelopes));
+    }
     if (pushPreview) formData.append('push_preview', pushPreview);
     if (pollOptions) {
       for (const opt of pollOptions) {
@@ -574,13 +594,18 @@ export class ApiService {
   }
 
   // Upload methods with progress reporting
-  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean) {
+  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
     formData.append('type', msgType);
     if (encryptedContent) formData.append('encrypted_content', encryptedContent);
     if (encryptedIV) formData.append('encrypted_iv', encryptedIV);
+    if (envelope) {
+      formData.append('env_content', envelope.env_content);
+      formData.append('env_iv', envelope.env_iv);
+      formData.append('envelopes', JSON.stringify(envelope.envelopes));
+    }
     if (pushPreview) formData.append('push_preview', pushPreview);
     if (pollOptions) {
       for (const opt of pollOptions) {
@@ -1281,6 +1306,13 @@ export class ApiService {
 
   getDevices() {
     return this.http.get<any[]>(`${this.baseUrl}/devices`);
+  }
+
+  /** Active device public keys of a user (for per-device key wrapping). */
+  getUserDeviceKeys(userId: number) {
+    return this.http.get<{ device_id: string; device_public_key: string; device_name: string }[]>(
+      `${this.baseUrl}/users/${userId}/device-keys`,
+    );
   }
 
   removeDevice(deviceId: string) {

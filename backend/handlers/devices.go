@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +67,39 @@ func (h *Handler) ListDevices(c *fiber.Ctx) error {
 		devices = append(devices, d)
 	}
 	return c.JSON(devices)
+}
+
+// GetUserDeviceKeys returns the active device public keys of a user. Senders use
+// it to wrap per-device content keys (DM envelopes / group key shares).
+func (h *Handler) GetUserDeviceKeys(c *fiber.Ctx) error {
+	targetID, err := strconv.ParseInt(c.Params("userId"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	rows, err := database.DB.Query(
+		"SELECT device_id, device_public_key, COALESCE(device_name, '') FROM user_devices WHERE user_id = ? ORDER BY id",
+		targetID,
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch device keys"})
+	}
+	defer rows.Close()
+
+	type DeviceKey struct {
+		DeviceID   string `json:"device_id"`
+		PublicKey  string `json:"device_public_key"`
+		DeviceName string `json:"device_name"`
+	}
+	keys := make([]DeviceKey, 0)
+	for rows.Next() {
+		var k DeviceKey
+		if rows.Scan(&k.DeviceID, &k.PublicKey, &k.DeviceName) != nil {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return c.JSON(keys)
 }
 
 func (h *Handler) RemoveDevice(c *fiber.Ctx) error {

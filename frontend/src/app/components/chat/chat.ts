@@ -6,7 +6,7 @@ import { Subscription, firstValueFrom, fromEvent } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult } from '../../services/api.service';
+import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult, EnvelopePayload } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
@@ -1075,15 +1075,20 @@ export class ChatComponent implements OnInit, OnDestroy {
             return;
           }
           let content = data.content;
-          if (data.encrypted_content && data.encrypted_iv) {
-            let decryptedOk = false;
+          let decryptedOk = true;
+          if (data.env_content && data.envelopes?.length) {
+            const viaEnv = await this.crypto.decryptViaEnvelope(data.envelopes, data.env_content, data.env_iv, data.from);
+            if (viaEnv !== null) content = viaEnv;
+          }
+          if (!content && data.encrypted_content && data.encrypted_iv) {
+            decryptedOk = false;
             if (this.e2eeReady) {
               const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
               if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             }
             if (!content) content = '[Зашифрованное сообщение]';
-            if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
           }
+          if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
           const msg: Message = {
             id: data.id || Date.now(),
             from_user_id: data.from,
@@ -1298,6 +1303,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private async decryptMsg(msg: Message, peerId: number): Promise<Message> {
+    if (msg.env_content && msg.envelopes?.length) {
+      const viaEnv = await this.crypto.decryptViaEnvelope(msg.envelopes, msg.env_content, msg.env_iv, msg.from_user_id);
+      if (viaEnv !== null) {
+        msg.content = viaEnv;
+        return msg;
+      }
+    }
     if (msg.encrypted_content && msg.encrypted_iv) {
       const decrypted = await this.crypto.decrypt(this.currentUserId, peerId, msg.encrypted_content, msg.encrypted_iv);
       if (decrypted !== null) {
@@ -1489,6 +1501,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     let encryptedContent: string | undefined;
     let encryptedIV: string | undefined;
+    let envelope: EnvelopePayload | undefined;
     let pushPreview: string | undefined;
     const content = rawContent;      // local/optimistic display (never sent when encrypted)
     let wireContent = rawContent;    // what actually goes to the server
@@ -1523,6 +1536,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       encryptedIV = result.iv;
       pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
       wireContent = '';
+      // Per-device envelope (additive). Legacy fields above stay for old clients.
+      if (this.selectedUser) {
+        envelope = (await this.crypto.buildEnvelopes(rawContent, this.selectedUser.id)) ?? undefined;
+      }
     }
 
       if (this.selectedGroup) {
@@ -1599,7 +1616,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (hasFiles) {
         this.uploading.set(true);
         this.uploadProgress.set(0);
-        this.api.sendMessageWithProgress(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple)
+        this.api.sendMessageWithProgress(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, envelope)
           .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
           .subscribe({
             next: (event: any) => {
@@ -1616,7 +1633,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             },
           });
       } else {
-        this.api.sendMessage(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple).subscribe({
+        this.api.sendMessage(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, envelope).subscribe({
           next: (res) => this.finalizeOptimistic(tempId, res),
           error: () => this.rollbackOptimistic(tempId),
         });

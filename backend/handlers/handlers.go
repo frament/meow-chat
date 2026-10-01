@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -74,6 +75,9 @@ type wsMessage struct {
 	createdAt         string
 	encryptedContent  string
 	encryptedIV       string
+	envContent        string
+	envIV             string
+	envelopes         []models.Envelope
 	pushPreview       string
 	pollData          fiber.Map
 	stickerURL        string
@@ -266,6 +270,13 @@ func (h *Handler) runHub() {
 					if msg.encryptedContent != "" {
 						payload["encrypted_content"] = msg.encryptedContent
 						payload["encrypted_iv"] = msg.encryptedIV
+					}
+					if msg.envContent != "" {
+						payload["env_content"] = msg.envContent
+						payload["env_iv"] = msg.envIV
+					}
+					if len(msg.envelopes) > 0 {
+						payload["envelopes"] = msg.envelopes
 					}
 				if msg.pollData != nil {
 					payload["poll"] = msg.pollData
@@ -915,7 +926,8 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 			SELECT m.id, m.from_user_id, m.to_user_id, m.content, COALESCE(m.msg_type, 'text'), m.created_at,
 				COALESCE(u.username, fu.username) as from_username,
 				COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
-				COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0)
+				COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0),
+				COALESCE(m.env_content, ''), COALESCE(m.env_iv, '')
 			FROM messages m
 			LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
 			LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
@@ -934,7 +946,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	for rows.Next() {
 		var m models.Message
 		var serverID *int64
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead, &m.EnvContent, &m.EnvIV); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -974,9 +986,44 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 		}
 
 		loadPollsForMessages(messages, authUserID, false)
+		loadEnvelopesForMessages(messages)
 	}
 
 	return c.JSON(messages)
+}
+
+// loadEnvelopesForMessages attaches per-device wrapped content keys to messages.
+func loadEnvelopesForMessages(messages []models.Message) {
+	if len(messages) == 0 {
+		return
+	}
+	placeholders := make([]string, len(messages))
+	ids := make([]interface{}, len(messages))
+	for i, m := range messages {
+		placeholders[i] = "?"
+		ids[i] = m.ID
+	}
+	rows, err := database.DB.Query(
+		"SELECT message_id, device_id, wrapped_key, iv FROM message_envelopes WHERE message_id IN ("+strings.Join(placeholders, ",")+")",
+		ids...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	byMsg := make(map[int64][]models.Envelope)
+	for rows.Next() {
+		var msgID int64
+		var e models.Envelope
+		if rows.Scan(&msgID, &e.DeviceID, &e.WrappedKey, &e.IV) == nil {
+			byMsg[msgID] = append(byMsg[msgID], e)
+		}
+	}
+	for i := range messages {
+		if envs, ok := byMsg[messages[i].ID]; ok {
+			messages[i].Envelopes = envs
+		}
+	}
 }
 
 func (h *Handler) SendMessage(c *fiber.Ctx) error {
@@ -1009,6 +1056,18 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	encryptedIV := ""
 	if vals, ok := form.Value["encrypted_iv"]; ok && len(vals) > 0 {
 		encryptedIV = vals[0]
+	}
+	envContent := ""
+	if vals, ok := form.Value["env_content"]; ok && len(vals) > 0 {
+		envContent = vals[0]
+	}
+	envIV := ""
+	if vals, ok := form.Value["env_iv"]; ok && len(vals) > 0 {
+		envIV = vals[0]
+	}
+	var envelopes []models.Envelope
+	if vals, ok := form.Value["envelopes"]; ok && len(vals) > 0 && vals[0] != "" {
+		json.Unmarshal([]byte(vals[0]), &envelopes)
 	}
 	pushPreview := ""
 	if vals, ok := form.Value["push_preview"]; ok && len(vals) > 0 {
@@ -1056,14 +1115,24 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url, env_content, env_iv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL, envContent, envIV,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
 	}
 
 	messageID, _ := result.LastInsertId()
+
+	for _, e := range envelopes {
+		if e.DeviceID == "" || e.WrappedKey == "" || e.IV == "" {
+			continue
+		}
+		tx.Exec(
+			"INSERT OR REPLACE INTO message_envelopes (message_id, device_id, wrapped_key, iv) VALUES (?, ?, ?, ?)",
+			messageID, e.DeviceID, e.WrappedKey, e.IV,
+		)
+	}
 
 	var pollID int64
 	if msgType == "poll" {
@@ -1136,6 +1205,9 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		createdAt:        time.Now().Format(time.RFC3339),
 		encryptedContent: encryptedContent,
 		encryptedIV:      encryptedIV,
+		envContent:       envContent,
+		envIV:            envIV,
+		envelopes:        envelopes,
 		pushPreview:      pushPreview,
 		pollData:         pollData,
 		stickerURL:       stickerURL,

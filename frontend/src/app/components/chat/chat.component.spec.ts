@@ -62,12 +62,15 @@ describe('ChatComponent', () => {
     acceptFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     rejectFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     reportDecryptFailure: jasmine.createSpy().and.returnValue(of({ ok: true })),
+    getUserDeviceKeys: jasmine.createSpy().and.returnValue(of([])),
   };
 
   const mockCrypto = {
     init: jasmine.createSpy().and.returnValue(Promise.resolve()),
     fetchPeerPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
     getGroupKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
+    buildEnvelopes: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
+    decryptViaEnvelope: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
   };
 
   beforeEach(async () => {
