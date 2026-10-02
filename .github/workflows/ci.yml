@@ -41,11 +41,23 @@ jobs:
           df -h "$RUNNER_TEMP" | tail -1
 
       # NOT `make test-backend`. Its GOMEMLIMIT=12GiB and -p=2/-parallel=2 exist
-      # to tame a 16 GB local Mac, and a hosted runner does not have that much
-      # headroom: the recipe was terminated by the runner (SIGTERM, exit 143) on
-      # every attempt. Same flags, but a limit that fits the runner.
+      # to tame a 16 GB local Mac. Here the recipe was terminated by the runner
+      # (SIGTERM, exit 143) about a minute in, right as the CGO packages start
+      # compiling, and the runner has 15 GiB with 11 free, so it is not simply
+      # a memory shortfall.
+      #
+      # One package at a time, echoed as it goes: the whole-suite form reported
+      # only "canceled" with no clue which package was being built, because a
+      # package that dies mid-compile prints nothing. This also serialises the
+      # build, which is the point of the -p=2 in the local target.
       - name: go test
-        run: cd backend && GOMEMLIMIT=4GiB go test -count=1 -p=2 -parallel=2 -timeout=15m ./...
+        run: |
+          cd backend
+          for pkg in $(go list ./...); do
+            echo "::group::go test $pkg"
+            GOMEMLIMIT=4GiB go test -count=1 -p=2 -parallel=2 -timeout=5m "$pkg" || exit 1
+            echo "::endgroup::"
+          done
 
   frontend:
     name: Frontend · ng test + build
