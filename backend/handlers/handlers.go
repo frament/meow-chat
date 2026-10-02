@@ -696,30 +696,25 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 
 	postID, _ := result.LastInsertId()
 
+	const dir = "./uploads/posts"
 	var savedImages []string
-	for _, file := range files {
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-			continue
-		}
+	for i, file := range files {
 		if file.Size > 10*1024*1024 {
 			continue
 		}
 
-		filename := fmt.Sprintf("%d_%d%s", postID, time.Now().UnixMilli(), ext)
-		savePath := filepath.Join("./uploads/posts", filename)
-
-		if err := c.SaveFile(file, savePath); err != nil {
+		// The index keeps two images in the same post from colliding when they
+		// are saved inside the same millisecond.
+		imageURL, err := saveImage(file, dir, fmt.Sprintf("%d_%d_%d", postID, time.Now().UnixMilli(), i))
+		if err != nil {
 			continue
 		}
 
-		imageURL := "/uploads/posts/" + filename
-		_, err := tx.Exec(
+		if _, err := tx.Exec(
 			"INSERT INTO post_images (post_id, image_url) VALUES (?, ?)",
 			postID, imageURL,
-		)
-		if err != nil {
-			os.Remove(savePath)
+		); err != nil {
+			os.Remove(filepath.Join(dir, filepath.Base(imageURL)))
 			continue
 		}
 
@@ -1181,22 +1176,17 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		}
 	}
 
+	const dir = "./uploads/messages"
 	var images []string
 	for _, file := range files {
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-			continue
-		}
 		if file.Size > 10*1024*1024 {
 			continue
 		}
 
-		filename := fmt.Sprintf("%d_%s", messageID, file.Filename)
-		savePath := filepath.Join("./uploads/messages", filename)
-		if err := c.SaveFile(file, savePath); err != nil {
+		imageURL, err := saveImage(file, dir, fmt.Sprintf("%d_%s", messageID, safeStem(file.Filename)))
+		if err != nil {
 			continue
 		}
-		imageURL := "/uploads/messages/" + filename
 		images = append(images, imageURL)
 
 		tx.Exec("INSERT INTO message_images (message_id, image_url) VALUES (?, ?)", messageID, imageURL)
@@ -1387,26 +1377,22 @@ func (h *Handler) UploadAvatar(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "No file provided"})
 	}
 
-	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-		return c.Status(400).JSON(fiber.Map{"error": "Only image files (jpg, png, gif, webp) are allowed"})
-	}
-
 	if file.Size > 5*1024*1024 {
 		return c.Status(400).JSON(fiber.Map{"error": "File too large (max 5MB)"})
 	}
 
-	filename := fmt.Sprintf("%d_%d%s", userID, time.Now().UnixMilli(), ext)
-	savePath := filepath.Join("./uploads/avatars", filename)
-
-	if err := c.SaveFile(file, savePath); err != nil {
+	const dir = "./uploads/avatars"
+	avatarURL, err := saveImage(file, dir, fmt.Sprintf("%d_%d", userID, time.Now().UnixMilli()))
+	if err != nil {
+		if isNotAnImage(err) {
+			return c.Status(400).JSON(fiber.Map{"error": "Only image files (jpg, png, gif, webp) are allowed"})
+		}
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save file"})
 	}
 
-	avatarURL := "/uploads/avatars/" + filename
 	_, err = database.DB.Exec("UPDATE users SET avatar_url = ? WHERE id = ?", avatarURL, userID)
 	if err != nil {
-		os.Remove(savePath)
+		os.Remove(filepath.Join(dir, filepath.Base(avatarURL)))
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to update avatar"})
 	}
 

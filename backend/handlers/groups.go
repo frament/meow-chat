@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -660,21 +659,17 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 		}
 	}
 
+	const dir = "./uploads/messages"
 	var images []string
 	for _, file := range files {
-		ext := strings.ToLower(filepath.Ext(file.Filename))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-			continue
-		}
 		if file.Size > 10*1024*1024 {
 			continue
 		}
-		filename := fmt.Sprintf("%d_%s", messageID, file.Filename)
-		savePath := filepath.Join("./uploads/messages", filename)
-		if err := c.SaveFile(file, savePath); err != nil {
+
+		imageURL, err := saveImage(file, dir, fmt.Sprintf("%d_%s", messageID, safeStem(file.Filename)))
+		if err != nil {
 			continue
 		}
-		imageURL := "/uploads/messages/" + filename
 		images = append(images, imageURL)
 		tx.Exec("INSERT INTO group_message_images (message_id, image_url) VALUES (?, ?)", messageID, imageURL)
 	}
