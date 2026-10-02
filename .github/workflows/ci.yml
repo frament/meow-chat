@@ -34,10 +34,18 @@ jobs:
       - name: Assert CGO toolchain
         run: gcc --version | head -1
 
-      # Same target as locally, so CI and developer runs cannot drift.
-      # -p=2 -parallel=2 keep peak memory inside the 16 GB runner.
+      - name: Show runner resources
+        run: |
+          nproc
+          free -h
+          df -h "$RUNNER_TEMP" | tail -1
+
+      # NOT `make test-backend`. Its GOMEMLIMIT=12GiB and -p=2/-parallel=2 exist
+      # to tame a 16 GB local Mac, and a hosted runner does not have that much
+      # headroom: the recipe was terminated by the runner (SIGTERM, exit 143) on
+      # every attempt. Same flags, but a limit that fits the runner.
       - name: go test
-        run: make test-backend
+        run: cd backend && GOMEMLIMIT=4GiB go test -count=1 -p=2 -parallel=2 -timeout=15m ./...
 
   frontend:
     name: Frontend · ng test + build
