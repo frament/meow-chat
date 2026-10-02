@@ -1,14 +1,31 @@
 package version
 
 import (
+	_ "embed"
 	"strconv"
 	"strings"
 )
 
-// Version is overridable at build time with:
-//   -ldflags "-X my-chat-backend/version.Version=v1.2.3"
-// It must be a var (not const) for -X to work.
-var Version = "1.3.0"
+// VERSION is the single source of truth for the release number. Bump it, tag
+// the commit, and every build reports the truth - including `go run` and the
+// tests, which have no build step to be given a flag.
+//
+// It is embedded rather than injected with
+// `-ldflags "-X my-chat-backend/version.Version=..."` on purpose. Every
+// injection point needed a literal fallback so that a build without the flag
+// would not fail, and each of those fallbacks was a way to silently produce a
+// binary reporting the wrong version - which is what happened on the
+// 2026-10-02 deploy, where the number never reached the binary and nothing
+// complained until someone read /api/version.
+//
+// The cost of embedding: -X no longer works, and it fails *silently*, because
+// Version is no longer a constant-initialised string. Do not reintroduce it.
+//
+//go:embed VERSION
+var versionFile string
+
+// Version is the release this binary was built from.
+var Version = strings.TrimSpace(versionFile)
 
 // GitHubRepo is the GitHub repository path for update checks.
 var (

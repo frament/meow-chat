@@ -1,15 +1,17 @@
 .PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend push-test
 
-# Version baked into the backend at build time and shown in the UI.
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 1.3.0)
+# Release number, read from the single source of truth. Nothing injects it into
+# the build: the backend embeds backend/version/VERSION, so there is no build arg
+# to forget and no way to ship a binary that reports a stale number.
+VERSION ?= $(shell cat backend/version/VERSION 2>/dev/null || echo unknown)
 
 update:
 	git pull
-	VERSION="$$(git describe --tags --always --dirty 2>/dev/null || echo 1.3.0)" docker compose build
+	docker compose build
 	docker compose up -d
 
 build:
-	VERSION="$(VERSION)" docker compose build
+	docker compose build
 
 up:
 	docker compose up -d
@@ -21,7 +23,7 @@ logs:
 	docker compose logs -f
 
 restart-backend:
-	VERSION="$(VERSION)" docker compose build backend && docker compose up -d --no-deps backend
+	docker compose build backend && docker compose up -d --no-deps backend
 
 # Never run test-backend and test-frontend at the same time: CGO compilation
 # plus Karma + Chrome exhausts RAM and macOS starts killing apps. See AGENTS.md.
@@ -51,7 +53,7 @@ MEOW_CHAT_USER ?= meow-chat
 install: install-backend install-frontend install-systemd install-nginx
 
 install-backend:
-	cd backend && CGO_ENABLED=1 go build -ldflags="-X my-chat-backend/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)" -o $(BINDIR)/meow-chat-server .
+	cd backend && CGO_ENABLED=1 go build -o $(BINDIR)/meow-chat-server .
 
 install-frontend:
 	cd frontend && npm ci --omit=dev 2>/dev/null || true

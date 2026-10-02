@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version-markers:
+    name: Version markers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # backend/version/VERSION is the only place the release number is written.
+      # README, ROADMAP and CHANGELOG hold copies that have to match; this is the
+      # step that stops them from rotting.
+      - name: Check README/ROADMAP/CHANGELOG against VERSION
+        run: ./scripts/check-version.sh
+
   backend:
     name: Backend · go test
     # Pinned rather than ubuntu-latest: the label is mid-migration to Ubuntu 26

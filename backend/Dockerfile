@@ -8,8 +8,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-ARG VERSION=1.3.0
-RUN CGO_ENABLED=1 go build -ldflags="-X my-chat-backend/version.Version=${VERSION}" -o server .
+# No VERSION build arg: the release number is embedded from version/VERSION, so
+# there is nothing to pass in and nothing that can silently fall back to a
+# stale literal.
+RUN CGO_ENABLED=1 go build -o server .
 
 FROM alpine:3.19
 
