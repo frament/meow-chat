@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"log"
 	"mime/multipart"
@@ -21,7 +24,7 @@ var (
 	tmpDir       = filepath.Join(os.TempDir(), "meowchat-e2e-"+fmt.Sprintf("%d", time.Now().UnixNano()))
 	serverACmd   *exec.Cmd
 	serverBCmd   *exec.Cmd
-	serverBinary = filepath.Join(os.TempDir(), "meowchat-e2e-server.exe")
+	serverBinary string
 	adminTokenA  string
 	adminTokenB  string
 	tokenA       string
@@ -48,8 +51,12 @@ func run() error {
 	}
 	defer stopServers()
 
-	waitForHealth(serverAURL, 30*time.Second)
-	waitForHealth(serverBURL, 30*time.Second)
+	if err := waitForHealth(serverAURL, 60*time.Second); err != nil {
+		return fmt.Errorf("server A: %w", err)
+	}
+	if err := waitForHealth(serverBURL, 60*time.Second); err != nil {
+		return fmt.Errorf("server B: %w", err)
+	}
 	time.Sleep(2 * time.Second) // let servers stabilize
 	log.Println("✓ Both servers healthy")
 
@@ -78,6 +85,11 @@ func run() error {
 	}
 	log.Println("✓ Cross-server post in feed")
 
+	if err := testForwardPostWithImage(); err != nil {
+		return fmt.Errorf("forward post with image: %w", err)
+	}
+	log.Println("✓ Cross-server image downloaded as a local file, with thumbnails")
+
 	if err := testOfflineQueue(); err != nil {
 		log.Printf("⚠ Offline queue test skipped/best-effort: %v", err)
 	} else {
@@ -90,19 +102,81 @@ func run() error {
 // ── Server lifecycle ──
 
 func startServers() error {
+	// The harness runs the real server binary, so it has to exist first. It used
+	// to point at a path in the temp directory that nothing ever wrote, and the
+	// error from starting it was thrown away - which is how a run that started no
+	// servers at all went on to print "Both servers healthy".
+	if err := buildServer(); err != nil {
+		return fmt.Errorf("build server binary: %w", err)
+	}
+
 	serverADir := filepath.Join(tmpDir, "server_a")
-	os.MkdirAll(serverADir, 0755)
 	serverBDir := filepath.Join(tmpDir, "server_b")
+	os.MkdirAll(serverADir, 0755)
 	os.MkdirAll(serverBDir, 0755)
 
-	serverACmd = startServer(serverADir, "9080")
-	serverBCmd = startServer(serverBDir, "9081")
+	var err error
+	if serverACmd, err = startServer(serverADir, "9080"); err != nil {
+		return fmt.Errorf("start server A: %w", err)
+	}
+	if serverBCmd, err = startServer(serverBDir, "9081"); err != nil {
+		return fmt.Errorf("start server B: %w", err)
+	}
 	return nil
 }
 
-func startServer(dir, port string) *exec.Cmd {
+// buildServer compiles the backend and remembers where the binary landed.
+func buildServer() error {
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+
+	out := filepath.Join(tmpDir, "meowchat-e2e-server")
+	cmd := exec.Command("go", "build", "-o", out, ".")
+	cmd.Dir = root
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	serverBinary = out
+	return nil
+}
+
+// moduleRoot walks up from the working directory until it finds go.mod, so the
+// harness can be started from the repository root or from backend/ alike. That
+// directory is where the server lives and where it must be run from: it resolves
+// ./uploads relative to it.
+func moduleRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no go.mod found above the working directory")
+		}
+		dir = parent
+	}
+}
+
+// startServer runs one backend instance with its own database. The working
+// directory has to be the module root whatever the caller's was: started from
+// backend/ it used to resolve to backend/backend, which does not exist, and the
+// process died before printing anything.
+func startServer(dir, port string) (*exec.Cmd, error) {
+	root, err := moduleRoot()
+	if err != nil {
+		return nil, err
+	}
+
 	cmd := exec.Command(serverBinary)
-	cmd.Dir = filepath.Join(".", "backend")
+	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"PORT="+port,
 		"DB_PATH="+filepath.Join(dir, "chat.db"),
@@ -111,8 +185,10 @@ func startServer(dir, port string) *exec.Cmd {
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Start()
-	return cmd
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
 
 func stopServers() {
@@ -126,21 +202,28 @@ func stopServers() {
 	}
 }
 
-func waitForHealth(url string, timeout time.Duration) {
+// waitForHealth blocks until a server answers, and reports it when it never
+// does. It used to return nothing, so a run in which no server started at all
+// carried on to the next step and printed a success line.
+func waitForHealth(url string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	var lastErr error
 	for time.Now().Before(deadline) {
 		req, _ := http.NewRequest("GET", url+"/api/health", nil)
 		req.Header.Set("User-Agent", "e2e-test")
 		resp, err := http.DefaultClient.Do(req)
-		if err == nil && resp.StatusCode == 200 {
-			resp.Body.Close()
-			return
-		}
 		if err == nil {
 			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return nil
+			}
+			lastErr = fmt.Errorf("status %d", resp.StatusCode)
+		} else {
+			lastErr = err
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+	return fmt.Errorf("%s not healthy within %s: %v", url, timeout, lastErr)
 }
 
 // ── HTTP helpers ──
@@ -181,10 +264,28 @@ func doJSON(method, url, token string, body interface{}) (*response, error) {
 }
 
 func doMultipart(method, url, token string, fields map[string]string) (*response, error) {
+	return doMultipartFiles(method, url, token, fields, nil)
+}
+
+// doMultipartFiles posts a multipart body with text fields and optional files.
+// The map key is the form field name a file is sent under, as the client would.
+func doMultipartFiles(method, url, token string, fields map[string]string, files map[string][]byte) (*response, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	for k, v := range fields {
 		w.WriteField(k, v)
+	}
+	for field, data := range files {
+		if len(data) == 0 {
+			continue
+		}
+		part, err := w.CreateFormFile(field, "upload.jpg")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := part.Write(data); err != nil {
+			return nil, err
+		}
 	}
 	w.Close()
 	return doReq(method, url, token, w.FormDataContentType(), &buf)
@@ -271,8 +372,8 @@ func registerUsers() error {
 
 	// Register alice on server A
 	r, err = doJSON("POST", serverAURL+"/api/register", "", map[string]string{
-		"username":    "alice",
-		"password":    "test123",
+		"username":     "alice",
+		"password":     "test123",
 		"invite_token": inviteTokenA,
 	})
 	if err != nil {
@@ -284,8 +385,8 @@ func registerUsers() error {
 
 	// Register bob on server B
 	r, err = doJSON("POST", serverBURL+"/api/register", "", map[string]string{
-		"username":    "bob",
-		"password":    "test456",
+		"username":     "bob",
+		"password":     "test456",
 		"invite_token": inviteTokenB,
 	})
 	if err != nil {
@@ -339,7 +440,7 @@ func registerUsers() error {
 func connectFederation() error {
 	// Create federation invite on server A
 	r, err := doJSON("POST", serverAURL+"/api/admin/federation/invites", adminTokenA, map[string]interface{}{
-		"max_uses":  1,
+		"max_uses": 1,
 	})
 	if err != nil {
 		return fmt.Errorf("create federation invite: %w", err)
@@ -496,6 +597,135 @@ func testForwardPost() error {
 	return fmt.Errorf("federated post not found on server A (got %d posts)", len(posts))
 }
 
+// testForwardPostWithImage covers the part of image forwarding that used to have
+// no coverage at all: whether server A ends up with a *file* or with a link to
+// server B.
+//
+// A link would look right in the feed and only fail for the reader - the browser
+// would request the peer's address, which is a different origin, and would be
+// refused or served as something else entirely. So the assertion is not "an image
+// is present" but "the image URL points at our own uploads directory".
+func testForwardPostWithImage() error {
+	marker := "post with a picture from B"
+	payload := testJPEG(1200, 900)
+
+	r, err := doMultipartFiles("POST", serverBURL+"/api/posts", tokenB,
+		map[string]string{"content": marker, "is_public": "true"},
+		map[string][]byte{"images": payload},
+	)
+	if err != nil {
+		return fmt.Errorf("create post with image: %w", err)
+	}
+	if !isOK(r) {
+		return fmt.Errorf("create post with image: %s", logResp(r))
+	}
+	time.Sleep(3 * time.Second)
+
+	r, err = doJSON("GET", serverAURL+"/api/feed", tokenA, nil)
+	if err != nil {
+		return fmt.Errorf("get feed: %w", err)
+	}
+	if !isOK(r) {
+		return fmt.Errorf("get feed: %s", logResp(r))
+	}
+
+	var posts []struct {
+		ID      int64  `json:"id"`
+		Content string `json:"content"`
+		Images  []struct {
+			ID         int64  `json:"id"`
+			ImageURL   string `json:"image_url"`
+			ThumbURL   string `json:"thumb_url"`
+			PreviewURL string `json:"preview_url"`
+		} `json:"images"`
+	}
+	if err := json.Unmarshal(r.Body, &posts); err != nil {
+		return fmt.Errorf("parse feed: %w", err)
+	}
+
+	for _, p := range posts {
+		if !strings.Contains(p.Content, marker) {
+			continue
+		}
+		if len(p.Images) == 0 {
+			return fmt.Errorf("post reached server A with no images attached")
+		}
+
+		img := p.Images[0]
+		if strings.HasPrefix(img.ImageURL, "http") {
+			return fmt.Errorf("image was not downloaded: server A kept the peer's URL %s", img.ImageURL)
+		}
+		if !strings.HasPrefix(img.ImageURL, "/uploads/posts/") {
+			return fmt.Errorf("expected a local uploads path, got %s", img.ImageURL)
+		}
+
+		// The forwarded file goes through imageproc.Store, so server A has a
+		// compressed copy and thumbnails of its own. Without them the reader on A
+		// would download the full-size original for a 200 pixel bubble.
+		if img.ThumbURL == "" || img.PreviewURL == "" {
+			return fmt.Errorf("expected thumbnails for the forwarded image, got thumb=%q preview=%q",
+				img.ThumbURL, img.PreviewURL)
+		}
+
+		// And the bytes really are there and really are a JPEG, which is what
+		// "forwarded" is supposed to mean.
+		for _, url := range []string{img.ImageURL, img.ThumbURL, img.PreviewURL} {
+			got, err := httpGet(serverAURL + url)
+			if err != nil {
+				return fmt.Errorf("fetch %s: %w", url, err)
+			}
+			if len(got) == 0 {
+				return fmt.Errorf("%s served empty", url)
+			}
+			if url == img.ImageURL {
+				if len(got) >= len(payload) {
+					return fmt.Errorf("forwarded image was not compressed: %d bytes from %d", len(got), len(payload))
+				}
+				if !bytes.HasPrefix(got, []byte{0xFF, 0xD8, 0xFF}) {
+					return fmt.Errorf("forwarded file is not a JPEG")
+				}
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("post with an image not found in server A's feed (got %d posts)", len(posts))
+}
+
+func httpGet(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// testJPEG builds a real photo-shaped JPEG: large enough that compression and
+// thumbnailing have something to do, and generated rather than committed so the
+// repository does not carry a binary fixture.
+func testJPEG(w, h int) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8((x * 7) % 251),
+				G: uint8((y * 11) % 241),
+				B: uint8((x*y + x) % 239),
+				A: 255,
+			})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
+}
+
 func testOfflineQueue() error {
 	// Stop server A
 	log.Printf("  stopping server A...")
@@ -520,8 +750,12 @@ func testOfflineQueue() error {
 
 	// Restart server A
 	serverADir := filepath.Join(tmpDir, "server_a")
-	serverACmd = startServer(serverADir, "9080")
-	waitForHealth(serverAURL, 15*time.Second)
+	if serverACmd, err = startServer(serverADir, "9080"); err != nil {
+		return fmt.Errorf("restart server A: %w", err)
+	}
+	if err := waitForHealth(serverAURL, 30*time.Second); err != nil {
+		return fmt.Errorf("server A did not come back: %w", err)
+	}
 	log.Printf("  server A restarted")
 
 	// Wait for federation queue to drain

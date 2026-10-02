@@ -200,13 +200,11 @@ func (h *Handler) AdminConnectFederation(c *fiber.Ctx) error {
 			Method:   "POST",
 		})
 		if shareErr == nil && shareResp.StatusCode == 200 {
-			var remoteUsers []struct {
-				RemoteID  int64  `json:"remote_id"`
-				Username  string `json:"username"`
-				AvatarURL string `json:"avatar_url"`
-				Email     string `json:"email"`
-				IsAdmin   bool   `json:"is_admin"`
-			}
+			// models.BulkSyncUser, not a hand-written copy: this payload was
+			// spelled out three times, and the sender already had the named type.
+			// A field added to the wire format would have gone into one of them
+			// and been silently ignored by the other two.
+			var remoteUsers []models.BulkSyncUser
 			if err := json.Unmarshal(shareResp.Body, &remoteUsers); err == nil {
 				for _, u := range remoteUsers {
 					isAdminInt := 0

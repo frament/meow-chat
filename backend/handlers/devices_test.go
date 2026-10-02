@@ -149,11 +149,24 @@ func TestListDevices_WithDevice(t *testing.T) {
 	}
 }
 
-func TestRemoveDevice_Success(t *testing.T) {
-	app, _, userID := setupTestApp(t)
+// Removing the device row is the easy half. What actually revokes it is dropping
+// the key material addressed to that device and telling the account's other
+// devices to rotate - neither of which the old test looked at, so all three could
+// have been deleted and it would still have passed.
+func TestRemoveDevice_RevokesKeyMaterial(t *testing.T) {
+	app, _, userID, sent := setupTestAppWithBroadcasts(t)
 
-	database.DB.Exec("INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, ?, ?, ?)",
-		userID, "Phone", "key123", "dev1")
+	mustExec(t, database.DB, `INSERT INTO group_chats (id, name, created_by) VALUES (1, 'G', ?)`, userID)
+	mustExec(t, database.DB, `INSERT INTO group_chat_members (group_chat_id, user_id) VALUES (1, ?)`, userID)
+	mustExec(t, database.DB, `INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, 'Phone', 'key123', 'dev1')`, userID)
+	mustExec(t, database.DB, `INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, 'Laptop', 'key456', 'dev2')`, userID)
+
+	// Two devices hold the group key at epoch 0; only dev1 is being revoked.
+	mustExec(t, database.DB, `INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev1', 0, 'wrapped', 'iv')`, userID)
+	mustExec(t, database.DB, `INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev2', 0, 'wrapped', 'iv')`, userID)
+	mustExec(t, database.DB, `INSERT INTO group_epoch_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev1', 1, 'wrapped', 'iv')`, userID)
+	mustExec(t, database.DB, `INSERT INTO group_epoch_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev2', 1, 'wrapped', 'iv')`, userID)
+	mustExec(t, database.DB, `INSERT INTO device_auth_requests (user_id, device_id, device_name, device_public_key, status) VALUES (?, 'dev1', 'Phone', 'key123', 'pending')`, userID)
 
 	req, _ := http.NewRequest("DELETE", "/devices/dev1", nil)
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
@@ -166,9 +179,40 @@ func TestRemoveDevice_Success(t *testing.T) {
 	}
 
 	var count int
-	database.DB.QueryRow("SELECT COUNT(*) FROM user_devices WHERE user_id=?", userID).Scan(&count)
+	database.DB.QueryRow("SELECT COUNT(*) FROM user_devices WHERE device_id='dev1'").Scan(&count)
 	if count != 0 {
-		t.Error("expected device to be deleted")
+		t.Error("expected the device row to be deleted")
+	}
+
+	// The part that is revocation: the revoked device can no longer be handed the
+	// group key, at any epoch.
+	for _, q := range []string{
+		`SELECT COUNT(*) FROM group_device_key_shares WHERE device_id='dev1'`,
+		`SELECT COUNT(*) FROM group_epoch_key_shares WHERE device_id='dev1'`,
+		`SELECT COUNT(*) FROM device_auth_requests WHERE device_id='dev1'`,
+	} {
+		database.DB.QueryRow(q).Scan(&count)
+		if count != 0 {
+			t.Errorf("expected nothing left for the revoked device in %q, got %d rows", q, count)
+		}
+	}
+
+	// And the other device keeps its material, or revoking one device would break
+	// the account's remaining ones.
+	database.DB.QueryRow(`SELECT COUNT(*) FROM group_device_key_shares WHERE device_id='dev2'`).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected the surviving device to keep its group key share, got %d", count)
+	}
+
+	// The surviving devices learn about it over the socket, and rotate on their own
+	// side: the server never bumps an epoch itself. Without this event the revoked
+	// device simply keeps reading until someone reopens the conversation.
+	events := sent.OfType("device_revoked")
+	if len(events) != 1 {
+		t.Fatalf("expected one device_revoked broadcast, got %d", len(events))
+	}
+	if got, _ := events[0]["device_id"].(string); got != "dev1" {
+		t.Errorf("expected the broadcast to name dev1, got %v", events[0]["device_id"])
 	}
 }
 

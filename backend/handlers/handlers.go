@@ -33,12 +33,20 @@ type Handler struct {
 	broadcastGroup  chan wsMessage
 	broadcastAll    chan fiber.Map
 	broadcastToUser chan userMessage
-	graceExpired    chan int64
-	forceOffline    chan int64
-	onlineUsers     map[int64]bool
-	graceTimers     map[int64]*time.Timer
-	stop            chan struct{}
-	wg              sync.WaitGroup
+
+	// onSendToUser, when set, sees every targeted broadcast. Nil in production;
+	// tests set it so they can assert on what was sent. The test harness drains
+	// broadcastToUser in a background goroutine, so reading the channel directly
+	// is not possible - and without a way in, nothing about a targeted message
+	// could be verified at all. Device revocation depends entirely on one.
+	onSendToUser func(userID int64, data fiber.Map)
+
+	graceExpired chan int64
+	forceOffline chan int64
+	onlineUsers  map[int64]bool
+	graceTimers  map[int64]*time.Timer
+	stop         chan struct{}
+	wg           sync.WaitGroup
 
 	// GracePeriod is how long a disconnected user keeps the online indicator
 	// lit, so a reload or a brief network drop does not flap everyone's view.
@@ -457,6 +465,9 @@ func (h *Handler) GoOffline(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SendToUser(userID int64, data fiber.Map) {
+	if h.onSendToUser != nil {
+		h.onSendToUser(userID, data)
+	}
 	select {
 	case h.broadcastToUser <- userMessage{userID: userID, data: data}:
 	default:

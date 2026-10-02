@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"os"
+	"sync"
 	"testing"
 
 	"my-chat-backend/auth"
@@ -12,6 +13,60 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// setupTestAppWithBroadcasts is setupTestApp plus a record of every targeted
+// broadcast, which is the only way to assert on one: the harness above drains
+// the channel in the background.
+func setupTestAppWithBroadcasts(t *testing.T) (*fiber.App, *Handler, int64, *BroadcastLog) {
+	t.Helper()
+	app, h, userID := setupTestApp(t)
+
+	log := &BroadcastLog{}
+	h.onSendToUser = func(id int64, data fiber.Map) {
+		log.add(id, data)
+	}
+	t.Cleanup(func() { h.onSendToUser = nil })
+
+	return app, h, userID, log
+}
+
+// BroadcastLog collects targeted broadcasts so a test can assert on them.
+type BroadcastLog struct {
+	mu   sync.Mutex
+	sent []userMessage
+}
+
+func (b *BroadcastLog) add(userID int64, data fiber.Map) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.sent = append(b.sent, userMessage{userID: userID, data: data})
+}
+
+// Of returns the broadcasts addressed to one user.
+func (b *BroadcastLog) Of(userID int64) []fiber.Map {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []fiber.Map
+	for _, m := range b.sent {
+		if m.userID == userID {
+			out = append(out, m.data)
+		}
+	}
+	return out
+}
+
+// OfType returns the broadcasts of one event type, addressed to anyone.
+func (b *BroadcastLog) OfType(event string) []fiber.Map {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []fiber.Map
+	for _, m := range b.sent {
+		if t, _ := m.data["type"].(string); t == event {
+			out = append(out, m.data)
+		}
+	}
+	return out
+}
 
 func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	t.Helper()
@@ -206,4 +261,14 @@ func bearerToken(t *testing.T, userID int64, isAdmin bool) string {
 
 func init() {
 	os.Setenv("JWT_SECRET", "test-secret-for-testing")
+}
+
+// mustExec runs a statement and fails the test on error. A bare db.Exec on a
+// fixture insert hides a schema mismatch: the row is silently absent and the
+// assertion that follows fails somewhere else, pointing nowhere near the cause.
+func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
+	t.Helper()
+	if _, err := db.Exec(query, args...); err != nil {
+		t.Fatalf("exec: %v\n  query: %s", err, query)
+	}
 }
