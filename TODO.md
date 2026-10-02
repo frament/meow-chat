@@ -7,13 +7,13 @@
 
 > Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались. Это единственное место, где живут числа: бейдж в `README.md` и упоминания в `ROADMAP.md` ссылаются сюда и не дублируют значения.
 
-### Backend — 285 тестов в 34 файлах (Go)
+### Backend — 287 тестов в 34 файлах (Go)
 | Файл | Тестов |
 |------|--------|
 | `backend/auth/jwt_test.go` | 11 |
 | `backend/backup/backup_test.go` | 5 |
 | `backend/backup/config_test.go` | 6 |
-| `backend/backup/process_test.go` | 5 |
+| `backend/backup/process_test.go` | 6 |
 | `backend/cache/lru_cache_test.go` | 8 |
 | `backend/database/database_test.go` | 5 |
 | `backend/federation/handler_test.go` | 24 |
@@ -26,7 +26,7 @@
 | `backend/handlers/admin_test.go` | 13 |
 | `backend/handlers/auth_test.go` | 10 |
 | `backend/handlers/backup_test.go` | 3 |
-| `backend/handlers/core_test.go` | 11 |
+| `backend/handlers/core_test.go` | 12 |
 | `backend/handlers/decrypt_logs_test.go` | 4 |
 | `backend/handlers/devices_test.go` | 17 |
 | `backend/handlers/e2ee_test.go` | 10 |
@@ -44,7 +44,7 @@
 | `backend/handlers/version_test.go` | 1 |
 | `backend/handlers/webauthn_test.go` | 8 |
 | `backend/handlers/ws_test.go` | 18 |
-| **Backend total** | **285** |
+| **Backend total** | **287** |
 
 ### Frontend — 227 тестов в 24 файлах (Jasmine/Karma)
 | Файл | Тестов |
@@ -75,7 +75,7 @@
 | `frontend/src/app/components/settings/settings.component.spec.ts` | 15 |
 | **Frontend total** | **227** |
 
-**Итого: 512 тестов в 58 файлах.**
+**Итого: 514 тестов в 58 файлах.**
 
 > Раньше в шапке стояло «262 tests across 29 files», а таблицы давали 177 и 108 с итогом 308 — цифры не сходились между собой и с исходниками. Файлы, отсутствовавшие в таблицах: `decrypt_logs`, `e2ee`, `envelopes`, `friend_requests`, `group_key`, `push_logs`, `unread`, `version` (Go), `gif-picker`, `sticker-picker`, `md.pipe`, `keyboard.service` (Frontend).
 
