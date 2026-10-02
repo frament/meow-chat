@@ -10,6 +10,7 @@ import { CryptoService } from '../../services/crypto.service';
 import { toMemoryFile } from '../../services/upload-utils';
 import { PwaInstallService } from '../../services/pwa-install.service';
 import { DeviceLinkService } from '../../services/device-link.service';
+import { NoticeService } from '../../services/notice.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -468,6 +469,7 @@ import * as QRCode from 'qrcode';
 })
 export class SettingsComponent implements OnInit {
   readonly #sw = inject(SwUpdate);
+  readonly notice = inject(NoticeService);
 
   username = '';
   email = '';
@@ -906,7 +908,7 @@ export class SettingsComponent implements OnInit {
 
   copyInvite(token: string) {
     const url = `${window.location.origin}/register?invite=${token}`;
-    navigator.clipboard.writeText(url).catch(() => {});
+    this.notice.copy(url, 'Ссылка-приглашение скопирована');
   }
 
   async showQR(token: string) {
@@ -922,7 +924,7 @@ export class SettingsComponent implements OnInit {
   }
 
   copyInviteFromQR() {
-    navigator.clipboard.writeText(this.qrInviteUrl).catch(() => {});
+    this.notice.copy(this.qrInviteUrl, 'Ссылка-приглашение скопирована');
   }
 
   loadFriends() {
@@ -956,7 +958,7 @@ export class SettingsComponent implements OnInit {
   }
 
   copyFriendInvite() {
-    navigator.clipboard.writeText(this.friendInviteUrl).catch(() => {});
+    this.notice.copy(this.friendInviteUrl, 'Ссылка-приглашение скопирована');
   }
 
   async showFriendQR() {
@@ -970,7 +972,7 @@ export class SettingsComponent implements OnInit {
   }
 
   copyFriendInviteFromQR() {
-    navigator.clipboard.writeText(this.friendQrUrl).catch(() => {});
+    this.notice.copy(this.friendQrUrl, 'Ссылка-приглашение скопирована');
   }
 
   removeFriend(id: number) {

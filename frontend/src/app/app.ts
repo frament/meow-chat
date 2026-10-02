@@ -9,11 +9,12 @@ import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
 import { DeviceAuthComponent } from './components/device-auth/device-auth';
 import { DeviceLinkService } from './services/device-link.service';
+import { NoticeComponent } from './components/notice/notice';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, DeviceAuthComponent],
+  imports: [RouterOutlet, DeviceAuthComponent, NoticeComponent],
   template: `
     @if (gitHubUpdateAvailable()) {
       <div class="update-banner" style="background:var(--accent-gradient);">
@@ -71,6 +72,7 @@ import { DeviceLinkService } from './services/device-link.service';
       </div>
     }
     <app-device-auth #deviceAuth />
+    <app-notice />
     <router-outlet />
   `,
   styles: [`

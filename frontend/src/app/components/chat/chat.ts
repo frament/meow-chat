@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -9,6 +9,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult, EnvelopePayload } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
+import { NoticeService } from '../../services/notice.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { MdPipe } from '../../pipes/md.pipe';
@@ -774,7 +775,7 @@ import { toMemoryFile } from '../../services/upload-utils';
             <div class="flex gap-2 mt-2">
               <button (click)="copyInviteLink()"
                 style="padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--divider);background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;">
-                {{ copied ? 'Скопировано!' : 'Копировать' }}
+                Копировать
               </button>
               <button (click)="showQR = !showQR"
                 style="padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--divider);background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;">
@@ -838,6 +839,8 @@ import { toMemoryFile } from '../../services/upload-utils';
   `,
 })
 export class ChatComponent implements OnInit, OnDestroy {
+  readonly notice = inject(NoticeService);
+
   users: User[] = [];
   selectedUser: User | null = null;
   messages: Message[] = [];
@@ -939,7 +942,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   groupFriendCandidates: User[] = [];
   inviteToken = '';
   inviteUrl = '';
-  copied = false;
   showQR = false;
   private subscriptions: Subscription[] = [];
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2097,7 +2099,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   createInvite() {
     if (!this.selectedGroup) return;
     this.inviteToken = '';
-    this.copied = false;
     this.api.createGroupInvite(this.selectedGroup.id).subscribe({
       next: (res) => {
         this.inviteToken = res.token;
@@ -2108,10 +2109,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   copyInviteLink() {
-    navigator.clipboard.writeText(this.inviteUrl).then(() => {
-      this.copied = true;
-      setTimeout(() => this.copied = false, 2000);
-    });
+    this.notice.copy(this.inviteUrl, 'Ссылка-приглашения скопирована');
   }
 
   deleteCurrentGroup() {

@@ -1,5 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { ApiService } from '../../services/api.service';
+import { NoticeService } from '../../services/notice.service';
 import { FormsModule } from '@angular/forms';
 import * as QRCode from 'qrcode';
 
@@ -181,6 +182,8 @@ import * as QRCode from 'qrcode';
   `,
 })
 export class AdminFederationComponent implements OnInit {
+  readonly notice = inject(NoticeService);
+
   servers: any[] = [];
   loading = false;
   msg = '';
@@ -301,7 +304,7 @@ export class AdminFederationComponent implements OnInit {
   }
 
   copyFederationInvite() {
-    navigator.clipboard.writeText(this.generatedInviteUrl).catch(() => {});
+    this.notice.copy(this.generatedInviteUrl, 'Ссылка-приглашения скопирована');
   }
 
   async showFederationQR() {
@@ -315,7 +318,7 @@ export class AdminFederationComponent implements OnInit {
   }
 
   copyFederationInviteFromQR() {
-    navigator.clipboard.writeText(this.federationQrInviteUrl).catch(() => {});
+    this.notice.copy(this.federationQrInviteUrl, 'Ссылка-приглашения скопирована');
   }
 
   updateCacheLimit(s: any, event: Event) {
