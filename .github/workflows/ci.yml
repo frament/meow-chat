@@ -14,7 +14,9 @@ concurrency:
 jobs:
   backend:
     name: Backend · go test
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest: the label is mid-migration to Ubuntu 26
+    # and the go test step was terminated by the runner on every attempt there.
+    runs-on: ubuntu-24.04
     # Bounded so a hung test can't burn the whole budget.
     timeout-minutes: 20
     steps:
@@ -39,7 +41,7 @@ jobs:
 
   frontend:
     name: Frontend · ng test + build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
