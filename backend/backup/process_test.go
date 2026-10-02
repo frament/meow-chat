@@ -48,9 +48,29 @@ func TestFindProcess_NonexistentPIDFile(t *testing.T) {
 	}
 }
 
-func TestSendRestartSignal_InvalidPID(t *testing.T) {
-	err := SendRestartSignal(-1)
-	if err == nil {
-		t.Error("expected error for invalid PID")
+// A nonexistent but strictly positive PID. Using -1 here used to call
+// kill(-1, SIGTERM), which on Linux signals *every* process the caller can
+// reach - as root on a CI runner that included the Actions runner agent, so the
+// job died with "the operation was canceled" and no test output. Locally, as a
+// non-root user, the same call returned EPERM, passed the assertion, and hid
+// the whole thing. Keep this PID positive and unused.
+const unusedPID = 4194303
+
+func TestSendRestartSignal_UnusedPID(t *testing.T) {
+	// A real kill against an unused PID must fail, not take anything down.
+	if err := SendRestartSignal(unusedPID); err == nil {
+		t.Error("expected error for a PID that does not exist")
+	}
+}
+
+func TestSendRestartSignal_RefusesBroadcastPIDs(t *testing.T) {
+	// -1 means "every process the caller can signal" and 0 means "my whole
+	// process group" in kill(2). Neither is ever a valid restart target, and
+	// SendRestartSignal must not let a corrupt pid file turn a restart into a
+	// mass SIGTERM.
+	for _, pid := range []int{-1, 0} {
+		if err := SendRestartSignal(pid); err == nil {
+			t.Errorf("expected an error for broadcast pid %d", pid)
+		}
 	}
 }

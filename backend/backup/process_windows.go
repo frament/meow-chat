@@ -52,7 +52,13 @@ func ShutdownContainer() {
 	// Docker doesn't run natively on Windows — no-op
 }
 
+// SendRestartSignal asks a process to terminate so something can replace it.
+// Non-positive PIDs are refused for the same reason as on Unix: a pid file that
+// parses to 0 must never be treated as a target.
 func SendRestartSignal(pid int) error {
+	if pid <= 0 {
+		return fmt.Errorf("refusing to signal broadcast pid %d", pid)
+	}
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		return err
