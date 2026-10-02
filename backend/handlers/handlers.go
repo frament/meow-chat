@@ -129,12 +129,24 @@ func NewHandler() *Handler {
 	return h
 }
 
+// Close stops the hub and then the grace timers.
+//
+// The order is load-bearing. graceTimers is owned by the runHub goroutine - it
+// inserts on disconnect, deletes on reconnect and on expiry - so ranging over it
+// from here while the hub is still running is a data race, and Go's runtime turns
+// that into a fatal "concurrent map iteration and map write" rather than a
+// quietly wrong value. So: stop the hub, wait for it to exit, and only then touch
+// the map. Nobody is left to add to it at that point.
+//
+// A timer that fires after this fires into a buffered channel with a select and a
+// default, so the stray graceExpired it sends goes nowhere.
 func (h *Handler) Close() {
+	close(h.stop)
+	h.wg.Wait()
+
 	for _, t := range h.graceTimers {
 		t.Stop()
 	}
-	close(h.stop)
-	h.wg.Wait()
 }
 
 // buildPushPreview picks the push body text. The client sends an explicit
