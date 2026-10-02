@@ -1,63 +1,89 @@
-# ✅ All Done — 262 tests across 29 files
+# TODO
+
+## Открытые пункты
+- [ ] После установки PWA отправлять приветственное push-уведомление, чтобы активировать подписку без необходимости отправлять сообщение первым
 
 ## Test Summary
 
-### Backend — 176 tests (Go, 18 files)
-| Package | Tests |
-|---------|-------|
+> Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам, а не по выводу прогона. После правки счётчиков сборки/прогоны не запускались.
+
+### Backend — 282 теста в 34 файлах (Go)
+| Файл | Тестов |
+|------|--------|
 | `backend/auth/jwt_test.go` | 11 |
-| `backend/database/database_test.go` | 3 |
-| `backend/handlers/auth_test.go` | 6 |
-| `backend/handlers/core_test.go` | 9 |
-| `backend/handlers/messages_test.go` | 4 |
-| `backend/handlers/posts_test.go` | 6 |
-| `backend/handlers/groups_test.go` | 11 |
-| `backend/handlers/admin_test.go` | 13 |
-| `backend/handlers/push_test.go` | 5 |
-| `backend/handlers/webauthn_test.go` | 4 |
-| `backend/handlers/devices_test.go` | 16 |
-| `backend/handlers/backup_test.go` | 4 |
-| `backend/handlers/admin_federation_test.go` | 9 |
-| `backend/handlers/update_test.go` | 6 |
-| `backend/backup/config_test.go` | 6 |
 | `backend/backup/backup_test.go` | 5 |
+| `backend/backup/config_test.go` | 6 |
 | `backend/backup/process_test.go` | 5 |
 | `backend/cache/lru_cache_test.go` | 8 |
-| `backend/federation/*_test.go` (6 files) | 54 |
-| `backend/handlers/polls_test.go` | 13 |
- | `backend/handlers/ws_test.go` | 17 |
- | **Backend total** | **200** |
+| `backend/database/database_test.go` | 5 |
+| `backend/federation/handler_test.go` | 24 |
+| `backend/federation/health_test.go` | 5 |
+| `backend/federation/mediator_test.go` | 7 |
+| `backend/federation/queue_test.go` | 4 |
+| `backend/federation/route_test.go` | 5 |
+| `backend/federation/transport_test.go` | 10 |
+| `backend/handlers/admin_federation_test.go` | 2 |
+| `backend/handlers/admin_test.go` | 13 |
+| `backend/handlers/auth_test.go` | 10 |
+| `backend/handlers/backup_test.go` | 3 |
+| `backend/handlers/core_test.go` | 11 |
+| `backend/handlers/decrypt_logs_test.go` | 4 |
+| `backend/handlers/devices_test.go` | 17 |
+| `backend/handlers/e2ee_test.go` | 10 |
+| `backend/handlers/envelopes_test.go` | 1 |
+| `backend/handlers/friend_requests_test.go` | 17 |
+| `backend/handlers/group_key_test.go` | 5 |
+| `backend/handlers/groups_test.go` | 12 |
+| `backend/handlers/messages_test.go` | 8 |
+| `backend/handlers/polls_test.go` | 15 |
+| `backend/handlers/posts_test.go` | 10 |
+| `backend/handlers/push_logs_test.go` | 7 |
+| `backend/handlers/push_test.go` | 5 |
+| `backend/handlers/unread_test.go` | 3 |
+| `backend/handlers/update_test.go` | 7 |
+| `backend/handlers/version_test.go` | 1 |
+| `backend/handlers/webauthn_test.go` | 8 |
+| `backend/handlers/ws_test.go` | 18 |
+| **Backend total** | **282** |
 
-### Frontend — 91 tests (17 files)
-| Component/Service | Tests |
-|-------------------|-------|
-| `theme.service.spec.ts` | 8 |
-| `notification.service.spec.ts` | 8 |
-| `crypto.service.spec.ts` | 7 |
-| `auth.interceptor.spec.ts` | 11 |
-| `api.service.spec.ts` | 7 |
-| `app.component.spec.ts` | 7 |
-| `login.component.spec.ts` | 3 |
-| `register.component.spec.ts` | 3 |
-| `layout.component.spec.ts` | 4 |
-| `feed.component.spec.ts` | 4 |
-| `chat.component.spec.ts` | 14 |
-| `settings.component.spec.ts` | 2 |
-| `admin.component.spec.ts` | 4 |
-| `device-auth.component.spec.ts` | 3 |
-| `admin-federation.component.spec.ts` | 3 |
-| `add-friend.component.spec.ts` | 2 |
-| `join-group.component.spec.ts` | 2 |
-| `post-dialog.component.spec.ts` | 18 |
- | **Frontend total** | **108** |
+### Frontend — 214 тестов в 22 файлах (Jasmine/Karma)
+| Файл | Тестов |
+|------|--------|
+| `frontend/src/app/app.component.spec.ts` | 11 |
+| `frontend/src/app/pipes/md.pipe.spec.ts` | 17 |
+| `frontend/src/app/services/api.service.spec.ts` | 22 |
+| `frontend/src/app/services/auth.interceptor.spec.ts` | 9 |
+| `frontend/src/app/services/crypto.service.spec.ts` | 9 |
+| `frontend/src/app/services/keyboard.service.spec.ts` | 5 |
+| `frontend/src/app/services/notification.service.spec.ts` | 8 |
+| `frontend/src/app/services/theme.service.spec.ts` | 8 |
+| `frontend/src/app/components/add-friend/add-friend.component.spec.ts` | 7 |
+| `frontend/src/app/components/admin/admin.component.spec.ts` | 6 |
+| `frontend/src/app/components/admin-federation/admin-federation.component.spec.ts` | 3 |
+| `frontend/src/app/components/chat/chat.component.spec.ts` | 19 |
+| `frontend/src/app/components/chat/gif-picker/gif-picker.spec.ts` | 8 |
+| `frontend/src/app/components/chat/sticker-picker/sticker-picker.spec.ts` | 9 |
+| `frontend/src/app/components/device-auth/device-auth.component.spec.ts` | 11 |
+| `frontend/src/app/components/feed/feed.component.spec.ts` | 4 |
+| `frontend/src/app/components/join-group/join-group.component.spec.ts` | 6 |
+| `frontend/src/app/components/layout/layout.component.spec.ts` | 4 |
+| `frontend/src/app/components/login/login.component.spec.ts` | 7 |
+| `frontend/src/app/components/post-dialog/post-dialog.component.spec.ts` | 18 |
+| `frontend/src/app/components/register/register.component.spec.ts` | 8 |
+| `frontend/src/app/components/settings/settings.component.spec.ts` | 15 |
+| **Frontend total** | **214** |
 
-### Grand total: 308 tests, 0 failures ✅
+**Итого: 496 тестов в 56 файлах.**
+
+> Раньше в шапке стояло «262 tests across 29 files», а таблицы давали 177 и 108 с итогом 308 — цифры не сходились между собой и с исходниками. Файлы, отсутствовавшие в таблицах: `decrypt_logs`, `e2ee`, `envelopes`, `friend_requests`, `group_key`, `push_logs`, `unread`, `version` (Go), `gif-picker`, `sticker-picker`, `md.pipe`, `keyboard.service` (Frontend).
+
+## Отменённые отметки
+- ~~Chat list virtualization with `@angular/cdk`~~ — **не сделано.** Зависимость `@angular/cdk ^20.2.14` есть в `frontend/package.json`, но в `frontend/src` нет ни одного её использования: ни `cdk-virtual-scroll-viewport`, ни `*cdkVirtualFor`. Отметка была ошибочной. Задача перенесена в `ROADMAP.md` → v1.5.0 «Виртуализация списков (чат, друзья)». Зависимость `@angular/cdk` оставлена в `package.json` — она понадобится под эту задачу.
 
 ## Done
-- [x] Chat list virtualization with `@angular/cdk`
-- [x] PWA install banner dismiss tracking (localStorage)
-- [x] Avatar upload progress indicator
-- [x] Backup upload progress indicator
+- [x] PWA install banner dismiss tracking (localStorage) — `app.ts`: `dismissInstall()`, покрыто тестами в `app.component.spec.ts`
+- [x] Avatar upload progress indicator — `settings.ts`: `uploadProgress` + `HttpEventType.UploadProgress`
+- [x] Backup upload progress indicator — `admin.ts`: `backupUploadProgress`
 - [x] Testing design spec written and committed
 - [x] Sessions 1-7 all complete — every file in TODO.md has tests
 
@@ -98,7 +124,7 @@
 - [x] **#20** Ложные уведомления о новых сообщениях: фильтр типов WS-событий — только `message`/`group_message`, игнорируются `user_online`/`user_offline` и др. + игнорирование своих сообщений.
 - [x] **#21** Мобильная версия: лишний отступ input при клавиатуре — переведён с `dvh` на `window.visualViewport` для точного отслеживания высоты.
 - [x] **#22** iOS: двойное нажатие отправки стикера — добавлен guard `sending` + `(touchstart)` на кнопку отправки для срабатывания до скрытия клавы.
-- [x] **#23** Мобильная версия: панель "новый пост" перекрыта навигацией — добавлен `padding-bottom: calc(3.5rem + env(safe-area-inset-bottom))` в bottom sheet.
+- [x] **#23** Мобильная версия: панель "новый пост" перекрыта навигацией — добавлены `padding-bottom: calc(3.5rem + env(safe-area-inset-bottom))` в bottom sheet.
 - [x] **#24** Каскадное удаление данных пользователя — добавлены `friend_invites`, `push_copies`, `poll_votes`, `post_reactions WHERE user_id` + удаление файлов (post/message images).
 - [x] **#25** Мобильная версия: кнопка удаления поста — заменён `text-xs px-2 pb-2` на `text-sm p-2` для mobile.
 
@@ -108,9 +134,6 @@
 - [x] **#28** Не отображать GIF как прикреплённый файл для отправки
 - [x] **#29** Индикатор загрузки файла внутри сообщения
 - [x] **#30** Добавить рядом со временем отправки индикатор отправки и прочтения сообщения
-
-## PWA
-- [ ] После установки PWA отправлять приветственное push-уведомление, чтобы активировать подписку без необходимости отправлять сообщение первым
 
 ## Done
 - [x] #31 Ограничить высоту миниатюр аватаров пользователей в списке друзей и чатах
