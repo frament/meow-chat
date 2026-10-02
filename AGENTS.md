@@ -96,8 +96,8 @@ leankg query "federation" --kind file  # search session docs
 
 See `ROADMAP.md` for the versioned plan (milestones per release). Highlights:
 
-- **Multi-device encryption** (ROADMAP v2.5.0): E2EE keys are stored in IndexedDB per-device — no key sync between devices. Solution: export/import key via QR code or password-encrypted backup, or use WebAuthn credential ID as a key wrapping mechanism.
+- **Multi-device E2EE** (ROADMAP v1.7.0): implemented — per-device key registry, per-device message envelopes, group key shares scoped to device + epoch, revocation. Key backup/restore by account password or recovery phrase (`/devices/backup-keys`, `/devices/recover`) + UI in settings and `device-auth`. **Residual limitation:** a revoked device still holds valid account credentials and can re-register itself; cryptographic revocation only prevents reading *new* messages without re-approval. Details: `docs/plans/per-device-e2ee.md`, section 12.
 - **Multi-server collaboration**: The WebSocket hub is in-memory per-process. Horizontal scaling would need a pub/sub layer — but this is an **explicit non-goal** (target scale: one household, ≤100 users).
-- **Federation `AdminConnectFederation`** (ROADMAP v2.4.0): Handler currently returns stub — needs full invite token validation + server-to-server handshake.
-- **Federation `HandleForwardPostImages`** (ROADMAP v2.4.0): Not yet implemented — needed for image proxying to federated peers.
-- **UI fixes** (ROADMAP v1.5.0 / v2.6.0): PWA install prompt, chat list virtualization, optimistic message sending with rollback, image upload progress.
+- **Federation `AdminConnectFederation`** (ROADMAP v1.6.0): implemented — full handshake with invite-token validation, 404/410/409 handling, schema-MAJOR check. Was long listed as a stub; it isn't.
+- **Federation post image proxying** (ROADMAP v1.6.0): implemented as `HandleForwardPost` → `cacheRemoteImage` (downloads the peer's file into `uploads/posts/`, stores the local URL, falls back to the remote URL on failure). There is no function named `HandleForwardPostImages` — earlier notes referred to one.
+- **UI fixes**: PWA install prompt (open, ROADMAP v1.5.0) and chat list virtualization (open, ROADMAP v1.5.0 — `@angular/cdk` is installed but unused). Done: optimistic send with rollback, message image upload progress.
