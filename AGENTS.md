@@ -1,7 +1,7 @@
 # MeowChat repo guide
 
 ## Stack
-- **Backend**: Go 1.23 + Fiber v2 + SQLite (go-webauthn for biometric auth) (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
+- **Backend**: Go 1.26 + Fiber v2 + SQLite (go-webauthn for biometric auth) (via mattn/go-sqlite3, CGO) + bcrypt + WebSocket (gofiber/contrib/websocket)
 - **Frontend**: Angular 20 (standalone components, new `@if`/`@for` control flow) + Tailwind v4 (`@import "tailwindcss"` in CSS) + PWA (`@angular/service-worker`)
 - **Infra**: Docker Compose (primary run-and-go), nginx reverse-proxy in frontend container (planned removal in `v2.0.0` — single binary serves the SPA; see `ROADMAP.md`)
 
@@ -33,6 +33,7 @@ frontend/
 - **Execution style**: Inline (execute tasks in current session, not subagent-driven)
 - **TODO**: See `TODO.md` in repo root for remaining tasks
 - **Roadmap**: See `ROADMAP.md` for the versioned plan (milestones per release)
+- **Dependencies move forward, not sideways.** A newer version of a tool or library is the default choice, and a breaking change in it is a task to do rather than a reason to stay put. Where taking the new version means the code has to be fixed, fix the code. Pinning something back to keep a diff small is a decision that has to be argued for out loud, not something to do quietly as a side effect of a `go get`.
 
 ## Positioning & roadmap
 - **Product**: home chat server for a family — one instance ≈ one household, target scale **up to ~100 users**. Federation joins families into a mesh.

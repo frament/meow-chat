@@ -198,7 +198,7 @@ SemVer-правило проекта: breaking changes — только в MAJOR
 - [ ] Unit-тесты static-handler (`/api` не перехватывается; битый `.js` → 404, а не HTML).
 
 ### 0.3 — Сборка и инфраструктура
-- [ ] Один multi-stage Dockerfile: `node:24-alpine` → `golang:1.23-alpine` (`CGO_ENABLED=0`) → `distroless/static` (или `scratch`).
+- [ ] Один multi-stage Dockerfile: `node:24-alpine` → `golang:1.26-alpine` (`CGO_ENABLED=0`) → `distroless/static` (или `scratch`).
 - [ ] `docker-compose.yml` → один сервис, порт `8080`, тома `/data` + `./uploads`.
 - [ ] Makefile: цель `embed-frontend` (копировать `dist/frontend/browser/*` → `backend/web/`), обновить `build`/`update`/`install`.
 - [ ] Дефолт `WEBAUTHN_RP_ORIGIN` под `:8080`; обновить `contrib/env.template`.

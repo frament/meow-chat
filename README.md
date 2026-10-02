@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
-  <img src="https://img.shields.io/badge/Go-1.23-00ADD8" alt="go">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
   <img src="https://img.shields.io/badge/tests-545-brightgreen" alt="tests">
   <a href="https://github.com/frament/meow-chat/actions/workflows/ci.yml">
@@ -100,7 +100,7 @@ cd backend && go run . admin backup   # или через API
 ## Требования
 
 - **Docker** + Docker Compose (для варианта 1)
-- **Go 1.23+** (`CGO_ENABLED=1`) + **Node.js 24+** (для прямой установки)
+- **Go 1.26+** (`CGO_ENABLED=1`) + **Node.js 24+** (для прямой установки)
 
 ## 🔗 Федеративная совместимость
 

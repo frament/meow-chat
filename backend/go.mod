@@ -1,6 +1,6 @@
 module my-chat-backend
 
-go 1.23.0
+go 1.26.0
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.1-0.20260422052225-76cc00f5ac2d
@@ -11,6 +11,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/mattn/go-sqlite3 v1.14.22
 	golang.org/x/crypto v0.31.0
+	golang.org/x/image v0.46.0
 )
 
 require (
@@ -30,7 +31,6 @@ require (
 	github.com/valyala/fasthttp v1.52.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/image v0.30.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
