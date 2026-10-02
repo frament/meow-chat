@@ -11,15 +11,22 @@ import { Pipe, PipeTransform } from '@angular/core';
  * this is not a lookup table. `plural()` implements the rule: n%10 in 2..4 and
  * n%100 not in 12..14 gives the "2-4" form, n%10==1 and n%100!=11 gives the
  * singular, everything else the "many" form.
+ *
+ * The reference time is a parameter rather than a `Date.now()` read inside
+ * `transform`, which is what makes this pipe recompute at all - a pure pipe only
+ * re-runs when one of its arguments changes, and the wall clock is not an
+ * argument. Callers pass `clock.now()`, which ticks once a minute. The default
+ * keeps the pipe usable on its own, in a test, or in a template with no clock to
+ * hand.
  */
 @Pipe({ name: 'lastSeen', standalone: true, pure: true })
 export class LastSeenPipe implements PipeTransform {
-  transform(value: string | Date | null | undefined): string {
+  transform(value: string | Date | null | undefined, now: number = Date.now()): string {
     if (!value) return '';
     const ts = value instanceof Date ? value.getTime() : Date.parse(value);
     if (Number.isNaN(ts)) return '';
 
-    const seconds = Math.floor((Date.now() - ts) / 1000);
+    const seconds = Math.floor((now - ts) / 1000);
     // A future timestamp means clock skew between the phone and the server, not
     // a user who left in the future. Anything under a minute reads as "just now",
     // which is also true for a person who stepped away a few seconds ago.

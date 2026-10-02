@@ -14,31 +14,45 @@ import (
 )
 
 const (
-	// Quality is the JPEG quality the rewrite aims for. It was picked by eye
+	// Quality is the JPEG quality every re-encode aims for. It was picked by eye
 	// rather than measured: high enough that recompression stays invisible on a
 	// phone screen, low enough to cost roughly a third of the bytes.
 	Quality = 82
 
-	// MaxEdge caps the long side. A chat bubble is about 300 pixels wide and the
-	// feed shows images full width, so this leaves room for a desktop display at
-	// 2x without carrying pixels nobody can see.
+	// MaxEdge caps the long side of a stored image. A chat bubble is 200 pixels
+	// and the feed shows a single image full width, up to about 600, so this
+	// leaves room for a 2x display without carrying pixels nobody can see.
 	MaxEdge = 1920
 
-	// minSavings is how much smaller the rewrite has to be before it is preferred
-	// over the original. Without it a photo that is already well compressed gets
-	// re-encoded for nothing, and every upload pays for a resize it did not need.
+	// ThumbEdge is the long side for the copy that goes in a chat bubble. The
+	// bubble is 200 pixels, so 400 covers a 2x screen with nothing to spare.
+	ThumbEdge = 400
+
+	// PreviewEdge is the long side for the copy the feed shows. A single image
+	// fills the column at around 600 pixels, which is 1200 on a 2x display.
+	PreviewEdge = 1200
+
+	// minSavings is how much smaller a rewrite of the original has to be before
+	// it is preferred over what was uploaded. Without it a photo that is already
+	// well compressed gets re-encoded for nothing, and every upload pays for a
+	// resize it did not need.
 	minSavings = 0.05
 )
 
 // ErrNotAnImage is returned by Sniff for bytes that are not a picture.
 var ErrNotAnImage = errors.New("not a recognised image")
 
+// ErrNoThumbnail is returned by Thumbnail for a format that has no thumbnail
+// written for it. Callers treat it as "serve the original" rather than as a
+// failure: the image is perfectly usable, it is just not smaller.
+var ErrNoThumbnail = errors.New("no thumbnail for this format")
+
 // Compress returns a smaller JPEG, and whether it produced one worth keeping.
 //
 // Why JPEG only, decided 2026-10-02 from what the server actually holds: two
 // 12-megapixel phone photos were 62% of every byte stored, shown in a chat
-// bubble roughly 300 pixels wide. So the long side is capped, the quality is
-// lowered, and whichever of the two files is smaller wins.
+// bubble 200 pixels wide. So the long side is capped, the quality is lowered,
+// and whichever of the two files is smaller wins.
 //
 // The formats left alone are left alone on purpose:
 //
@@ -50,7 +64,8 @@ var ErrNotAnImage = errors.New("not a recognised image")
 //     byte for byte.
 //
 // That last point is a real gap, not a shrug: a phone photo uploaded as WebP
-// keeps its full size. Closing it means cgo, and cgo goes away in v2.0.0.
+// keeps its full size, and gets no thumbnail either. Closing it means cgo, and
+// cgo goes away in v2.0.0.
 //
 // A rewritten JPEG also loses its EXIF, which is where phones record the device,
 // the time, and sometimes the coordinates. Re-encoding is what strips it, so an
@@ -62,42 +77,84 @@ func Compress(data []byte) ([]byte, bool, error) {
 		return data, false, nil
 	}
 
-	src, _, err := image.Decode(bytes.NewReader(data))
+	img, err := decodeUpright(data)
 	if err != nil {
 		return data, false, err
 	}
 
-	// Turn the image upright before measuring it. The stored pixels of a phone
-	// photo are often sideways, and the long side of the stored image is not
-	// necessarily the long side of the photo - capping first would leave a
-	// portrait photo at 1440 pixels tall and 1920 wide, which is the wrong way
-	// round.
-	var img image.Image = src
-	if o := exifOrientation(data); o != 1 {
-		img = oriented(src, o)
-	}
-
-	bounds := img.Bounds()
-	var toEncode image.Image = img
-	if max(bounds.Dx(), bounds.Dy()) > MaxEdge {
-		scale := float64(MaxEdge) / float64(max(bounds.Dx(), bounds.Dy()))
-		dst := image.NewRGBA(image.Rect(0, 0, int(float64(bounds.Dx())*scale), int(float64(bounds.Dy())*scale)))
-		// CatmullRom over the source's alpha channel, so the resize does not bleed
-		// the colour of one edge pixel across the whole image.
-		draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Src, nil)
-		toEncode = dst
-	}
-
-	var buf bytes.Buffer
-	buf.Grow(len(data) / 2)
-	if err := jpeg.Encode(&buf, toEncode, &jpeg.Options{Quality: Quality}); err != nil {
+	out, err := encodeJPEG(fit(img, MaxEdge))
+	if err != nil {
 		return data, false, err
 	}
 
-	if buf.Len() >= int(float64(len(data))*(1-minSavings)) {
+	if len(out) >= int(float64(len(data))*(1-minSavings)) {
 		return data, false, nil
 	}
-	return buf.Bytes(), true, nil
+	return out, true, nil
+}
+
+// Thumbnail returns a JPEG no larger than maxEdge on its long side.
+//
+// It answers ErrNoThumbnail for anything that is not a JPEG, for the same
+// reason Compress leaves them alone. Unlike Compress there is no question of
+// whether the result is worth keeping - the caller is replacing a full-size file
+// on a page that has already decided to show it smaller.
+func Thumbnail(data []byte, maxEdge int) ([]byte, error) {
+	if !isJPEG(data) {
+		return nil, ErrNoThumbnail
+	}
+
+	img, err := decodeUpright(data)
+	if err != nil {
+		return nil, err
+	}
+	return encodeJPEG(fit(img, maxEdge))
+}
+
+// decodeUpright decodes a JPEG and turns it the right way up.
+//
+// The orientation matters before anything else is measured. The stored pixels of
+// a phone photo are often sideways, and the long side of the stored image is not
+// necessarily the long side of the photo - capping first would leave a portrait
+// photo 1440 pixels tall and 1920 wide, which is the wrong way round.
+func decodeUpright(data []byte) (image.Image, error) {
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if o := exifOrientation(data); o != 1 {
+		return oriented(src, o), nil
+	}
+	return src, nil
+}
+
+// fit returns img scaled so neither side exceeds maxEdge, or img itself when it
+// already fits. Never upscales: enlarging a small image costs bytes and adds
+// nothing.
+func fit(img image.Image, maxEdge int) image.Image {
+	b := img.Bounds()
+	long := max(b.Dx(), b.Dy())
+	if long <= maxEdge {
+		return img
+	}
+
+	scale := float64(maxEdge) / float64(long)
+	dst := image.NewRGBA(image.Rect(0, 0,
+		max(1, int(float64(b.Dx())*scale+0.5)),
+		max(1, int(float64(b.Dy())*scale+0.5))))
+
+	// CatmullRom over the source's alpha channel, so the resize does not bleed
+	// the colour of one edge pixel across the whole image.
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+	return dst
+}
+
+func encodeJPEG(img image.Image) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: Quality}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Sniff returns the file extension that matches what the bytes actually are,

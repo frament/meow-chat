@@ -51,7 +51,7 @@ import { MdPipe } from '../../pipes/md.pipe';
             <div [class]="'post-images post-images-' + showCount">
               @for (img of post.images.slice(0, showCount); track img.id; let i = $index) {
                 <div class="post-image-wrapper" (click)="openViewer(post.images!, i)">
-                  <img [src]="img.image_url" loading="lazy">
+                  <img [src]="img.preview_url || img.image_url" loading="lazy">
                   @if (count > 4 && i === showCount - 1) {
                     <div class="post-image-overlay">+{{ count - 4 }}</div>
                   }

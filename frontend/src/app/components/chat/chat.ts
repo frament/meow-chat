@@ -11,6 +11,7 @@ import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { NoticeService } from '../../services/notice.service';
 import { LastSeenPipe } from '../../pipes/last-seen.pipe';
+import { ClockService } from '../../services/clock.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { MdPipe } from '../../pipes/md.pipe';
@@ -133,7 +134,7 @@ import { toMemoryFile } from '../../services/upload-utils';
               @if (user.is_online) {
                 <span class="                 rounded-full shrink-0" style="background:#34d399;"></span>
               } @else if (user.last_seen) {
-                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
+                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen: clock.now() }}</span>
               }
               <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
@@ -168,7 +169,7 @@ import { toMemoryFile } from '../../services/upload-utils';
             @if (user.is_online) {
               <span class="               rounded-full shrink-0" style="background:#34d399;"></span>
             } @else if (user.last_seen) {
-              <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
+              <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen: clock.now() }}</span>
             }
             <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
           </div>
@@ -251,7 +252,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
-                          <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                          <img [src]="img.thumb_url || img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
                           (click)="openImage(img.image_url)">
                           }
                         </div>
@@ -496,7 +497,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 @if (user.is_online) {
                   <span class="                   rounded-full shrink-0" style="background:#34d399;"></span>
                 } @else if (user.last_seen) {
-                  <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
+                  <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen: clock.now() }}</span>
                 }
                 <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
               </div>
@@ -528,7 +529,7 @@ import { toMemoryFile } from '../../services/upload-utils';
               @if (user.is_online) {
                 <span class="                 rounded-full shrink-0" style="background:#34d399;"></span>
               } @else if (user.last_seen) {
-                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
+                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen: clock.now() }}</span>
               }
               <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
@@ -593,7 +594,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">
                           @for (img of $any(item).images; track img.id || $index) {
-                          <img [src]="img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                          <img [src]="img.thumb_url || img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
                           (click)="openImage(img.image_url)">
                           }
                         </div>
@@ -1020,6 +1021,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     private crypto: CryptoService,
     private sanitizer: DomSanitizer,
     private keyboardService: KeyboardService,
+    protected clock: ClockService,
   ) {
     this.msgTypes = this.buildMsgTypes();
     this.api.getGiphyStatus().subscribe({

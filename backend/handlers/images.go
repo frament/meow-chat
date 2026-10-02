@@ -3,14 +3,13 @@ package handlers
 import (
 	"errors"
 	"io"
-	"log"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 
 	"my-chat-backend/imageproc"
+	"my-chat-backend/models"
 )
 
 // saveImage stores one uploaded image under dir and returns the URL to serve it
@@ -20,9 +19,8 @@ import (
 // static handler derives the Content-Type from the extension, so a photo
 // uploaded as photo.png was being stored as - and served as - image/png.
 //
-// The image is compressed first when that is worth doing, and the original is
-// kept when it is not. A compression failure is logged and the original stored:
-// a photo that uploads slightly larger is better than a rejected one.
+// Compression and thumbnail generation both live in imageproc.Store, so this is
+// only about getting the bytes out of the request and making the name safe.
 //
 // Returns imageproc.ErrNotAnImage if the bytes are not a picture.
 func saveImage(file *multipart.FileHeader, dir, base string) (string, error) {
@@ -37,47 +35,11 @@ func saveImage(file *multipart.FileHeader, dir, base string) (string, error) {
 		return "", err
 	}
 
-	ext, err := imageproc.Sniff(data)
+	stored, err := imageproc.Store(dir, base, data)
 	if err != nil {
 		return "", err
 	}
-
-	filename := base + "." + ext
-	if out, changed, err := imageproc.Compress(data); err != nil {
-		log.Printf("image: left %s at %d bytes, compression failed: %v", filename, len(data), err)
-	} else if changed {
-		log.Printf("image: %s %d -> %d bytes", filename, len(data), len(out))
-		data = out
-	}
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", err
-	}
-
-	// Write beside the target and rename into place. Writing straight to the final
-	// name risks a truncated file sitting behind a database row that already
-	// points at it, if the process dies mid-write.
-	tmp, err := os.CreateTemp(dir, ".upload-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.Remove(tmp.Name())
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return "", err
-	}
-	if err := tmp.Close(); err != nil {
-		return "", err
-	}
-	if err := os.Chmod(tmp.Name(), 0644); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, filename)); err != nil {
-		return "", err
-	}
-
-	return "/uploads/" + filepath.Base(dir) + "/" + filename, nil
+	return stored.URL, nil
 }
 
 // safeStem reduces a client-supplied filename to something safe to put in a
@@ -117,4 +79,18 @@ func safeStem(name string) string {
 
 func isNotAnImage(err error) bool {
 	return errors.Is(err, imageproc.ErrNotAnImage)
+}
+
+// withThumbnails fills in the small copies of an image, if it has them.
+//
+// They are not stored in the database: the paths follow from the original URL,
+// and checking whether the files are actually there costs one stat and answers
+// honestly for the images that predate this feature. That is the whole reason
+// this is not a column - an image from before has no thumbnail, the client falls
+// back to the original, and nothing 404s.
+func withThumbnails(images []models.PostImage) []models.PostImage {
+	for i := range images {
+		images[i].ThumbURL, images[i].PreviewURL = imageproc.ThumbURLs(images[i].ImageURL)
+	}
+	return images
 }

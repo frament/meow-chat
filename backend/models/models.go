@@ -74,6 +74,12 @@ type PostImage struct {
 	ID       int64  `json:"id"`
 	PostID   int64  `json:"post_id"`
 	ImageURL string `json:"image_url"`
+	// ThumbURL is a 400px copy for chat bubbles, PreviewURL a 1200px copy for the
+	// feed. Both are empty when the image has none, which is the case for every
+	// file uploaded before thumbnails existed and for every format that is not
+	// JPEG. The client falls back to ImageURL, so an empty one is not an error.
+	ThumbURL   string `json:"thumb_url"`
+	PreviewURL string `json:"preview_url"`
 }
 
 type Reaction struct {

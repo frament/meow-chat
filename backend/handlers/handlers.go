@@ -895,6 +895,7 @@ func (h *Handler) GetFeed(c *fiber.Ctx) error {
 				}
 			}
 			imgRows.Close()
+			p.Images = withThumbnails(p.Images)
 		}
 
 		// Fetch reactions
@@ -994,7 +995,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 			}
 			for i := range messages {
 				if imgs, ok := imgMap[messages[i].ID]; ok {
-					messages[i].Images = imgs
+					messages[i].Images = withThumbnails(imgs)
 				}
 			}
 		}

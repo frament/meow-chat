@@ -1,11 +1,17 @@
 package federation
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -626,6 +632,78 @@ func TestHandleForwardPost_WithImageDownload(t *testing.T) {
 	if imgCount != 1 {
 		t.Errorf("expected 1 post image, got %d", imgCount)
 	}
+}
+
+// cacheRemoteImage used to write the downloaded bytes straight to disk, which is
+// how a photo from a peer's phone was served here at its full 12 megapixel size
+// while locally uploaded ones went through compression. It goes through
+// imageproc.Store now, and this pins that.
+func TestCacheRemoteImageCompressesLikeALocalUpload(t *testing.T) {
+	db := setupHandlerDB(t)
+	defer db.Close()
+	database.DB = db
+
+	if err := os.MkdirAll("./uploads/posts", 0755); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll("./uploads")
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(previous) })
+
+	fh := NewFederationHandler(NewTransport(), nil, nil)
+
+	// A 12 megapixel photo, encoded at the quality a phone uses. Too large to keep
+	// in the repository, so it is generated and served over a real HTTP server,
+	// which is the path cacheRemoteImage actually takes.
+	src := federationTestJPEG(t, 2400, 1800)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Write(src)
+	}))
+	defer srv.Close()
+	fh.transport = &Transport{client: srv.Client()}
+
+	local := fh.cacheRemoteImage(1, 0, srv.URL+"/uploads/posts/6_1.jpg")
+	if strings.HasPrefix(local, "http") {
+		t.Fatalf("expected a local URL, got the remote one back: %s", local)
+	}
+	if local != "/uploads/posts/fed_post_1_0.jpg" {
+		t.Errorf("unexpected url %q", local)
+	}
+
+	stored, err := os.ReadFile("./uploads/posts/fed_post_1_0.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) >= len(src) {
+		t.Errorf("expected the federated image to be compressed, got %d from %d", len(stored), len(src))
+	}
+
+	// And it gets thumbnails, so the feed on this server has the same small copy
+	// to serve that a locally uploaded photo would.
+	for _, name := range []string{"fed_post_1_0_400.jpg", "fed_post_1_0_1200.jpg"} {
+		if _, err := os.Stat(filepath.Join("./uploads/thumbs/posts", name)); err != nil {
+			t.Errorf("expected thumbnail %s: %v", name, err)
+		}
+	}
+}
+
+func federationTestJPEG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 7 % 251), G: uint8(y * 13 % 241), B: uint8((x * y) % 239), A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+		t.Fatalf("fixture encode: %v", err)
+	}
+	return buf.Bytes()
 }
 
 // Test unused import silence

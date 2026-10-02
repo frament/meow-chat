@@ -40,7 +40,7 @@ func withOrientation(t *testing.T, jpegBytes []byte, orientation uint16) []byte 
 }
 
 func TestExifOrientationReadsTheTag(t *testing.T) {
-	base := encodeJPEG(t, noise(16, 16), 80)
+	base := fixtureJPEG(t, noise(16, 16), 80)
 
 	if got := exifOrientation(base); got != 1 {
 		t.Errorf("a JPEG with no EXIF should read as 1, got %d", got)
@@ -53,7 +53,7 @@ func TestExifOrientationReadsTheTag(t *testing.T) {
 }
 
 func TestExifOrientationSurvivesRubbish(t *testing.T) {
-	base := withOrientation(t, encodeJPEG(t, noise(16, 16), 80), 6)
+	base := withOrientation(t, fixtureJPEG(t, noise(16, 16), 80), 6)
 
 	cases := []struct {
 		name   string
@@ -112,7 +112,7 @@ func TestExifOrientationSurvivesRubbish(t *testing.T) {
 // A JPEG with a segment length that runs past the end of the data must not send
 // the segment walk off the end of the buffer.
 func TestExifSegmentStopsAtBadLengths(t *testing.T) {
-	full := withOrientation(t, encodeJPEG(t, noise(16, 16), 80), 6)
+	full := withOrientation(t, fixtureJPEG(t, noise(16, 16), 80), 6)
 	for _, n := range []int{3, 5, 20, 30, 60, 100} {
 		if n >= len(full) {
 			continue
@@ -130,7 +130,7 @@ func TestExifSegmentStopsAtBadLengths(t *testing.T) {
 // does not. Re-encoding without rotating therefore turns a photo that displays
 // correctly into one that displays on its side.
 func TestCompressTurnsAnOrientedPhotoUpright(t *testing.T) {
-	plain := encodeJPEG(t, noise(2400, 1800), 92)
+	plain := fixtureJPEG(t, noise(2400, 1800), 92)
 	rotated := withOrientation(t, plain, 6)
 
 	if w, h := decodeConfig(t, rotated); w != 2400 || h != 1800 {
@@ -159,7 +159,7 @@ func TestCompressTurnsAnOrientedPhotoUpright(t *testing.T) {
 // Capping the stored pixels first would have produced the transposed
 // 1440x1920, so the dimensions alone show which order it happened in.
 func TestCompressCapsTheLongSideOfTheUprightImage(t *testing.T) {
-	out, _, err := Compress(withOrientation(t, encodeJPEG(t, noise(1800, 2400), 92), 6))
+	out, _, err := Compress(withOrientation(t, fixtureJPEG(t, noise(1800, 2400), 92), 6))
 	if err != nil {
 		t.Fatalf("Compress: %v", err)
 	}

@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
-  <img src="https://img.shields.io/badge/tests-545-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-565-brightgreen" alt="tests">
   <a href="https://github.com/frament/meow-chat/actions/workflows/ci.yml">
     <img src="https://github.com/frament/meow-chat/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
@@ -145,7 +145,7 @@ make test-frontend   # cd frontend && ng test (headless Chrome)
 
 > ⚠️ **Никогда не запускайте оба набора одновременно.** CGO-компиляция плюс Karma с Chrome выедают память, и macOS начинает прибивать приложения (Finder, редактор). По одному, в foreground. Подробности — в `AGENTS.md`.
 
-545 тестов: 306 Go в 37 файлах + 239 Jasmine в 25 файлах.
+565 тестов: 320 Go в 38 файлах + 245 Jasmine в 26 файлах.
 
 ## CLI (администрирование)
 

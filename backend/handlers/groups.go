@@ -481,7 +481,7 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 			}
 			for i := range messages {
 				if imgs, ok := imgMap[messages[i].ID]; ok {
-					messages[i].Images = imgs
+					messages[i].Images = withThumbnails(imgs)
 				}
 			}
 		}

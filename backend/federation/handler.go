@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"my-chat-backend/database"
+	"my-chat-backend/imageproc"
 	"my-chat-backend/models"
 	"my-chat-backend/version"
 
@@ -280,23 +281,17 @@ func (fh *FederationHandler) cacheRemoteImage(postID int64, index int, remoteURL
 		return remoteURL
 	}
 
-	ext := filepath.Ext(remoteURL)
-	if ext == "" {
-		ext = ".jpg"
-	}
-	localName := fmt.Sprintf("fed_post_%d_%d%s", postID, index, ext)
-	localPath := filepath.Join(".", "uploads", "posts", localName)
-
-	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
-		log.Printf("Federation: failed to create posts dir: %v", err)
-		return remoteURL
-	}
-	if err := os.WriteFile(localPath, data, 0644); err != nil {
-		log.Printf("Federation: failed to write post image %s: %v", localPath, err)
+	// Through imageproc rather than straight to disk: this file arrived at full
+	// size from a phone on another server, and it belongs in the feed of this one
+	// like any locally uploaded photo. It gets compressed and given thumbnails
+	// the same way, so the copy the reader downloads is the small one.
+	stored, err := imageproc.Store("./uploads/posts", fmt.Sprintf("fed_post_%d_%d", postID, index), data)
+	if err != nil {
+		log.Printf("Federation: failed to store post image %s: %v", remoteURL, err)
 		return remoteURL
 	}
 
-	return "/uploads/posts/" + localName
+	return stored.URL
 }
 
 func (fh *FederationHandler) HandleForwardKey(c *fiber.Ctx) error {

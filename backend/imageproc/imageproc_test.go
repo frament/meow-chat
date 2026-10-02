@@ -43,7 +43,9 @@ func flat(w, h int) *image.RGBA {
 	return img
 }
 
-func encodeJPEG(t *testing.T, img image.Image, quality int) []byte {
+// fixtureJPEG encodes at a chosen quality, which is how the tests get a
+// file that is deliberately badly or well compressed.
+func fixtureJPEG(t *testing.T, img image.Image, quality int) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
@@ -64,7 +66,7 @@ func decodeConfig(t *testing.T, data []byte) (int, int) {
 func TestCompressShrinksAndCapsAPhotosizedJPEG(t *testing.T) {
 	// Larger than MaxEdge on the long side, the shape of a 12 megapixel phone
 	// photo.
-	in := encodeJPEG(t, noise(2400, 1800), 92)
+	in := fixtureJPEG(t, noise(2400, 1800), 92)
 
 	out, changed, err := Compress(in)
 	if err != nil {
@@ -90,7 +92,7 @@ func TestCompressShrinksAndCapsAPhotosizedJPEG(t *testing.T) {
 func TestCompressKeepsTheOriginalWhenTheRewriteDoesNotPay(t *testing.T) {
 	// Nothing to gain. Re-encoding at 82 would only add generation loss, so the
 	// original stands.
-	in := encodeJPEG(t, flat(400, 300), 97)
+	in := fixtureJPEG(t, flat(400, 300), 97)
 
 	out, changed, err := Compress(in)
 	if err != nil {
@@ -105,7 +107,7 @@ func TestCompressKeepsTheOriginalWhenTheRewriteDoesNotPay(t *testing.T) {
 }
 
 func TestCompressNeverUpscales(t *testing.T) {
-	in := encodeJPEG(t, noise(200, 150), 70)
+	in := fixtureJPEG(t, noise(200, 150), 70)
 
 	out, _, err := Compress(in)
 	if err != nil {
@@ -172,7 +174,7 @@ func TestSniff(t *testing.T) {
 		data []byte
 		want string
 	}{
-		{"jpeg", encodeJPEG(t, noise(8, 8), 80), "jpg"},
+		{"jpeg", fixtureJPEG(t, noise(8, 8), 80), "jpg"},
 		{"png", append([]byte("\x89PNG\r\n\x1a\n"), 0x00), "png"},
 		{"gif87", []byte("GIF87a...."), "gif"},
 		{"gif89", []byte("GIF89a...."), "gif"},
@@ -206,7 +208,7 @@ func TestSniff(t *testing.T) {
 // The extension has to come from the bytes. A photo uploaded as photo.png used
 // to be stored as - and served as - image/png.
 func TestSniffIgnoresTheNameTheClientSent(t *testing.T) {
-	jpegBytes := encodeJPEG(t, noise(8, 8), 80)
+	jpegBytes := fixtureJPEG(t, noise(8, 8), 80)
 
 	got, err := Sniff(jpegBytes)
 	if err != nil {

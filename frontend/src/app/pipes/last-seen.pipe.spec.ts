@@ -22,6 +22,29 @@ describe('LastSeenPipe', () => {
     expect(pipe.transform('not-a-date')).toBe('');
   });
 
+  it('measures against a supplied reference time, not the wall clock', () => {
+    // This is the reason the parameter exists. The caller holds a signal that
+    // ticks once a minute and passes its value in; if the pipe read Date.now()
+    // itself, a pure pipe would never re-run and the text would freeze on screen
+    // until the next last_seen arrived from the server.
+    const at = Date.parse('2026-10-02T12:00:00Z');
+    const left = new Date(at - 5 * 60 * 1000).toISOString();
+
+    expect(pipe.transform(left, at)).toBe('5 минут назад');
+
+    // One minute of clock movement with no new input is all it takes to change
+    // the answer, which is the whole behaviour under test.
+    expect(pipe.transform(left, at + 60_000)).toBe('6 минут назад');
+    expect(pipe.transform(left, at + 10 * 60_000)).toBe('15 минут назад');
+  });
+
+  it('still falls back to the wall clock when given no reference time', () => {
+    // Keeps the pipe usable on its own, which is what the tests above and any
+    // template without a clock injected depend on.
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    expect(pipe.transform(fiveMinutesAgo)).toBe('5 минут назад');
+  });
+
   it('says "just now" for anything under a minute', () => {
     expect(ago(0)).toBe('только что');
     expect(ago(30)).toBe('только что');
