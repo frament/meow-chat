@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { DeviceAuthComponent } from './device-auth';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
+import { AppReloadService } from '../../services/app-reload.service';
 import { of, throwError } from 'rxjs';
 
 describe('DeviceAuthComponent', () => {
@@ -16,6 +17,10 @@ describe('DeviceAuthComponent', () => {
     denyAuthRequest: jasmine.createSpy().and.returnValue(of({})),
     recoverKeys: jasmine.createSpy().and.returnValue(of({ identity_key_jwk: '{}' })),
   };
+
+  // Without this the component's real reload() runs and takes the Karma page
+  // down with it, which is what made the whole suite fail intermittently.
+  const mockReload = { reload: jasmine.createSpy('reload') };
 
   const mockCrypto = {
     ensureDeviceKeyPair: jasmine.createSpy().and.returnValue(Promise.resolve()),
@@ -39,6 +44,7 @@ describe('DeviceAuthComponent', () => {
       providers: [
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
+        { provide: AppReloadService, useValue: mockReload },
       ],
     }).compileComponents();
 
@@ -135,5 +141,18 @@ describe('DeviceAuthComponent', () => {
     component.doRecover();
     tick();
     expect(component.recoveryError).toBe('Неверный пароль или фраза восстановления');
+  }));
+
+  it('asks the injected reload service to restart the app after a successful recover', fakeAsync(() => {
+    // The app has to come back up for the new identity key to be used
+    // everywhere, and this assertion is only possible because the reload goes
+    // through an injectable service rather than the global location object.
+    mockApi.recoverKeys.and.returnValue(of({ identity_key_jwk: '{}' }));
+    component.recoveryInput = 'mypassword';
+    component.doRecover();
+    tick();
+
+    expect(mockCrypto.importIdentityKey).toHaveBeenCalled();
+    expect(mockReload.reload).toHaveBeenCalled();
   }));
 });

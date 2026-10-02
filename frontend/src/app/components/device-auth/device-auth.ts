@@ -1,8 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { interval, Subscription } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
+import { AppReloadService } from '../../services/app-reload.service';
 
 interface IncomingRequest {
   id: number;
@@ -98,6 +99,8 @@ interface IncomingRequest {
   `]
 })
 export class DeviceAuthComponent {
+  readonly #reload = inject(AppReloadService);
+
   readonly status = signal<'idle' | 'waiting' | 'approved' | 'failed'>('idle');
   readonly incomingRequest = signal<IncomingRequest | null>(null);
   deviceName: string = '';
@@ -170,7 +173,7 @@ export class DeviceAuthComponent {
     if (jwk) {
       await this.crypto.importIdentityKey(jwk);
       await this.crypto.syncPublicKey();
-      location.reload();
+      this.#reload.reload();
     }
   }
 
@@ -253,7 +256,7 @@ export class DeviceAuthComponent {
           this.crypto.syncPublicKey();
           this.showRecovery = false;
           this.status.set('approved');
-          location.reload();
+          this.#reload.reload();
         });
       },
       error: () => {
