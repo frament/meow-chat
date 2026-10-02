@@ -45,7 +45,7 @@ describe('App', () => {
       'connectWebSocket', 'incrementUnread', 'clearUnread',
       'incrementGroupUnread', 'clearGroupUnread', 'markGroupRead',
       'getUnread', 'hydrateUnread', 'pushUnsubscribe', 'pushLog',
-      'checkHealth', 'getVapidPublicKey', 'pushSubscribe',
+      'checkHealth', 'getVapidPublicKey', 'pushSubscribe', 'pushWelcome',
       'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
       'getAuthRequests', 'getAuthRequest',
     ], {
@@ -222,6 +222,11 @@ describe('App', () => {
         pushManager: jasmine.createSpyObj('PushManager', ['getSubscription', 'subscribe']),
       });
       (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo(null);
+      (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
+      (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
+      (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.pushWelcome as jasmine.Spy).and.returnValue(of({ sent: true }));
       mockSW = makeMockSW(null);
       (mockNotif.requestPermission as jasmine.Spy).and.returnValue(Promise.resolve(true));
     });
@@ -240,10 +245,6 @@ describe('App', () => {
         configurable: true,
         get: () => mockSW,
       });
-    (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
-    (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
-      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
-      (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
 
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
@@ -324,6 +325,52 @@ describe('App', () => {
       await app.tryReSubscribePush();
 
       expect(mockApi.getVapidPublicKey).not.toHaveBeenCalled();
+    }));
+
+    it('asks for the welcome push after a fresh subscription', fakeAsync(async () => {
+      // A fresh subscription means a fresh install: the user has never seen a
+      // notification from this device, so the one nudge must be requested.
+      mockSW = makeMockSW({ postMessage: jasmine.createSpy('postMessage') });
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => mockSW,
+      });
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.pushWelcome as jasmine.Spy).and.returnValue(of({ sent: true }));
+      (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo(null);
+      (mockReg.pushManager.subscribe as jasmine.Spy).and.resolveTo({ toJSON: () => makeSubJSON() });
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+      tick();
+
+      expect(mockApi.pushWelcome).toHaveBeenCalled();
+    }));
+
+    it('does not ask for the welcome push when reusing a subscription', fakeAsync(async () => {
+      // Reuse means a returning device that already got the nudge on install.
+      mockSW = makeMockSW({ postMessage: jasmine.createSpy('postMessage') });
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        get: () => mockSW,
+      });
+      (mockApi.pushSubscribe as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.pushWelcome as jasmine.Spy).and.returnValue(of({ sent: false, reason: 'already_sent' }));
+      (mockReg.pushManager.getSubscription as jasmine.Spy).and.resolveTo({
+        toJSON: () => makeSubJSON('https://existing.push'),
+      });
+      localStorage.setItem('pushVapidKey', 'v2:test-vapid-key');
+
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      await app.tryReSubscribePush();
+      tick();
+
+      expect(mockApi.pushSubscribe).toHaveBeenCalled();
+      expect(mockApi.pushWelcome).not.toHaveBeenCalled();
     }));
   });
 });

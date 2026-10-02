@@ -1,13 +1,13 @@
 # TODO
 
 ## Открытые пункты
-- [ ] После установки PWA отправлять приветственное push-уведомление, чтобы активировать подписку без необходимости отправлять сообщение первым
+- _(нет — все пункты ниже закрыты)_
 
 ## Test Summary
 
-> Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам, а не по выводу прогона. После правки счётчиков сборки/прогоны не запускались.
+> Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались.
 
-### Backend — 282 теста в 34 файлах (Go)
+### Backend — 285 тестов в 34 файлах (Go)
 | Файл | Тестов |
 |------|--------|
 | `backend/auth/jwt_test.go` | 11 |
@@ -38,18 +38,18 @@
 | `backend/handlers/polls_test.go` | 15 |
 | `backend/handlers/posts_test.go` | 10 |
 | `backend/handlers/push_logs_test.go` | 7 |
-| `backend/handlers/push_test.go` | 5 |
+| `backend/handlers/push_test.go` | 8 |
 | `backend/handlers/unread_test.go` | 3 |
 | `backend/handlers/update_test.go` | 7 |
 | `backend/handlers/version_test.go` | 1 |
 | `backend/handlers/webauthn_test.go` | 8 |
 | `backend/handlers/ws_test.go` | 18 |
-| **Backend total** | **282** |
+| **Backend total** | **285** |
 
-### Frontend — 214 тестов в 22 файлах (Jasmine/Karma)
+### Frontend — 216 тестов в 22 файлах (Jasmine/Karma)
 | Файл | Тестов |
 |------|--------|
-| `frontend/src/app/app.component.spec.ts` | 11 |
+| `frontend/src/app/app.component.spec.ts` | 13 |
 | `frontend/src/app/pipes/md.pipe.spec.ts` | 17 |
 | `frontend/src/app/services/api.service.spec.ts` | 22 |
 | `frontend/src/app/services/auth.interceptor.spec.ts` | 9 |
@@ -71,9 +71,9 @@
 | `frontend/src/app/components/post-dialog/post-dialog.component.spec.ts` | 18 |
 | `frontend/src/app/components/register/register.component.spec.ts` | 8 |
 | `frontend/src/app/components/settings/settings.component.spec.ts` | 15 |
-| **Frontend total** | **214** |
+| **Frontend total** | **216** |
 
-**Итого: 496 тестов в 56 файлах.**
+**Итого: 501 тест в 56 файлах.**
 
 > Раньше в шапке стояло «262 tests across 29 files», а таблицы давали 177 и 108 с итогом 308 — цифры не сходились между собой и с исходниками. Файлы, отсутствовавшие в таблицах: `decrypt_logs`, `e2ee`, `envelopes`, `friend_requests`, `group_key`, `push_logs`, `unread`, `version` (Go), `gif-picker`, `sticker-picker`, `md.pipe`, `keyboard.service` (Frontend).
 

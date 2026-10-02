@@ -923,6 +923,12 @@ export class ApiService {
     });
   }
 
+  // Asks the server for the one-time post-install nudge. The server dedupes it,
+  // so calling on every fresh subscription is safe.
+  pushWelcome() {
+    return this.http.post<{ sent: boolean; reason?: string }>(`${this.baseUrl}/push/welcome`, {});
+  }
+
   pushUnsubscribe(endpoint: string) {
     return this.http.delete(`${this.baseUrl}/push/subscribe`, {
       body: { endpoint },

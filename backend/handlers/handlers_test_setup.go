@@ -217,6 +217,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Get("/push/vapid-public-key", h.VAPIDPublicKey)
 	app.Post("/push/subscribe", AuthRequired, h.SubscribePush)
 	app.Post("/push/unsubscribe", AuthRequired, h.UnsubscribePush)
+	app.Post("/push/welcome", AuthRequired, h.SendWelcomePush)
 
 	// Device routes
 	devices := app.Group("/devices")

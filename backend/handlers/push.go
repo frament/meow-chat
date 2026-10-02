@@ -176,6 +176,13 @@ func (h *Handler) PushAck(c *fiber.Ctx) error {
 }
 
 func (h *Handler) sendPushNotification(toUserID int64, title, body string, data map[string]interface{}) {
+	h.sendPushNotificationFrom(toUserID, "server", title, body, data)
+}
+
+// sendPushNotificationFrom is sendPushNotification with an explicit log source,
+// so a delivery can be told apart from ordinary message pushes in the admin
+// push log. "server" is the default for conversation traffic.
+func (h *Handler) sendPushNotificationFrom(toUserID int64, source, title, body string, data map[string]interface{}) {
 	rows, err := database.DB.Query(
 		"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
 		toUserID,
@@ -237,7 +244,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 		})
 		if err != nil {
 			log.Println("Web Push send error:", err)
-			logPush(toUserID, "server", "error", endpoint, title, body, "error", err.Error(), ackID)
+			logPush(toUserID, source, "error", endpoint, title, body, "error", err.Error(), ackID)
 			continue
 		}
 		log.Printf("Web Push sent to user %d, endpoint %s..., status %d", toUserID, endpoint[:min(len(endpoint), 50)], resp.StatusCode)
@@ -249,7 +256,7 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 			}
 		}
 		resp.Body.Close()
-		logPush(toUserID, "server", "send", endpoint, title, body, strconv.Itoa(resp.StatusCode), detail, ackID)
+		logPush(toUserID, source, "send", endpoint, title, body, strconv.Itoa(resp.StatusCode), detail, ackID)
 
 		if resp.StatusCode == 410 || resp.StatusCode == 404 || resp.StatusCode == 403 {
 			log.Printf("Removing dead push subscription (status %d) for user %d", resp.StatusCode, toUserID)
@@ -263,8 +270,45 @@ func (h *Handler) sendPushNotification(toUserID int64, title, body string, data 
 	}
 	if !hasSubs {
 		log.Printf("No push subscriptions found for user %d", toUserID)
-		logPush(toUserID, "server", "no_subscription", "", title, body, "", "", "")
+		logPush(toUserID, source, "no_subscription", "", title, body, "", "", "")
 	}
+}
+
+// SendWelcomePush delivers the single notification that closes the
+// post-install silence gap.
+//
+// iOS only shows the notification permission prompt once the PWA is on the home
+// screen, and the push subscription only exists after the client has registered
+// it. A brand-new install therefore receives nothing at all: the user never
+// learns that notifications work until somebody happens to send a message.
+//
+// The client calls this only from the fresh-subscription path (a returning
+// device reuses its existing subscription and must not be nudged again), and
+// the server dedupes on push_logs as a second line of defence. Only a
+// successful send counts, so a failed attempt stays retryable.
+func (h *Handler) SendWelcomePush(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	var alreadySent int
+	if err := database.DB.QueryRow(
+		"SELECT COUNT(1) FROM push_logs WHERE user_id = ? AND source = 'welcome' AND kind = 'send'",
+		userID,
+	).Scan(&alreadySent); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to read welcome push state"})
+	}
+	if alreadySent > 0 {
+		return c.JSON(fiber.Map{"sent": false, "reason": "already_sent"})
+	}
+
+	h.sendPushNotificationFrom(
+		userID,
+		"welcome",
+		"MeowChat установлен",
+		"Уведомления включены — теперь вы не пропустите сообщения семьи.",
+		map[string]interface{}{"type": "welcome"},
+	)
+
+	return c.JSON(fiber.Map{"sent": true})
 }
 
 type adminPushLog struct {

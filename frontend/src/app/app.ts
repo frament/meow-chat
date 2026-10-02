@@ -577,7 +577,15 @@ export class App implements OnInit, OnDestroy {
         applicationServerKey: key,
       });
       this.#api.pushSubscribe(sub.toJSON()).subscribe({
-        next: () => { localStorage.setItem('pushVapidKey', fingerprint); this.#logPush('subscribe', sub.endpoint); },
+        next: () => {
+          localStorage.setItem('pushVapidKey', fingerprint);
+          this.#logPush('subscribe', sub.endpoint);
+          // A fresh subscription means a fresh install on iOS: nobody has ever
+          // seen a notification from this device, so the permission grant is not
+          // yet proof that anything works. Nudge once, from this path only - the
+          // reuse branch above is a returning device and must stay quiet.
+          this.#api.pushWelcome().subscribe({ error: () => {} });
+        },
         error: () => { this.schedulePushRetry(); this.#logPush('subscribe_error', sub.endpoint, 'POST failed'); },
       });
     } catch (err) {

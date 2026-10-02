@@ -209,6 +209,9 @@ func main() {
 
 	api.Post("/push/subscribe", h.SubscribePush)
 	api.Delete("/push/subscribe", h.UnsubscribePush)
+	// Authenticated: the handler reads userId from the token and delivers only
+	// to the caller's own devices.
+	api.Post("/push/welcome", h.SendWelcomePush)
 	api.Post("/push/log", h.PushClientLog)
 	api.Post("/e2ee/decrypt-failed", h.LogDecryptFailure)
 
