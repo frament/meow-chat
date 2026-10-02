@@ -12,17 +12,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  version-markers:
-    name: Version markers
+  repo-hygiene:
+    name: Repo hygiene
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      # backend/version/VERSION is the only place the release number is written.
-      # README, ROADMAP and CHANGELOG hold copies that have to match; this is the
-      # step that stops them from rotting.
-      - name: Check README/ROADMAP/CHANGELOG against VERSION
-        run: ./scripts/check-version.sh
+      # backend/version/VERSION is the only place the release number is written;
+      # README, ROADMAP and CHANGELOG hold copies that have to match. And the
+      # schema is defined once in database.ApplySchema, which fixtures call
+      # instead of keeping their own DDL.
+      - name: Version markers and schema source
+        run: |
+          ./scripts/check-version.sh
+          ./scripts/check-schema-single-source.sh
 
   backend:
     name: Backend · go test

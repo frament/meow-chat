@@ -118,7 +118,32 @@ func InitDB() {
 	migrate()
 }
 
+// migrate is the production entry point: apply the schema, then make sure the
+// upload directories exist. The directories are not schema, so they stay out of
+// ApplySchema and out of the test fixtures.
 func migrate() {
+	if err := ApplySchema(DB); err != nil {
+		log.Fatal("Migration failed:", err)
+	}
+
+	for _, dir := range []string{"avatars", "posts", "messages", "stickers"} {
+		if err := os.MkdirAll("./uploads/"+dir, 0755); err != nil {
+			log.Fatal("Failed to create "+dir+" uploads directory:", err)
+		}
+	}
+
+	log.Println("Database migrated successfully")
+}
+
+// ApplySchema brings a database up to the current schema: creates every
+// table and adds every column. It is the single definition of the schema,
+// and takes the connection as a parameter precisely so that tests apply the
+// same thing instead of keeping their own copy of the DDL.
+//
+// Test fixtures used to hand-write CREATE TABLE lists of their own, and the
+// copies drifted: a column added here was missing there, so a write against a
+// column silently matched zero rows while `go build` stayed green.
+func ApplySchema(db *sql.DB) error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -480,136 +505,128 @@ func migrate() {
 	}
 
 	for _, q := range queries {
-		if _, err := DB.Exec(q); err != nil {
-			log.Fatal("Migration failed:", err)
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+
+	for _, q := range queries {
+		if _, err := db.Exec(q); err != nil {
 		}
 	}
 
 	var count int
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='avatar_url'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='avatar_url'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_admin'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_admin'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_banned'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_banned'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
 	}
 	// Written by the WS hub when a user goes offline for good, not on every
 	// disconnect: the hub keeps a 30s grace period, and stamping earlier would
 	// make last_seen disagree with the online indicator the user can see.
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='last_seen'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='last_seen'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE users ADD COLUMN last_seen DATETIME")
+		db.Exec("ALTER TABLE users ADD COLUMN last_seen DATETIME")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE posts ADD COLUMN is_public INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE posts ADD COLUMN is_public INTEGER DEFAULT 0")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='msg_type'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='msg_type'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'text'")
+		db.Exec("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'text'")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_content'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_content'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_iv'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='encrypted_iv'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='env_content'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='env_content'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN env_content TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN env_content TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='env_iv'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='env_iv'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN env_iv TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN env_iv TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sender_device_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sender_device_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN sender_device_id TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN sender_device_id TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='epoch'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='epoch'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_messages ADD COLUMN epoch INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE group_messages ADD COLUMN epoch INTEGER DEFAULT 0")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_content'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_content'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_content TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_iv'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_iv'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('friends') WHERE name='server_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('friends') WHERE name='server_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE friends ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+		db.Exec("ALTER TABLE friends ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='server_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='server_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+		db.Exec("ALTER TABLE messages ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='server_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='server_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE posts ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+		db.Exec("ALTER TABLE posts ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('sticker_packs') WHERE name='server_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('sticker_packs') WHERE name='server_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE sticker_packs ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
+		db.Exec("ALTER TABLE sticker_packs ADD COLUMN server_id INTEGER DEFAULT NULL REFERENCES federation_servers(id)")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_key_shares') WHERE name='key_creator_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_key_shares') WHERE name='key_creator_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
+		db.Exec("ALTER TABLE group_key_shares ADD COLUMN key_creator_id INTEGER DEFAULT NULL REFERENCES users(id)")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('device_auth_requests') WHERE name='approver_public_key'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('device_auth_requests') WHERE name='approver_public_key'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE device_auth_requests ADD COLUMN approver_public_key TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE device_auth_requests ADD COLUMN approver_public_key TEXT DEFAULT ''")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='is_read'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='is_read'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_chat_members') WHERE name='last_read_message_id'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_chat_members') WHERE name='last_read_message_id'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_chat_members ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
+		db.Exec("ALTER TABLE group_chat_members ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
 	}
 
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sticker_url'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='sticker_url'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE messages ADD COLUMN sticker_url TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE messages ADD COLUMN sticker_url TEXT DEFAULT ''")
 	}
-	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='sticker_url'").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='sticker_url'").Scan(&count)
 	if count == 0 {
-		DB.Exec("ALTER TABLE group_messages ADD COLUMN sticker_url TEXT DEFAULT ''")
+		db.Exec("ALTER TABLE group_messages ADD COLUMN sticker_url TEXT DEFAULT ''")
 	}
 
-	if err := os.MkdirAll("./uploads/avatars", 0755); err != nil {
-		log.Fatal("Failed to create uploads directory:", err)
-	}
-	if err := os.MkdirAll("./uploads/posts", 0755); err != nil {
-		log.Fatal("Failed to create posts uploads directory:", err)
-	}
-	if err := os.MkdirAll("./uploads/messages", 0755); err != nil {
-		log.Fatal("Failed to create messages uploads directory:", err)
-	}
-	if err := os.MkdirAll("./uploads/stickers", 0755); err != nil {
-		log.Fatal("Failed to create stickers uploads directory:", err)
+	if err := initSchemaVersion(db); err != nil {
+		return err
 	}
 
-	if err := InitSchemaVersion(); err != nil {
-		log.Fatal("Schema version init failed:", err)
-	}
-
-	log.Println("Database migrated successfully")
+	return nil
 }
 
 func GetSetting(key string) (string, error) {
@@ -694,8 +711,8 @@ const CurrentMajor = 1
 const CurrentMinor = 0
 const CurrentPatch = 0
 
-func InitSchemaVersion() error {
-	_, err := DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version (
+func initSchemaVersion(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (
 		major INTEGER NOT NULL,
 		minor INTEGER NOT NULL,
 		patch INTEGER NOT NULL,
@@ -706,9 +723,9 @@ func InitSchemaVersion() error {
 	}
 
 	var count int
-	DB.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&count)
 	if count == 0 {
-		_, err = DB.Exec("INSERT INTO schema_version (major, minor, patch) VALUES (?, ?, ?)",
+		_, err = db.Exec("INSERT INTO schema_version (major, minor, patch) VALUES (?, ?, ?)",
 			CurrentMajor, CurrentMinor, CurrentPatch)
 	}
 	return err

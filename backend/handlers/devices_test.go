@@ -140,7 +140,9 @@ func TestListDevices_WithDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var devices []struct{ DeviceName string `json:"device_name"` }
+	var devices []struct {
+		DeviceName string `json:"device_name"`
+	}
 	json.NewDecoder(resp.Body).Decode(&devices)
 	if len(devices) != 1 || devices[0].DeviceName != "Phone" {
 		t.Errorf("expected 1 device named Phone, got %+v", devices)

@@ -25,8 +25,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-
-
 type Handler struct {
 	clients         map[*websocket.Conn]int64
 	register        chan *wsClient
@@ -49,9 +47,9 @@ type Handler struct {
 	GracePeriod time.Duration
 
 	// O1–O3: Metrics counters (atomic for lock-free reads from health handler)
-	wsConnectionsTotal   atomic.Int64
-	wsMessagesSentTotal  atomic.Int64
-	wsWriteErrorsTotal   atomic.Int64
+	wsConnectionsTotal  atomic.Int64
+	wsMessagesSentTotal atomic.Int64
+	wsWriteErrorsTotal  atomic.Int64
 
 	// Prepared statements for hot WS paths
 	stmtInsertMessage *sql.Stmt
@@ -70,25 +68,25 @@ type userMessage struct {
 }
 
 type wsMessage struct {
-	messageID         int64
-	from              int64
-	to                int64
-	groupID           int64
-	content           string
-	msgType           string
-	images            []string
-	fromName          string
-	createdAt         string
-	encryptedContent  string
-	encryptedIV       string
-	envContent        string
-	envIV             string
-	senderDeviceID    string
-	envelopes         []models.Envelope
-	epoch             int
-	pushPreview       string
-	pollData          fiber.Map
-	stickerURL        string
+	messageID        int64
+	from             int64
+	to               int64
+	groupID          int64
+	content          string
+	msgType          string
+	images           []string
+	fromName         string
+	createdAt        string
+	encryptedContent string
+	encryptedIV      string
+	envContent       string
+	envIV            string
+	senderDeviceID   string
+	envelopes        []models.Envelope
+	epoch            int
+	pushPreview      string
+	pollData         fiber.Map
+	stickerURL       string
 }
 
 func NewHandler() *Handler {
@@ -101,8 +99,8 @@ func NewHandler() *Handler {
 		broadcastAll:    make(chan fiber.Map, 256),
 		broadcastToUser: make(chan userMessage, 1024),
 		graceExpired:    make(chan int64, 1024),
-		forceOffline:     make(chan int64, 1024),
-		onlineUsers:      make(map[int64]bool),
+		forceOffline:    make(chan int64, 1024),
+		onlineUsers:     make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
 		stop:            make(chan struct{}),
 		GracePeriod:     30 * time.Second,
@@ -298,16 +296,16 @@ func (h *Handler) runHub() {
 					if len(msg.envelopes) > 0 {
 						payload["envelopes"] = msg.envelopes
 					}
-				if msg.pollData != nil {
-					payload["poll"] = msg.pollData
-				}
-				if msg.stickerURL != "" {
-					payload["sticker_url"] = msg.stickerURL
-				}
-				if msg.pushPreview != "" {
-					payload["preview"] = msg.pushPreview
-				}
-				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					if msg.pollData != nil {
+						payload["poll"] = msg.pollData
+					}
+					if msg.stickerURL != "" {
+						payload["sticker_url"] = msg.stickerURL
+					}
+					if msg.pushPreview != "" {
+						payload["preview"] = msg.pushPreview
+					}
+					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					err := conn.WriteJSON(payload)
 					if err != nil {
 						log.Println("WebSocket write error:", err)
@@ -401,9 +399,9 @@ func (h *Handler) runHub() {
 						"New message in "+groupName,
 						msg.fromName+": "+preview,
 						map[string]interface{}{
-							"url":      fmt.Sprintf("/chat/group/%d", msg.groupID),
-							"groupId":  msg.groupID,
-							"tag":      fmt.Sprintf("group-%d", msg.groupID),
+							"url":     fmt.Sprintf("/chat/group/%d", msg.groupID),
+							"groupId": msg.groupID,
+							"tag":     fmt.Sprintf("group-%d", msg.groupID),
 						},
 					)
 				}
@@ -440,9 +438,9 @@ func (h *Handler) runHub() {
 
 func (h *Handler) WSHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
-		"connections":     h.wsConnectionsTotal.Load(),
-		"messages_sent":   h.wsMessagesSentTotal.Load(),
-		"write_errors":    h.wsWriteErrorsTotal.Load(),
+		"connections":   h.wsConnectionsTotal.Load(),
+		"messages_sent": h.wsMessagesSentTotal.Load(),
+		"write_errors":  h.wsWriteErrorsTotal.Load(),
 	})
 }
 
@@ -1624,10 +1622,10 @@ func (h *Handler) CheckInvite(c *fiber.Ctx) error {
 	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", createdBy).Scan(&creatorName)
 
 	return c.JSON(fiber.Map{
-		"valid":    valid,
-		"reason":   reason,
+		"valid":      valid,
+		"reason":     reason,
 		"created_by": createdBy,
-		"creator":  creatorName,
+		"creator":    creatorName,
 	})
 }
 
@@ -1675,10 +1673,10 @@ func (h *Handler) CheckFriendInvite(c *fiber.Ctx) error {
 	database.DB.QueryRow("SELECT username FROM users WHERE id = ?", createdBy).Scan(&creatorName)
 
 	return c.JSON(fiber.Map{
-		"valid":     valid,
-		"reason":    reason,
+		"valid":      valid,
+		"reason":     reason,
 		"created_by": createdBy,
-		"creator":   creatorName,
+		"creator":    creatorName,
 	})
 }
 

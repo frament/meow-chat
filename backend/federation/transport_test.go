@@ -17,7 +17,17 @@ func setupTransportDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.Exec(`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+	// ":memory:" gives every pooled connection its own private database, so the
+	// schema created on one connection is invisible to the next statement. Pin the
+	// pool to a single connection - the same trap the pure-Go migration in
+	// ROADMAP v2.0.0 (0.1) has to keep in mind.
+	db.SetMaxOpenConns(1)
+	// Single schema from database.ApplySchema; this file used to create just the
+	// one table it happened to need, which is how a fixture ends up testing a
+	// schema the application does not have.
+	if err := database.ApplySchema(db); err != nil {
+		t.Fatal(err)
+	}
 	originalDB := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })

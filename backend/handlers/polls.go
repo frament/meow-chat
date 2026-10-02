@@ -143,10 +143,10 @@ func (h *Handler) broadcastPollUpdate(pollID int64, messageID, groupMessageID sq
 	}
 
 	payload := fiber.Map{
-		"type":         "poll_update",
-		"poll_id":      pollID,
-		"options":      options,
-		"total_votes":  totalVotes,
+		"type":        "poll_update",
+		"poll_id":     pollID,
+		"options":     options,
+		"total_votes": totalVotes,
 	}
 
 	if messageID.Valid {

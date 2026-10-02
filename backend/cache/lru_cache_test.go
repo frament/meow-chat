@@ -15,17 +15,28 @@ func setupCacheDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execs := []string{
-		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS federation_cache_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL, cache_key TEXT NOT NULL, data_type TEXT DEFAULT 'file', size_bytes INTEGER DEFAULT 0, accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (server_id) REFERENCES federation_servers(id))`,
-	}
-	for _, q := range execs {
-		if _, err := db.Exec(q); err != nil {
-			t.Fatal(err)
-		}
+	// ":memory:" gives every pooled connection its own private database, so the
+	// schema created on one connection is invisible to the next statement. Pin the
+	// pool to a single connection - the same trap the pure-Go migration in
+	// ROADMAP v2.0.0 (0.1) has to keep in mind.
+	db.SetMaxOpenConns(1)
+	// Single schema from database.ApplySchema; this file used to carry its own
+	// DDL copy, and the copies drifted silently.
+	if err := database.ApplySchema(db); err != nil {
+		t.Fatalf("schema: %v", err)
 	}
 	os.MkdirAll(cacheBaseDir, 0755)
 	return db
+}
+
+// mustExec fails the test on error. A bare db.Exec on a fixture insert is how a
+// schema mismatch hides: the INSERT is rejected, the row never appears, and the
+// test fails somewhere else with a message that points nowhere near the cause.
+func mustExec(t *testing.T, db *sql.DB, query string) {
+	t.Helper()
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("exec: %v\n  query: %s", err, query)
+	}
 }
 
 func TestEnsureCacheDir(t *testing.T) {
@@ -48,7 +59,7 @@ func TestFileExists(t *testing.T) {
 	defer db.Close()
 	database.DB = db
 
-	db.Exec("INSERT INTO federation_servers (id, name, base_url) VALUES (1, 'test', 'https://test.com')")
+	mustExec(t, db, "INSERT INTO federation_servers (id, name, base_url, server_token) VALUES (1, 'test', 'https://test.com', 'tok')")
 
 	if FileExists(1, "nonexistent") {
 		t.Error("expected false for nonexistent file")
@@ -67,7 +78,7 @@ func TestStoreAndReadFile(t *testing.T) {
 	defer db.Close()
 	database.DB = db
 
-	db.Exec("INSERT INTO federation_servers (id, name, base_url, disk_cache_limit) VALUES (1, 'test', 'https://test.com', 100)")
+	mustExec(t, db, "INSERT INTO federation_servers (id, name, base_url, disk_cache_limit, server_token) VALUES (1, 'test', 'https://test.com', 100, 'tok')")
 
 	err := StoreFile(1, "hello.txt", []byte("hello world"))
 	if err != nil {
@@ -103,7 +114,7 @@ func TestEnforceLimit_EvictsOldest(t *testing.T) {
 	defer db.Close()
 	database.DB = db
 
-	db.Exec("INSERT INTO federation_servers (id, name, base_url, disk_cache_limit) VALUES (1, 'test', 'https://test.com', 0)")
+	mustExec(t, db, "INSERT INTO federation_servers (id, name, base_url, disk_cache_limit, server_token) VALUES (1, 'test', 'https://test.com', 0, 'tok')")
 
 	err := StoreFile(1, "a.txt", make([]byte, 100))
 	if err != nil {
@@ -130,7 +141,7 @@ func TestGetStats(t *testing.T) {
 	defer db.Close()
 	database.DB = db
 
-	db.Exec("INSERT INTO federation_servers (id, name, base_url, disk_cache_limit) VALUES (1, 'test', 'https://test.com', 100)")
+	mustExec(t, db, "INSERT INTO federation_servers (id, name, base_url, disk_cache_limit, server_token) VALUES (1, 'test', 'https://test.com', 100, 'tok')")
 
 	totalBytes, fileCount := GetStats(1)
 	if totalBytes != 0 || fileCount != 0 {
@@ -153,7 +164,7 @@ func TestClearServerCache(t *testing.T) {
 	defer db.Close()
 	database.DB = db
 
-	db.Exec("INSERT INTO federation_servers (id, name, base_url, disk_cache_limit) VALUES (1, 'test', 'https://test.com', 100)")
+	mustExec(t, db, "INSERT INTO federation_servers (id, name, base_url, disk_cache_limit, server_token) VALUES (1, 'test', 'https://test.com', 100, 'tok')")
 
 	StoreFile(1, "a.txt", []byte("data"))
 	StoreFile(1, "b.txt", []byte("data2"))

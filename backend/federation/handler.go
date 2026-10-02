@@ -20,9 +20,9 @@ import (
 )
 
 type FederationHandler struct {
-	transport       *Transport
-	queue           *Queue
-	health          *HealthChecker
+	transport         *Transport
+	queue             *Queue
+	health            *HealthChecker
 	OnIncomingMessage func(fromUserID, toUserID int64, content, msgType string, createdAt string, images []string)
 }
 

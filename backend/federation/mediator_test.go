@@ -15,15 +15,15 @@ func setupFederationDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execs := []string{
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS federation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER NOT NULL REFERENCES federation_servers(id), remote_id INTEGER NOT NULL, username TEXT NOT NULL, avatar_url TEXT DEFAULT '', email TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(server_id, remote_id))`,
-	}
-	for _, q := range execs {
-		if _, err := db.Exec(q); err != nil {
-			t.Fatal(err)
-		}
+	// ":memory:" gives every pooled connection its own private database, so the
+	// schema created on one connection is invisible to the next statement. Pin the
+	// pool to a single connection - the same trap the pure-Go migration in
+	// ROADMAP v2.0.0 (0.1) has to keep in mind.
+	db.SetMaxOpenConns(1)
+	// Single schema from database.ApplySchema; this file used to carry its own
+	// DDL copy, and the copies drifted silently.
+	if err := database.ApplySchema(db); err != nil {
+		t.Fatalf("schema: %v", err)
 	}
 	return db
 }

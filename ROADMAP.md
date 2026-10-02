@@ -367,6 +367,7 @@ SemVer-правило проекта: breaking changes — только в MAJOR
 
 ## Backlog (без версии)
 
+- [ ] **Таблица маршрутов дублируется между `main.go` и `handlers_test_setup.go`.** Тот же класс проблемы, что был со схемой: 2026-10-02 новый эндпоинт дважды упал в тестах с 404, потому что в harness его просто не зарегистрировали. Схему уже свели к одному источнику (`database.ApplySchema`) и закрыли `scripts/check-schema-single-source.sh`; с маршрутами так же — вынести регистрацию в экспортируемую `handlers.RegisterRoutes(app, h)`, которую зовут и прод, и harness.
 - [ ] `/metrics` (Prometheus) — лёгкая наблюдаемость.
 - [ ] **Версия бандла во фронтенде** (define при сборке из `backend/version/VERSION`), сравнение с серверной версией, флаг «интерфейс отстал» — предусловие для честных релизных заметок, см. `docs/plans/update-notifications.md` §2.
 - [ ] Desktop-приложение (Tauri) поверх PWA.

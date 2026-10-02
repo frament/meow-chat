@@ -66,9 +66,9 @@ func (u *waUser) WebAuthnID() []byte {
 }
 
 func (u *waUser) WebAuthnName() string                       { return u.name }
-func (u *waUser) WebAuthnDisplayName() string                 { return u.displayName }
+func (u *waUser) WebAuthnDisplayName() string                { return u.displayName }
 func (u *waUser) WebAuthnCredentials() []webauthn.Credential { return u.credentials }
-func (u *waUser) WebAuthnIcon() string                        { return "" }
+func (u *waUser) WebAuthnIcon() string                       { return "" }
 
 func loadWACredentials(userID int64) []webauthn.Credential {
 	rows, err := database.GetWebAuthnCredentials(userID)

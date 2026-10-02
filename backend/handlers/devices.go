@@ -220,10 +220,10 @@ func (h *Handler) GetAuthRequest(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"status":             status,
-		"encrypted_key":      encryptedKey,
-		"iv":                 iv,
-		"device_id":          deviceID,
+		"status":              status,
+		"encrypted_key":       encryptedKey,
+		"iv":                  iv,
+		"device_id":           deviceID,
 		"approver_public_key": approverKey,
 	})
 }
@@ -247,9 +247,9 @@ func (h *Handler) ApproveAuthRequest(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		EncryptedKey    string `json:"encrypted_key"`
-		IV              string `json:"iv"`
-		ApproverKey     string `json:"approver_public_key"`
+		EncryptedKey string `json:"encrypted_key"`
+		IV           string `json:"iv"`
+		ApproverKey  string `json:"approver_public_key"`
 	}
 	if err := c.BodyParser(&req); err != nil || req.EncryptedKey == "" || req.IV == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "encrypted_key and iv required"})

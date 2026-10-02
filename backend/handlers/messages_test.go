@@ -233,5 +233,3 @@ func TestGetMessages_AccessDenied(t *testing.T) {
 		t.Errorf("expected 403, got %d", resp.StatusCode)
 	}
 }
-
-

@@ -15,8 +15,8 @@ import (
 	"my-chat-backend/database"
 	"my-chat-backend/models"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/SherClockHolmes/webpush-go"
+	"github.com/gofiber/fiber/v2"
 )
 
 type vapidKeys struct {

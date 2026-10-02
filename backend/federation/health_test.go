@@ -17,19 +17,16 @@ func setupHealthDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.Exec(`CREATE TABLE IF NOT EXISTS federation_servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, base_url TEXT UNIQUE NOT NULL, server_token TEXT, status TEXT DEFAULT 'active', disk_cache_limit INTEGER DEFAULT 512, blocked INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
-	db.Exec(`CREATE TABLE IF NOT EXISTS federation_queue (
-		id           INTEGER PRIMARY KEY AUTOINCREMENT,
-		server_id    INTEGER NOT NULL REFERENCES federation_servers(id),
-		endpoint     TEXT NOT NULL,
-		body         TEXT NOT NULL,
-		headers      TEXT DEFAULT '',
-		priority     INTEGER DEFAULT 0,
-		attempts     INTEGER DEFAULT 0,
-		max_attempts INTEGER DEFAULT 3,
-		last_error   TEXT DEFAULT '',
-		created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
+	// ":memory:" gives every pooled connection its own private database, so the
+	// schema created on one connection is invisible to the next statement. Pin the
+	// pool to a single connection - the same trap the pure-Go migration in
+	// ROADMAP v2.0.0 (0.1) has to keep in mind.
+	db.SetMaxOpenConns(1)
+	// Single schema from database.ApplySchema; this file used to carry its own
+	// DDL copy, and the copies drifted silently.
+	if err := database.ApplySchema(db); err != nil {
+		t.Fatalf("schema: %v", err)
+	}
 	originalDB := database.DB
 	database.DB = db
 	t.Cleanup(func() { database.DB = originalDB })
