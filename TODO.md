@@ -46,7 +46,7 @@
 | `backend/handlers/ws_test.go` | 20 |
 | **Backend total** | **320** |
 
-### Frontend — 245 тестов в 26 файлах (Jasmine/Karma)
+### Frontend — 247 тестов в 26 файлах (Jasmine/Karma)
 | Файл | Тестов |
 |------|--------|
 | `frontend/src/app/app.component.spec.ts` | 13 |
@@ -74,9 +74,9 @@
 | `frontend/src/app/components/post-dialog/post-dialog.component.spec.ts` | 18 |
 | `frontend/src/app/components/register/register.component.spec.ts` | 8 |
 | `frontend/src/app/components/settings/settings.component.spec.ts` | 15 |
-| **Frontend total** | **245** |
+| **Frontend total** | **247** |
 
-**Итого: 565 тестов в 64 файлах.**
+**Итого: 567 тестов в 64 файлах.**
 
 > Раньше в шапке стояло «262 tests across 29 files», а таблицы давали 177 и 108 с итогом 308 — цифры не сходились между собой и с исходниками. Файлы, отсутствовавшие в таблицах: `decrypt_logs`, `e2ee`, `envelopes`, `friend_requests`, `group_key`, `push_logs`, `unread`, `version` (Go), `gif-picker`, `sticker-picker`, `md.pipe`, `keyboard.service` (Frontend).
 

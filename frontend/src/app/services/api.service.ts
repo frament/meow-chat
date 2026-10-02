@@ -411,7 +411,14 @@ export class ApiService {
     }
 
     this.refreshInProgress = true;
-    this.refreshSub = new ReplaySubject<{ access_token: string; refresh_token: string }>(1);
+    // Held in a local, and every use below goes through it. Reading the field
+    // again after subscribing is the bug this replaces: with a synchronous HTTP
+    // observable the next callback runs before the return, clears the field, and
+    // the return then dereferenced null. That threw an unhandled rejection, which
+    // is what took down a whole Karma run when a visibilitychange event reached
+    // this path mid-test.
+    const sub = new ReplaySubject<{ access_token: string; refresh_token: string }>(1);
+    this.refreshSub = sub;
 
     this.http.post<{ access_token: string; refresh_token: string }>(
       `${this.baseUrl}/refresh`,
@@ -421,19 +428,19 @@ export class ApiService {
         this.accessToken.set(res.access_token);
         localStorage.setItem('accessToken', res.access_token);
         localStorage.setItem('refreshToken', res.refresh_token);
-        this.refreshSub!.next(res);
-        this.refreshSub!.complete();
+        sub.next(res);
+        sub.complete();
         this.refreshInProgress = false;
         this.refreshSub = null;
       },
       error: (err) => {
-        this.refreshSub!.error(err);
+        sub.error(err);
         this.refreshInProgress = false;
         this.refreshSub = null;
       },
     });
 
-    return this.refreshSub.asObservable();
+    return sub.asObservable();
   }
 
   refreshToken() {

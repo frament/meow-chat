@@ -4,6 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 import { ApiService } from './api.service';
 
 describe('ApiService', () => {
@@ -259,6 +260,53 @@ describe('ApiService', () => {
     tick();
 
     expect((service as any).wsRetryCount).toBe(0);
+  }));
+
+  // ── Regression: refreshAccessToken used to read a field its own callback had
+  // already cleared, so a synchronous HTTP response made it throw before it
+  // returned. An unhandled rejection of that shape aborts a whole Karma run.
+
+  it('returns a usable observable when the refresh response is synchronous', fakeAsync(() => {
+    localStorage.setItem('refreshToken', 'test-refresh');
+
+    // of() delivers on subscribe, so the response arrives before
+    // refreshAccessToken reaches its own return statement. That ordering is the
+    // whole point: it is what the interceptor hits when a transport is cached or
+    // mocked, and it is what the test harness always does.
+    spyOn(service['http'], 'post').and.returnValue(
+      of({ access_token: 'fresh-access', refresh_token: 'fresh-refresh' }),
+    );
+
+    let result: { access_token: string; refresh_token: string } | undefined;
+    let failure: unknown = undefined;
+    service.refreshAccessToken().subscribe({
+      next: (res) => (result = res),
+      error: (err) => (failure = err),
+    });
+    tick();
+
+    expect(failure).toBeUndefined();
+    expect(result).toEqual({ access_token: 'fresh-access', refresh_token: 'fresh-refresh' });
+    expect(localStorage.getItem('accessToken')).toBe('fresh-access');
+  }));
+
+  it('returns a usable observable when the refresh fails synchronously', fakeAsync(() => {
+    localStorage.setItem('refreshToken', 'test-refresh');
+
+    spyOn(service['http'], 'post').and.returnValue(
+      throwError(() => new Error('refresh rejected')),
+    );
+
+    let failure: unknown = undefined;
+    service.refreshAccessToken().subscribe({
+      next: () => fail('should not have succeeded'),
+      error: (err) => (failure = err),
+    });
+    tick();
+
+    // An expired refresh token ends in a logged-out user, not a thrown
+    // TypeError nobody catches.
+    expect((failure as Error)?.message).toBe('refresh rejected');
   }));
 
   // ── T9c: PWA — after logout, no reconnect ──
