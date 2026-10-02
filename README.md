@@ -14,7 +14,10 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.23-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
-  <img src="https://img.shields.io/badge/tests-374_%E2%9C%85-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-496-brightgreen" alt="tests">
+  <a href="https://github.com/frament/meow-chat/actions/workflows/ci.yml">
+    <img src="https://github.com/frament/meow-chat/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
 </p>
 
 <p align="center">
@@ -130,6 +133,19 @@ make dev-frontend
 ```
 
 Открывается на `:4200`. Запросы к `/api` проксируются на `localhost:8080` (включая WebSocket).
+
+### Тесты
+
+Те же цели, что и в CI (`.github/workflows/ci.yml`):
+
+```sh
+make test-backend    # cd backend && go test ./...
+make test-frontend   # cd frontend && ng test (headless Chrome)
+```
+
+> ⚠️ **Никогда не запускайте оба набора одновременно.** CGO-компиляция плюс Karma с Chrome выедают память, и macOS начинает прибивать приложения (Finder, редактор). По одному, в foreground. Подробности — в `AGENTS.md`.
+
+496 тестов: 282 Go в 34 файлах + 214 Jasmine в 22 файлах.
 
 ## CLI (администрирование)
 

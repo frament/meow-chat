@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same ref supersedes the run in flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · go test
+    runs-on: ubuntu-latest
+    # Bounded so a hung test can't burn the whole budget.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # CGO is mandatory: the driver is mattn/go-sqlite3. gcc/musl-dev ship
+      # with the runner image, so this asserts the toolchain instead of
+      # installing it. See ROADMAP v2.0.0 (0.1) for the pure-Go migration
+      # that will let us drop this.
+      - name: Assert CGO toolchain
+        run: gcc --version | head -1
+
+      # Same target as locally, so CI and developer runs cannot drift.
+      # -p=2 -parallel=2 keep peak memory inside the 16 GB runner.
+      - name: go test
+        run: make test-backend
+
+  frontend:
+    name: Frontend · ng test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
+
+      # Chrome is preinstalled on ubuntu-latest and karma-chrome-launcher
+      # finds it; --watch=false is what makes Karma exit.
+      - name: Unit tests (headless Chrome)
+        run: make test-frontend

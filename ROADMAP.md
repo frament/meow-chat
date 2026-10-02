@@ -79,13 +79,14 @@ SemVer-правило проекта: breaking changes — только в MAJOR
 
 **Цель:** поставить CI на текущей архитектуре, чтобы защитить последующий рефакторинг. Без изменений поведения.
 
-- [ ] GitHub Actions: `go test ./...` на PR/push (CGO-вариант на этом этапе).
-- [ ] GitHub Actions: `ng test` + `npm run build` на PR/push.
-- [ ] Кэш Go/Node зависимостей в CI, таймаут и параллелизм под 16 ГБ RAM.
-- [ ] Бейджи CI в README; актуализировать счётчик тестов.
-- [ ] `make test-backend` и `make test-frontend` — единые цели для локально и CI.
+- [x] GitHub Actions: `go test ./...` на PR/push (CGO-вариант на этом этапе) — джоб `backend`, `make test-backend`, `go-version-file: backend/go.mod`, кэш по `go.sum`, отдельная проверка наличия gcc.
+- [x] GitHub Actions: `ng test` + `npm run build` на PR/push — джоб `frontend`, `npm ci` с кэшем, `make test-frontend`. *Локально проверено: `make test-frontend` → 214/214 SUCCESS за 4.4 с.*
+- [x] Кэш Go/Node зависимостей в CI, таймаут и параллелизм под 16 ГБ RAM — `timeout-minutes: 20` на оба джоба, `concurrency` с отменой устаревших прогонов, Go ограничен `-p=2 -parallel=2` (наследуется из `make test-backend`).
+- [x] Бейджи CI в README; актуализировать счётчик тестов — бейдж CI добавлен, счётчик исправлен (было 374, стало 496).
+- [x] `make test-backend` и `make test-frontend` — единые цели для локально и CI. Обе добавлены в `.PHONY` (раньше `test-backend` там не было, `push-test` тоже).
 
 **Acceptance:** зелёный CI на `main`; тесты запускаются на каждый PR. **Breaking:** нет.
+**Осталось:** первый прогон на GitHub-раннерах не проверен — бейдж будет серым до первого зелёного запуска. Приватные/корпоративные раннеры здесь не использовались, только `ubuntu-latest`.
 
 ---
 

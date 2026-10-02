@@ -1,4 +1,4 @@
-.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password
+.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend push-test
 
 # Version baked into the backend at build time and shown in the UI.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 1.3.0)
@@ -23,8 +23,13 @@ logs:
 restart-backend:
 	VERSION="$(VERSION)" docker compose build backend && docker compose up -d --no-deps backend
 
+# Never run test-backend and test-frontend at the same time: CGO compilation
+# plus Karma + Chrome exhausts RAM and macOS starts killing apps. See AGENTS.md.
 test-backend:
 	cd backend && GOMEMLIMIT=12GiB go test -count=1 -p=2 -parallel=2 ./...
+
+test-frontend:
+	cd frontend && npm test -- --watch=false --browsers=ChromeHeadless
 
 dev-backend:
 	cd backend && DB_PATH=./data/chat.db go run .
