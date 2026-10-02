@@ -41,7 +41,7 @@ import { MdPipe } from '../../pipes/md.pipe';
               <p class="post-time">{{ post.created_at | date:'dd.MM.yyyy HH:mm' }}</p>
             </div>
             @if (api.currentUser()?.id === post.user_id || api.currentUser()?.is_admin) {
-              <button (click)="deletePost(post)" class="text-base p-3 pt-0 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост">✕</button>
+              <button (click)="deletePost(post)" class="text-base p-3 pt-0 rounded hover:opacity-80" style="color:var(--text-secondary);background:var(--bg-card-hover);cursor:pointer;" title="Удалить пост"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             }
           </div>
           <p class="post-content md" [innerHTML]="post.content | md"></p>
@@ -104,7 +104,7 @@ import { MdPipe } from '../../pipes/md.pipe';
     @if (viewerImages) {
       <div class="viewer-overlay" (click)="closeViewer()">
         <img [src]="viewerImages[viewerIndex].image_url" (click)="$event.stopPropagation()">
-        <button class="viewer-close" (click)="closeViewer()">✕</button>
+        <button class="viewer-close" (click)="closeViewer()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         @if (viewerImages.length > 1) {
           <button class="viewer-nav viewer-nav-prev" (click)="$event.stopPropagation(); prevViewer()">‹</button>
           <button class="viewer-nav viewer-nav-next" (click)="$event.stopPropagation(); nextViewer()">›</button>

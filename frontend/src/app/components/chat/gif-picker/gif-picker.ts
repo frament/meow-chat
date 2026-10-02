@@ -16,7 +16,7 @@ import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } 
           <span class="font-semibold text-sm" style="color:var(--text-primary);">GIF</span>
           <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:var(--bg-tertiary);color:var(--text-secondary);">Giphy</span>
           <button (click)="close()" class="ml-auto w-7 h-7 flex items-center justify-center rounded-full"
-            style="border:none;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:14px;">✕</button>
+            style="border:none;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:14px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
 
         <div class="px-4 py-2">

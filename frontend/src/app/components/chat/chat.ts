@@ -32,7 +32,7 @@ import { toMemoryFile } from '../../services/upload-utils';
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           @if (searchQuery && searchResults) {
-            <button (click)="clearSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:12px;padding:2px;">✕</button>
+            <button (click)="clearSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:12px;padding:2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           }
         </div>
         @if (searchQuery && searchResults) {
@@ -76,7 +76,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 <button (click)="acceptFriendReq(req.id, $event)" class="text-xs shrink-0"
                   style="padding:4px 8px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;">✓</button>
                 <button (click)="rejectFriendReq(req.id, $event)" class="text-xs shrink-0"
-                  style="padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                  style="padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
               </div>
             }
           </div>
@@ -286,7 +286,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 <img [src]="preview" class="w-16 h-16 rounded-lg object-cover">
                 <button (click)="removeFile($index)"
                 class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs rounded-full"
-                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);">✕</button>
+                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
               </div>
               }
             </div>
@@ -301,7 +301,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                   style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
                 @if (pollOptions.length > 2) {
                 <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
-                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 }
               </div>
               }
@@ -391,7 +391,7 @@ import { toMemoryFile } from '../../services/upload-utils';
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             @if (searchQuery && searchResults) {
-              <button (click)="clearSearch()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;padding:2px;">✕</button>
+              <button (click)="clearSearch()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;padding:2px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             }
           </div>
           @if (searchQuery && searchResults) {
@@ -439,7 +439,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                   <button (click)="acceptFriendReq(req.id, $event)" class="text-xs shrink-0"
                     style="padding:6px 12px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;">✓</button>
                   <button (click)="rejectFriendReq(req.id, $event)" class="text-xs shrink-0"
-                    style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                    style="padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
               }
             </div>
@@ -491,7 +491,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 @if (user.is_online) {
                   <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
                 }
-                <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить">📌</button>
+                <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
               </div>
             }
           }
@@ -521,7 +521,7 @@ import { toMemoryFile } from '../../services/upload-utils';
               @if (user.is_online) {
                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
               }
-              <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Закрепить">📌</button>
+              <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
           }
         </div>
@@ -625,7 +625,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 <img [src]="preview" class="w-16 h-16 rounded-lg object-cover">
                 <button (click)="removeFile($index)"
                 class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs rounded-full"
-                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);">✕</button>
+                style="background:var(--bg-overlay);color:var(--text-primary);border:1px solid var(--divider);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
               </div>
               }
             </div>
@@ -640,7 +640,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                   style="flex:1;height:32px;box-sizing:border-box;font-size:13px;">
                 @if (pollOptions.length > 2) {
                 <button (click)="removePollOption(i)" class="w-6 h-6 flex items-center justify-center text-xs rounded-full"
-                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;">✕</button>
+                  style="border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 }
               </div>
               }

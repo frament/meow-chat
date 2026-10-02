@@ -1532,8 +1532,13 @@ func (h *Handler) CreateInvite(c *fiber.Ctx) error {
 func (h *Handler) GetMyInvites(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 
+	// Exhausted invites are dropped from the list (issue #7): a token that can
+	// no longer be redeemed is noise, and the owner already sees who used it.
+	// The predicate mirrors the check Register applies, so the list can never
+	// advertise a token the register endpoint would reject. max_uses = 0 means
+	// unlimited and is always kept.
 	rows, err := database.DB.Query(
-		"SELECT id, created_by, token, max_uses, use_count, expires_at, created_at FROM invite_tokens WHERE created_by = ? ORDER BY created_at DESC",
+		"SELECT id, created_by, token, max_uses, use_count, expires_at, created_at FROM invite_tokens WHERE created_by = ? AND (max_uses = 0 OR use_count < max_uses) ORDER BY created_at DESC",
 		userID,
 	)
 	if err != nil {

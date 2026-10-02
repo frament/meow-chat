@@ -20,7 +20,7 @@ import { NoticeComponent } from './components/notice/notice';
       <div class="update-banner" style="background:var(--accent-gradient);">
         <span>Доступна новая версия {{ gitHubLatestVersion() }}</span>
         <a [href]="gitHubDownloadUrl()" target="_blank" rel="noopener noreferrer" style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:4px 12px;font-weight:600;cursor:pointer;text-decoration:none;font-size:14px;">Скачать</a>
-        <button (click)="dismissGitHubUpdate()" style="background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
+        <button (click)="dismissGitHubUpdate()" style="background:transparent;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px;padding:0 4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     }
     @if (updateAvailable()) {
@@ -42,7 +42,7 @@ import { NoticeComponent } from './components/notice/notice';
       <div class="install-banner">
         <span>Установите MeowChat на устройство</span>
         <button (click)="installApp()">Установить</button>
-        <button class="dismiss" (click)="dismissInstall()">✕</button>
+        <button class="dismiss" (click)="dismissInstall()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     }
     @if (maintenanceMode()) {
@@ -60,7 +60,7 @@ import { NoticeComponent } from './components/notice/notice';
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           Подключиться
         </button>
-        <button class="offline-dismiss" (click)="dismissOffline()">✕</button>
+        <button class="offline-dismiss" (click)="dismissOffline()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     }
     @if (pullDistance() > 0) {

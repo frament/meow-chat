@@ -471,7 +471,7 @@ interface BackupEntry {
                         <img [src]="sticker.image_url" class="w-16 h-16 rounded-lg object-cover" style="border:1px solid var(--border-default);">
                         <button (click)="deleteSticker(pack, sticker)"
                           class="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs rounded-full"
-                          style="background:#e74c3c;color:white;border:none;cursor:pointer;">✕</button>
+                          style="background:#e74c3c;color:white;border:none;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                       </div>
                     }
                   </div>
@@ -972,7 +972,7 @@ interface BackupEntry {
                       <img [src]="sticker.image_url" class="w-14 h-14 rounded-lg object-cover" style="border:1px solid var(--border-default);">
                       <button (click)="deleteSticker(pack, sticker)"
                         class="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs rounded-full"
-                        style="background:#e74c3c;color:white;border:none;cursor:pointer;">✕</button>
+                        style="background:#e74c3c;color:white;border:none;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                     </div>
                   }
                 </div>

@@ -218,6 +218,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/push/subscribe", AuthRequired, h.SubscribePush)
 	app.Post("/push/unsubscribe", AuthRequired, h.UnsubscribePush)
 	app.Post("/push/welcome", AuthRequired, h.SendWelcomePush)
+	app.Get("/invites", AuthRequired, h.GetMyInvites)
 
 	// Device routes
 	devices := app.Group("/devices")

@@ -27,9 +27,7 @@ import { toMemoryFile } from '../../services/upload-utils';
             <h3 class="text-lg font-bold" style="color:var(--text-primary);">Новый пост</h3>
             <button data-testid="dialog-close" (click)="close()"
               class="w-8 h-8 rounded-full flex items-center justify-center hover:opacity-80"
-              style="background:var(--bg-card-hover);color:var(--text-secondary);border:none;cursor:pointer;">
-              ✕
-            </button>
+              style="background:var(--bg-card-hover);color:var(--text-secondary);border:none;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
 
           <textarea [(ngModel)]="newPostContent" rows="4"
@@ -44,9 +42,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                   <img [src]="preview" class="w-full h-full object-cover rounded-lg" style="border:1px solid var(--border-default);">
                   <button (click)="removeFile($index)"
                     class="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center hover:opacity-90"
-                    style="background:#e74c3c;color:white;border:none;cursor:pointer;">
-                    ✕
-                  </button>
+                    style="background:#e74c3c;color:white;border:none;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
               }
             </div>
@@ -99,9 +95,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                     <img [src]="preview" class="w-full h-full object-cover rounded-lg" style="border:1px solid var(--border-default);">
                     <button (click)="removeFile($index)"
                       class="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center hover:opacity-90"
-                      style="background:#e74c3c;color:white;border:none;cursor:pointer;">
-                      ✕
-                    </button>
+                      style="background:#e74c3c;color:white;border:none;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                   </div>
                 }
               </div>

@@ -9,6 +9,7 @@ import (
 
 	"my-chat-backend/auth"
 	"my-chat-backend/database"
+	"my-chat-backend/models"
 )
 
 func TestRegister_Success(t *testing.T) {
@@ -132,6 +133,51 @@ func TestRegister_ExhaustedInvite(t *testing.T) {
 	}
 	if resp.StatusCode != 400 {
 		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetMyInvites_HidesExhausted(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	// available, exhausted (use_count reached max_uses), unlimited (max_uses=0),
+	// and one exhausted invite belonging to somebody else.
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses, use_count) VALUES (?, 'avail', 3, 1)", userID)
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses, use_count) VALUES (?, 'used-up', 1, 1)", userID)
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses, use_count) VALUES (?, 'unlimited', 0, 99)", userID)
+	database.DB.Exec("INSERT INTO invite_tokens (created_by, token, max_uses, use_count) VALUES (999, 'not-mine', 1, 1)")
+
+	req, _ := http.NewRequest("GET", "/invites", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var invites []models.InviteToken
+	json.NewDecoder(resp.Body).Decode(&invites)
+
+	seen := map[string]int{}
+	for _, inv := range invites {
+		seen[inv.Token] = inv.UseCount
+	}
+
+	if _, ok := seen["used-up"]; ok {
+		t.Error("exhausted invite should not appear in the list")
+	}
+	if _, ok := seen["avail"]; !ok {
+		t.Error("invite with remaining uses should appear")
+	}
+	if _, ok := seen["unlimited"]; !ok {
+		t.Error("unlimited invite (max_uses=0) should always appear")
+	}
+	if _, ok := seen["not-mine"]; ok {
+		t.Error("another user's invite should never appear")
+	}
+	if len(invites) != 2 {
+		t.Errorf("expected 2 invites, got %d", len(invites))
 	}
 }
 
