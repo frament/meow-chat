@@ -5,7 +5,7 @@
 
 ## Test Summary
 
-> Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались.
+> Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались. Это единственное место, где живут числа: бейдж в `README.md` и упоминания в `ROADMAP.md` ссылаются сюда и не дублируют значения.
 
 ### Backend — 285 тестов в 34 файлах (Go)
 | Файл | Тестов |
@@ -78,7 +78,7 @@
 > Раньше в шапке стояло «262 tests across 29 files», а таблицы давали 177 и 108 с итогом 308 — цифры не сходились между собой и с исходниками. Файлы, отсутствовавшие в таблицах: `decrypt_logs`, `e2ee`, `envelopes`, `friend_requests`, `group_key`, `push_logs`, `unread`, `version` (Go), `gif-picker`, `sticker-picker`, `md.pipe`, `keyboard.service` (Frontend).
 
 ## Отменённые отметки
-- ~~Chat list virtualization with `@angular/cdk`~~ — **не сделано.** Зависимость `@angular/cdk ^20.2.14` есть в `frontend/package.json`, но в `frontend/src` нет ни одного её использования: ни `cdk-virtual-scroll-viewport`, ни `*cdkVirtualFor`. Отметка была ошибочной. Задача перенесена в `ROADMAP.md` → v1.5.0 «Виртуализация списков (чат, друзья)». Зависимость `@angular/cdk` оставлена в `package.json` — она понадобится под эту задачу.
+- ~~Chat list virtualization with `@angular/cdk`~~ — **не сделано, задача снята.** Зависимость `@angular/cdk ^20.2.14` есть в `frontend/package.json`, но в `frontend/src` нет ни одного её использования: ни `cdk-virtual-scroll-viewport`, ни `*cdkVirtualFor`. Отметка была ошибочной. Задача снята как оптимизация несуществующей проблемы: лента сообщений ограничена `LIMIT 100` на сервере, список друзей упирается в потолок инстанса (~100 пользователей). Обоснование и реальное предусловие (серверная пагинация) — в `ROADMAP.md`, v1.5.0 и Backlog. Зависимость оставлена в `package.json`.
 
 ## Done
 - [x] PWA install banner dismiss tracking (localStorage) — `app.ts`: `dismissInstall()`, покрыто тестами в `app.component.spec.ts`
