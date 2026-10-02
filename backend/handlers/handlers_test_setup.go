@@ -33,7 +33,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	t.Cleanup(func() { db.Close(); os.Remove(dbPath) })
 
 	execs := []string{
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, last_seen DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_user_id INTEGER NOT NULL, to_user_id INTEGER NOT NULL, content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', encrypted_content TEXT DEFAULT '', encrypted_iv TEXT DEFAULT '', env_content TEXT DEFAULT '', env_iv TEXT DEFAULT '', sender_device_id TEXT DEFAULT '', server_id INTEGER DEFAULT NULL, sticker_url TEXT DEFAULT '', is_read INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (from_user_id) REFERENCES users(id), FOREIGN KEY (to_user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS message_images (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS message_envelopes (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE, device_id TEXT NOT NULL, wrapped_key TEXT NOT NULL, iv TEXT NOT NULL, UNIQUE(message_id, device_id))`,
@@ -172,6 +172,8 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Use(AuthRequired)
 	admin.Use(AdminRequired)
 	admin.Get("/users", h.AdminListUsers)
+	app.Get("/users", AuthRequired, h.GetUsers)
+	app.Get("/friends", AuthRequired, h.GetFriends)
 	admin.Post("/users/:id/make-admin", h.MakeAdmin)
 	admin.Post("/users/:id/remove-admin", h.RemoveAdmin)
 	admin.Post("/users/:id/block", h.AdminBlockUser)

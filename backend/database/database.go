@@ -127,6 +127,7 @@ func migrate() {
 			password TEXT NOT NULL,
 			avatar_url TEXT DEFAULT '',
 			is_admin INTEGER DEFAULT 0,
+			last_seen DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
@@ -496,6 +497,13 @@ func migrate() {
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='is_banned'").Scan(&count)
 	if count == 0 {
 		DB.Exec("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+	}
+	// Written by the WS hub when a user goes offline for good, not on every
+	// disconnect: the hub keeps a 30s grace period, and stamping earlier would
+	// make last_seen disagree with the online indicator the user can see.
+	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='last_seen'").Scan(&count)
+	if count == 0 {
+		DB.Exec("ALTER TABLE users ADD COLUMN last_seen DATETIME")
 	}
 	DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('posts') WHERE name='is_public'").Scan(&count)
 	if count == 0 {

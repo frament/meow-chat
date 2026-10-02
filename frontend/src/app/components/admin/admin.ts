@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ApiService, User, StickerPack, AdminPushLog, AdminPushStatus, AdminDecryptFailures } from '../../services/api.service';
+import { LastSeenPipe } from '../../pipes/last-seen.pipe';
 import { toMemoryFile } from '../../services/upload-utils';
 import { AdminFederationComponent } from '../admin-federation/admin-federation';
 
@@ -32,7 +33,7 @@ interface BackupEntry {
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [DatePipe, AdminFederationComponent, FormsModule],
+  imports: [DatePipe, AdminFederationComponent, FormsModule, LastSeenPipe],
   template: `
     <!-- Desktop -->
     <div class="hidden sm:block max-w-6xl mx-auto px-4 py-6 pb-20 sm:pb-6">
@@ -279,6 +280,8 @@ interface BackupEntry {
                           <span style="font-size:13px;color:#e74c3c;">Заблокирован</span>
                         } @else if (user.is_online) {
                           <span style="font-size:13px;color:#34d399;">В сети</span>
+                        } @else if (user.last_seen) {
+                          <span style="color:var(--text-tertiary);font-size:13px;">{{ user.last_seen | lastSeen }}</span>
                         } @else {
                           <span style="color:var(--text-tertiary);font-size:13px;">Не в сети</span>
                         }
@@ -745,6 +748,8 @@ interface BackupEntry {
                       <span style="font-size:11px;padding:1px 6px;border-radius:99px;background:#fee2e2;color:#dc2626;font-weight:500;">Заблокирован</span>
                     } @else if (user.is_online) {
                       <span style="font-size:11px;padding:1px 6px;border-radius:99px;background:#d1fae5;color:#059669;font-weight:500;">В сети</span>
+                    } @else if (user.last_seen) {
+                      <span style="font-size:11px;padding:1px 6px;border-radius:99px;background:var(--border-subtle);color:var(--text-tertiary);font-weight:500;">{{ user.last_seen | lastSeen }}</span>
                     } @else {
                       <span style="font-size:11px;padding:1px 6px;border-radius:99px;background:var(--border-subtle);color:var(--text-tertiary);font-weight:500;">Не в сети</span>
                     }

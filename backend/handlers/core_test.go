@@ -181,6 +181,50 @@ func TestGetMyInvites_HidesExhausted(t *testing.T) {
 	}
 }
 
+func TestGetFriends_ReturnsLastSeen(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	// A user who has never been online since the upgrade has NULL last_seen and
+	// must come back as null, not as the zero time: "never" and "1 January of
+	// year 1" are different things to show in the UI.
+	database.DB.Exec("INSERT INTO users (id, username, email, password) VALUES (99, 'ghost', 'g@e.com', 'x')")
+	database.DB.Exec("INSERT INTO users (id, username, email, password, last_seen) VALUES (98, 'was_here', 'w@e.com', 'x', datetime('now', '-2 hours'))")
+	database.DB.Exec("INSERT INTO friends (user_id, friend_id) VALUES (?, 99)", userID)
+	database.DB.Exec("INSERT INTO friends (user_id, friend_id) VALUES (?, 98)", userID)
+
+	req, _ := http.NewRequest("GET", "/friends", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var friends []struct {
+		Username string     `json:"username"`
+		LastSeen *time.Time `json:"last_seen"`
+	}
+	json.NewDecoder(resp.Body).Decode(&friends)
+
+	if len(friends) != 2 {
+		t.Fatalf("expected 2 friends, got %d", len(friends))
+	}
+	for _, f := range friends {
+		switch f.Username {
+		case "ghost":
+			if f.LastSeen != nil {
+				t.Errorf("expected null last_seen for a never-online user, got %v", f.LastSeen)
+			}
+		case "was_here":
+			if f.LastSeen == nil {
+				t.Error("expected a last_seen timestamp for a user who was online")
+			}
+		}
+	}
+}
+
 func TestLogin_Success(t *testing.T) {
 	app, _, _ := setupTestApp(t)
 

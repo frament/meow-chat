@@ -11,6 +11,8 @@ export interface User {
   is_banned: boolean;
   created_at: string;
   is_online: boolean;
+  /** When presence ended. null means never seen online since the upgrade. */
+  last_seen?: string | null;
 }
 
 export interface PostImage {

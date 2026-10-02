@@ -12,6 +12,9 @@ type User struct {
 	IsBanned  bool      `json:"is_banned"`
 	CreatedAt time.Time `json:"created_at"`
 	IsOnline  bool      `json:"is_online"`
+	// LastSeen is when the user's presence ended, not when their last message
+	// was sent. Nil means they have never been seen online since the upgrade.
+	LastSeen *time.Time `json:"last_seen"`
 }
 
 // Envelope is a per-device wrapped copy of a message's content key.

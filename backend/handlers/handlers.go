@@ -42,6 +42,12 @@ type Handler struct {
 	stop            chan struct{}
 	wg              sync.WaitGroup
 
+	// GracePeriod is how long a disconnected user keeps the online indicator
+	// lit, so a reload or a brief network drop does not flap everyone's view.
+	// It is a field rather than a constant so tests do not have to sleep for
+	// the real 30 seconds; production code never changes it.
+	GracePeriod time.Duration
+
 	// O1–O3: Metrics counters (atomic for lock-free reads from health handler)
 	wsConnectionsTotal   atomic.Int64
 	wsMessagesSentTotal  atomic.Int64
@@ -99,6 +105,7 @@ func NewHandler() *Handler {
 		onlineUsers:      make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
 		stop:            make(chan struct{}),
+		GracePeriod:     30 * time.Second,
 	}
 	if database.DB != nil {
 		h.stmtInsertMessage, _ = database.DB.Prepare(
@@ -202,7 +209,7 @@ func (h *Handler) runHub() {
 			}
 			if !hasOthers && h.onlineUsers[client.uid] {
 				uid := client.uid
-				h.graceTimers[uid] = time.AfterFunc(30*time.Second, func() {
+				h.graceTimers[uid] = time.AfterFunc(h.GracePeriod, func() {
 					select {
 					case h.graceExpired <- uid:
 					default:
@@ -222,6 +229,16 @@ func (h *Handler) runHub() {
 			}
 			if stillOffline && h.onlineUsers[uid] {
 				h.onlineUsers[uid] = false
+				// Stamp here, not on disconnect: this is the moment the online
+				// indicator actually flips for everyone else, so last_seen and
+				// the dot the user sees cannot disagree. A user who reconnects
+				// inside the grace period never reaches this branch and keeps
+				// their previous last_seen, which is what we want.
+				if _, err := database.DB.Exec(
+					"UPDATE users SET last_seen = datetime('now') WHERE id = ?", uid,
+				); err != nil {
+					log.Printf("Hub: failed to record last_seen for user %d: %v", uid, err)
+				}
 				for conn := range h.clients {
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(fiber.Map{"type": "user_offline", "user_id": uid}); err != nil {
@@ -599,7 +616,7 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 func (h *Handler) GetUsers(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 	rows, err := database.DB.Query(`
-		SELECT id, username, email, avatar_url, created_at, NULL as server_id
+		SELECT id, username, email, avatar_url, created_at, last_seen, NULL as server_id
 		FROM users
 		WHERE id IN (
 			SELECT friend_id FROM friends WHERE user_id = ?
@@ -607,7 +624,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 			SELECT user_id FROM friends WHERE friend_id = ?
 		)
 		UNION ALL
-		SELECT fu.remote_id, fu.username, fu.email, fu.avatar_url, fu.created_at, fu.server_id
+		SELECT fu.remote_id, fu.username, fu.email, fu.avatar_url, fu.created_at, NULL, fu.server_id
 		FROM federation_users fu
 		WHERE fu.remote_id IN (
 			SELECT friend_id FROM friends WHERE user_id = ? AND server_id IS NOT NULL
@@ -629,7 +646,7 @@ func (h *Handler) GetUsers(c *fiber.Ctx) error {
 	users := make([]userWithServer, 0)
 	for rows.Next() {
 		var u userWithServer
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.ServerID); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.LastSeen, &u.ServerID); err != nil {
 			continue
 		}
 		u.IsOnline = h.onlineUsers[u.ID]
@@ -1730,7 +1747,7 @@ func (h *Handler) GetFriends(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 
 	rows, err := database.DB.Query(`
-		SELECT id, username, email, avatar_url, created_at
+		SELECT id, username, email, avatar_url, created_at, last_seen
 		FROM users
 		WHERE id IN (
 			SELECT friend_id FROM friends WHERE user_id = ?
@@ -1747,7 +1764,7 @@ func (h *Handler) GetFriends(c *fiber.Ctx) error {
 	users := make([]models.User, 0)
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.CreatedAt, &u.LastSeen); err != nil {
 			continue
 		}
 		u.IsOnline = h.onlineUsers[u.ID]
@@ -2121,27 +2138,28 @@ func (h *Handler) AdminListFiles(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AdminListUsers(c *fiber.Ctx) error {
-	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, is_admin, is_banned, created_at FROM users ORDER BY username")
+	rows, err := database.DB.Query("SELECT id, username, email, avatar_url, is_admin, is_banned, created_at, last_seen FROM users ORDER BY username")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch users"})
 	}
 	defer rows.Close()
 
 	type AdminUser struct {
-		ID        int64     `json:"id"`
-		Username  string    `json:"username"`
-		Email     string    `json:"email"`
-		AvatarURL string    `json:"avatar_url"`
-		IsAdmin   bool      `json:"is_admin"`
-		IsBanned  bool      `json:"is_banned"`
-		CreatedAt time.Time `json:"created_at"`
-		IsOnline  bool      `json:"is_online"`
+		ID        int64      `json:"id"`
+		Username  string     `json:"username"`
+		Email     string     `json:"email"`
+		AvatarURL string     `json:"avatar_url"`
+		IsAdmin   bool       `json:"is_admin"`
+		IsBanned  bool       `json:"is_banned"`
+		CreatedAt time.Time  `json:"created_at"`
+		IsOnline  bool       `json:"is_online"`
+		LastSeen  *time.Time `json:"last_seen"`
 	}
 
 	users := make([]AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.IsBanned, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.AvatarURL, &u.IsAdmin, &u.IsBanned, &u.CreatedAt, &u.LastSeen); err != nil {
 			continue
 		}
 		u.IsOnline = h.onlineUsers[u.ID]

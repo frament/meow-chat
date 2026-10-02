@@ -46,7 +46,7 @@ func setupWSDB(t *testing.T) (*sql.DB, int64) {
 	t.Cleanup(func() { db.Close(); os.Remove(dbPath) })
 
 	migrations := []string{
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar_url TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, is_banned INTEGER DEFAULT 0, last_seen DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_user_id INTEGER NOT NULL, to_user_id INTEGER NOT NULL, content TEXT NOT NULL, msg_type TEXT DEFAULT 'text', encrypted_content TEXT DEFAULT '', encrypted_iv TEXT DEFAULT '', server_id INTEGER DEFAULT NULL, sticker_url TEXT DEFAULT '', is_read INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (from_user_id) REFERENCES users(id), FOREIGN KEY (to_user_id) REFERENCES users(id))`,
 		`CREATE TABLE IF NOT EXISTS message_images (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL, image_url TEXT NOT NULL, FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, content TEXT NOT NULL, is_public INTEGER DEFAULT 0, server_id INTEGER DEFAULT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))`,
@@ -363,6 +363,79 @@ func TestWS_GracePeriod_Reconnect(t *testing.T) {
 	if !h.onlineUsers[userID] {
 		t.Fatal("expected user to stay online after reconnect within grace period")
 	}
+}
+
+// A user who goes offline for good gets last_seen stamped - and only then, so
+// the timestamp agrees with the online indicator everyone else sees.
+func TestWS_GraceExpiry_StampsLastSeen(t *testing.T) {
+	h, userID, baseURL := setupWSTest(t)
+	// Production keeps the 30s grace period; the test shortens it so it does not
+	// have to sleep half a minute.
+	h.GracePeriod = 200 * time.Millisecond
+
+	conn := wsDialDrain(t, baseURL, userID, false)
+	if !h.onlineUsers[userID] {
+		t.Fatal("expected user online after connect")
+	}
+
+	conn.Close()
+	waitForOffline(t, h, userID)
+	waitForLastSeen(t, userID)
+}
+
+// Reconnecting inside the grace period is not "going offline": the user was
+// never seen leave, so last_seen must stay empty. Stamping it here would make
+// the timestamp jump backwards on every brief reconnect.
+func TestWS_ReconnectWithinGrace_DoesNotStampLastSeen(t *testing.T) {
+	h, userID, baseURL := setupWSTest(t)
+	h.GracePeriod = 200 * time.Millisecond
+
+	conn1 := wsDialDrain(t, baseURL, userID, false)
+	conn1.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	conn2 := wsDial(t, baseURL, userID, false)
+	defer conn2.Close()
+
+	time.Sleep(200 * time.Millisecond)
+	if !h.onlineUsers[userID] {
+		t.Fatal("expected user to stay online after reconnect within grace period")
+	}
+
+	var lastSeen sql.NullString
+	database.DB.QueryRow("SELECT last_seen FROM users WHERE id = ?", userID).Scan(&lastSeen)
+	if lastSeen.Valid {
+		t.Errorf("last_seen must stay NULL after a reconnect inside the grace period, got %q", lastSeen.String)
+	}
+}
+
+// waitForOffline polls the hub until the grace timer has fired and the user has
+// been marked offline.
+func waitForOffline(t *testing.T, h *Handler, userID int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if !h.onlineUsers[userID] {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("user was not marked offline within 5s: grace timer never fired")
+}
+
+// waitForLastSeen polls until the row has a timestamp, since the write happens
+// on the hub goroutine just after the offline flip.
+func waitForLastSeen(t *testing.T, userID int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		var lastSeen sql.NullString
+		if err := database.DB.QueryRow("SELECT last_seen FROM users WHERE id = ?", userID).Scan(&lastSeen); err == nil && lastSeen.Valid {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("last_seen was not written within 5s of going offline")
 }
 
 // T5b: No push copy when recipient is online and receives delivery

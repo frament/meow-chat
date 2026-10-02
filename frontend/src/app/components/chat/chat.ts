@@ -10,6 +10,7 @@ import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult
 import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { NoticeService } from '../../services/notice.service';
+import { LastSeenPipe } from '../../pipes/last-seen.pipe';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { MdPipe } from '../../pipes/md.pipe';
@@ -18,7 +19,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe],
+  imports: [ LastSeenPipe,DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe],
   template: `
     <input type="file" #fileInput (change)="onFileSelected($event)" accept="image/jpeg,image/png,image/gif,image/webp" multiple style="display:none;">
     <!-- Desktop -->
@@ -130,7 +131,9 @@ import { toMemoryFile } from '../../services/upload-utils';
                 <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
               }
               @if (user.is_online) {
-                <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
+                <span class="                 rounded-full shrink-0" style="background:#34d399;"></span>
+              } @else if (user.last_seen) {
+                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
               }
               <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
@@ -163,7 +166,9 @@ import { toMemoryFile } from '../../services/upload-utils';
               <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
             }
             @if (user.is_online) {
-              <span class="w-2 h-2 rounded-full shrink-0" style="background:#34d399;"></span>
+              <span class="               rounded-full shrink-0" style="background:#34d399;"></span>
+            } @else if (user.last_seen) {
+              <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
             }
             <button (click)="togglePin(user.id, $event)" class="p-1 text-xs" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
           </div>
@@ -489,7 +494,9 @@ import { toMemoryFile } from '../../services/upload-utils';
                   <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
                 }
                 @if (user.is_online) {
-                  <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
+                  <span class="                   rounded-full shrink-0" style="background:#34d399;"></span>
+                } @else if (user.last_seen) {
+                  <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
                 }
                 <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Открепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
               </div>
@@ -519,7 +526,9 @@ import { toMemoryFile } from '../../services/upload-utils';
                 <span class="badge-user">{{ api.unreadCounts()[user.id] }}</span>
               }
               @if (user.is_online) {
-                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:#34d399;"></span>
+                <span class="                 rounded-full shrink-0" style="background:#34d399;"></span>
+              } @else if (user.last_seen) {
+                <span class="text-[11px] shrink-0" style="color:var(--text-tertiary);">{{ user.last_seen | lastSeen }}</span>
               }
               <button (click)="togglePin(user.id, $event)" class="p-1 text-sm" style="color:var(--text-tertiary);" title="Закрепить"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg></button>
             </div>
