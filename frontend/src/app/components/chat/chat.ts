@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, effect, EffectRef, HostListener, inject, Injector, runInInjectionContext } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, signal, computed, effect, EffectRef, HostListener, inject, Injector, runInInjectionContext, afterNextRender } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -197,14 +197,14 @@ import { toMemoryFile } from '../../services/upload-utils';
           </div>
           }
 
-          <div #scrollContainerDesktop class="flex-1 overflow-y-auto" style="min-height:0;">
+          <div #scrollContainerDesktop class="flex-1 overflow-y-auto chat-scroll" style="min-height:0;">
               @if (messagesLoadFailed()) {
                 <div class="message-load-failed" role="alert">
                   <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
                   <button type="button" (click)="retryLoadMessages()">Повторить</button>
                 </div>
               }
-            <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
+            <div #threadInnerDesktop class="p-4 thread-inner" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
@@ -545,7 +545,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 
       @if (showMobileChat && (selectedUser || selectedGroup)) {
         <div class="flex flex-col fixed inset-x-0 z-30" style="top:calc(3.5rem + env(safe-area-inset-top, 0px));" [style.height]="mobileChatHeight()">
-          <div #scrollContainerMobile class="flex-1 overflow-y-auto" style="min-height:0;">
+          <div #scrollContainerMobile class="flex-1 overflow-y-auto chat-scroll" style="min-height:0;">
               @if (messagesLoadFailed()) {
                 <div class="message-load-failed" role="alert">
                   <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
@@ -553,7 +553,7 @@ import { toMemoryFile } from '../../services/upload-utils';
                 </div>
               }
 
-            <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
+            <div #threadInnerMobile class="p-4 thread-inner" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
                   <div class="unread-divider"><span>Новые сообщения</span></div>
@@ -861,7 +861,7 @@ import { toMemoryFile } from '../../services/upload-utils';
     }
   `,
 })
-export class ChatComponent implements OnInit, OnDestroy {
+export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly notice = inject(NoticeService);
 
   users: User[] = [];
@@ -994,6 +994,8 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   @ViewChild('scrollContainerDesktop', { read: ElementRef }) scrollContainerDesktop?: ElementRef<HTMLElement>;
   @ViewChild('scrollContainerMobile', { read: ElementRef }) scrollContainerMobile?: ElementRef<HTMLElement>;
+  @ViewChild('threadInnerDesktop', { read: ElementRef }) threadInnerDesktop?: ElementRef<HTMLElement>;
+  @ViewChild('threadInnerMobile', { read: ElementRef }) threadInnerMobile?: ElementRef<HTMLElement>;
 
   get displayMessages(): (Message | { _divider: true } | { _dateSep: true; label: string })[] {
     const items: (Message | { _divider: true } | { _dateSep: true; label: string })[] = [];
@@ -1031,14 +1033,86 @@ export class ChatComponent implements OnInit, OnDestroy {
     return d.toLocaleDateString('ru-RU', opts);
   }
 
+  /**
+   * Pins the thread to the bottom, once the layout has settled.
+   *
+   * The CSS does most of the work: .chat-scroll is a flex column and .thread-inner
+   * carries margin-top:auto, so a thread shorter than its container sits against
+   * the bottom with no JavaScript at all - and stays there through image loads,
+   * font swaps and re-renders, which is where the old version kept missing.
+   *
+   * What CSS cannot do is scroll: once the thread is taller than the container,
+   * margin-top:auto computes to zero and the scroll position is whatever the
+   * browser last had. So a thread that overflows - or that started short and grew -
+   * still needs one real scroll, which is this. A ResizeObserver on the inner
+   * wrapper does it, so it fires whenever anything changes the height without
+   * anyone having to remember to call.
+   *
+   * Both halves are needed. CSS alone jumps from the bottom to the top the moment
+   * a short thread overflows; JS alone is what missed the bottom in the first
+   * place.
+   */
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        this.scrollContainerDesktop?.nativeElement.scrollTo({ top: this.scrollContainerDesktop.nativeElement.scrollHeight, behavior: 'auto' });
-        this.scrollContainerMobile?.nativeElement.scrollTo({ top: this.scrollContainerMobile.nativeElement.scrollHeight, behavior: 'auto' });
+        this.scrollContainers().forEach(c => c.scrollTo({ top: c.scrollHeight, behavior: 'auto' }));
       });
     });
   }
+
+  private scrollContainers(): HTMLElement[] {
+    return [this.scrollContainerDesktop?.nativeElement, this.scrollContainerMobile?.nativeElement]
+      .filter((el): el is HTMLElement => !!el && el.offsetParent !== null);
+  }
+
+  /**
+   * Starts keeping the thread at the bottom, but only while the reader is there.
+   *
+   * `nearBottom` is tracked from the container's own scroll events, so it holds the
+   * answer as it was *before* the thread grew. Reading it inside the resize
+   * callback would be too late: the browser has already moved the scroll position
+   * and the measurement would say "not at the bottom" for a reader who never left.
+   *
+   * The consequence is that an incoming message no longer yanks the view down while
+   * someone is reading earlier history, which is a change in behaviour and the
+   * reason this is a spike.
+   */
+  private startStickyBottom(): void {
+    this.stickyDisposers.forEach(d => d());
+    this.stickyDisposers = [];
+
+    this.setupSticky(
+      this.scrollContainerDesktop?.nativeElement,
+      this.threadInnerDesktop?.nativeElement,
+    );
+    this.setupSticky(
+      this.scrollContainerMobile?.nativeElement,
+      this.threadInnerMobile?.nativeElement,
+    );
+  }
+
+  private setupSticky(container: HTMLElement | undefined, inner: HTMLElement | undefined): void {
+    if (!container || !inner || typeof ResizeObserver === 'undefined') return;
+
+    let nearBottom = true;
+
+    const onScroll = () => {
+      nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+
+    const observer = new ResizeObserver(() => {
+      if (nearBottom) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(inner);
+
+    this.stickyDisposers.push(() => {
+      container.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    });
+  }
+
+  private stickyDisposers: Array<() => void> = [];
 
   giphyHasKey = false;
 
@@ -1081,7 +1155,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.route.paramMap.subscribe((params) => {
       const userId = params.get('userId');
       const groupId = params.get('groupId');
-      this.showMobileChat = !!(userId || groupId);
+      if (userId || groupId) {
+        this.showMobileThread();
+      } else {
+        this.showMobileChat = false;
+      }
       if (groupId && this.groupChats.length > 0) {
         this.resolvePendingGroupChat(Number(groupId));
       } else if (userId && this.users.length > 0) {
@@ -1397,7 +1475,31 @@ export class ChatComponent implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * Switches the phone layout to the thread view and re-wires the sticky bottom.
+   *
+   * The mobile container only exists once showMobileChat is set, which on a phone
+   * happens *after* ngAfterViewInit has run - so wiring there alone leaves the
+   * phone thread without an observer. afterNextRender waits for the container to
+   * actually be in the DOM.
+   */
+  private showMobileThread(): void {
+    this.showMobileChat = true;
+    runInInjectionContext(this.injector, () => {
+      afterNextRender(() => this.startStickyBottom());
+    });
+  }
+
+  ngAfterViewInit(): void {
+    // After the view exists, so the two scroll containers and their wrappers can be
+    // measured and observed. The desktop layout is hidden by CSS on a phone and the
+    // mobile one hidden on a desktop, hence the offsetParent check inside.
+    this.startStickyBottom();
+  }
+
   ngOnDestroy() {
+    this.stickyDisposers.forEach(d => d());
+    this.stickyDisposers = [];
     this.effects.forEach(e => e.destroy());
     this.effects = [];
     this.api.chatHeaderInfo.set(null);
@@ -1950,7 +2052,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   async selectGroup(group: GroupChat) {
     this.selectedGroup = group;
     this.selectedUser = null;
-    this.showMobileChat = true;
+    this.showMobileThread();
     this.api.chatHeaderInfo.set({ type: 'group', id: group.id, name: group.name });
     this.router.navigate(['/chat', 'group', group.id]);
 

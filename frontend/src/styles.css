@@ -546,6 +546,25 @@ img {
   flex-shrink: 0;
 }
 
+/* Thread scrolling.
+   The container is a flex column and the inner wrapper carries margin-top:auto,
+   so a thread shorter than the container sits against the bottom on its own - no
+   JavaScript, and nothing to miss when an image finishes loading or Angular
+   re-renders the list. What CSS cannot do is scroll, so a ResizeObserver in
+   ChatComponent pins the position once the thread is taller than the container.
+   Both halves are load-bearing: CSS alone jumps to the top the moment a short
+   thread overflows, and JS alone is what used to miss the bottom.
+   margin-top:auto is deliberate over justify-content:flex-end - the latter is
+   the pattern everyone reaches for, and it silently makes content above the fold
+   unreachable (max scroll 0) once the thread overflows. */
+.chat-scroll {
+  display: flex;
+  flex-direction: column;
+}
+.chat-scroll > .thread-inner {
+  margin-top: auto;
+}
+
 /* Shown when loading the thread failed. Sits above the messages rather than
    replacing them: the cached ones are still worth reading, and before this the
    failure was indistinguishable from an empty conversation. */
