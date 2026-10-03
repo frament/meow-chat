@@ -2,9 +2,10 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
+import { ClockService } from '../../services/clock.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal, computed } from '@angular/core';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 describe('ChatComponent', () => {
   let component: ChatComponent;
@@ -24,6 +25,7 @@ describe('ChatComponent', () => {
     groupUnreadCounts: signal<Record<number, number>>({}),
     groupUnreadBoundaries: signal<Record<number, string>>({}),
     totalUnread: computed(() => 0),
+    wsConnected: signal(false),
     wsMessages$: wsMessages$.asObservable(),
     wsOnlineEvent: wsOnlineEvent.asObservable(),
     groupInfoRequest$: groupInfoRequest$.asObservable(),
@@ -86,6 +88,7 @@ describe('ChatComponent', () => {
     mockApi.requestGroupKey.calls.reset();
     mockApi.uploadGroupKeyShare.calls.reset();
     mockApi.reportDecryptFailure.calls.reset();
+    mockApi.wsConnected.set(false);
 
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
@@ -93,6 +96,7 @@ describe('ChatComponent', () => {
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },
+        { provide: ClockService, useValue: { now: signal(Date.now()) } },
         { provide: Router, useValue: { navigate: jasmine.createSpy(), navigateByUrl: jasmine.createSpy(), createUrlTree: jasmine.createSpy(), serializeUrl: jasmine.createSpy(), events: of(null), url: '' } },
       ],
     }).compileComponents();
@@ -314,4 +318,274 @@ describe('ChatComponent', () => {
 
     expect(mockApi.uploadGroupKeyShare).toHaveBeenCalledWith(5, 7, 'ek', 'iv');
   }));
+});
+
+// ── The report: opening a chat with no network left the thread at the very top
+  // and nothing recovered when the network came back.
+
+describe('ChatComponent: loading a thread over a failing network', () => {
+  let component: ChatComponent;
+  let fixture: ComponentFixture<ChatComponent>;
+  let mockApi: any;
+
+  const ekaterina = {
+    id: 2,
+    username: 'ekaterina',
+    email: 'e@example.com',
+    avatar_url: '',
+    is_admin: false,
+    is_banned: false,
+    created_at: new Date().toISOString(),
+    is_online: true,
+  };
+
+  function message(id: number, from: number, content: string, minutesAgo: number) {
+    return {
+      id,
+      from_user_id: from,
+      to_user_id: from === 1 ? 2 : 1,
+      content,
+      msg_type: 'text',
+      created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+      from_user: from === 1 ? 'me' : 'ekaterina',
+      is_read: true,
+    };
+  }
+
+  beforeEach(async () => {
+    // selectUser seeds itself from localStorage, and persistCache writes there.
+    // Left shared between specs, user 2's cache from one test would suppress the
+    // next test's messages by id, and the merge would look broken rather than the
+    // cache doing its job.
+    localStorage.clear();
+
+    mockApi = {
+      currentUser: signal({ id: 1, username: 'me', avatar_url: '' }),
+      chatHeaderInfo: signal(null),
+      cachedUsers: signal([]),
+      cachedPins: signal([]),
+      unreadCounts: signal<Record<number, number>>({}),
+      unreadBoundaries: signal<Record<number, string>>({}),
+      groupUnreadCounts: signal<Record<number, number>>({}),
+      groupUnreadBoundaries: signal<Record<number, string>>({}),
+      totalUnread: computed(() => 0),
+      wsConnected: signal(false),
+      wsMessages$: new Subject<any>().asObservable(),
+      wsOnlineEvent: new Subject<any>().asObservable(),
+      groupInfoRequest$: new Subject<number>().asObservable(),
+      getUsers: jasmine.createSpy().and.returnValue(of([])),
+      getPinned: jasmine.createSpy().and.returnValue(of({ pinned_user_ids: [] })),
+      getGroupChats: jasmine.createSpy().and.returnValue(of([])),
+      getGroupMessages: jasmine.createSpy().and.returnValue(of([])),
+      getFriends: jasmine.createSpy().and.returnValue(of([])),
+      getIncomingRequests: jasmine.createSpy().and.returnValue(of([])),
+      getFriendRequests: jasmine.createSpy().and.returnValue(of([])),
+      getUserDeviceKeys: jasmine.createSpy().and.returnValue(of([])),
+      getGiphyStatus: jasmine.createSpy().and.returnValue(of({ has_key: false })),
+      getUnread: jasmine.createSpy().and.returnValue(of({ users: [], groups: [] })),
+      hydrateUnread: jasmine.createSpy(),
+      clearUnread: jasmine.createSpy(),
+      clearUnreadBoundary: jasmine.createSpy(),
+      clearGroupUnread: jasmine.createSpy(),
+      clearGroupUnreadBoundary: jasmine.createSpy(),
+      incrementGroupUnread: jasmine.createSpy(),
+      markMessagesRead: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      markGroupRead: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      searchUsers: jasmine.createSpy().and.returnValue(of([])),
+      sendFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      acceptFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      rejectFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      reportDecryptFailure: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      connectWebSocket: jasmine.createSpy(),
+      // The default: the network is down. Every test overrides this explicitly so
+      // that no test can accidentally pass on a working connection.
+      getMessages: jasmine.createSpy().and.returnValue(throwError(() => new Error('network down'))),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [ChatComponent],
+      providers: [
+        { provide: ApiService, useValue: mockApi },
+        { provide: CryptoService, useValue: { init: jasmine.createSpy().and.returnValue(Promise.resolve()) } },
+        { provide: ClockService, useValue: { now: signal(Date.now()) } },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },
+        { provide: Router, useValue: { navigate: jasmine.createSpy(), navigateByUrl: jasmine.createSpy(), createUrlTree: jasmine.createSpy(), serializeUrl: jasmine.createSpy(), events: of(null), url: '' } },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ChatComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('reports a failed load instead of looking like an empty thread', async () => {
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+
+    // The bug: getMessages had no error callback, so the failure was invisible and
+    // the thread kept showing whatever the cache held - the top of the
+    // conversation, indistinguishable from "this is all there is".
+    expect(component.messagesLoadFailed()).toBe(true);
+  });
+
+  it('scrolls to the bottom once a load succeeds', async () => {
+    const scroll = spyOn<any>(component, 'scrollToBottom');
+    mockApi.getMessages.and.returnValue(of([message(1, 2, 'старое', 60), message(2, 2, 'новое', 1)]));
+
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+
+    expect(component.messagesLoadFailed()).toBe(false);
+    expect(scroll).toHaveBeenCalled();
+  });
+
+  it('refetches and scrolls when the websocket comes back', async () => {
+    // Open while down: fails, flag set.
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+    expect(component.messagesLoadFailed()).toBe(true);
+
+    const callsWhileDown = mockApi.getMessages.calls.count();
+
+    // The network returns. Nothing was sent while it was down, so there is no
+    // frame to catch up from - the only thing that can fix this is a refetch.
+    mockApi.getMessages.and.returnValue(
+      of([message(1, 2, 'пока меня не было', 30), message(2, 2, 'вернулись?', 1)]),
+    );
+    mockApi.wsConnected.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockApi.getMessages.calls.count()).toBeGreaterThan(callsWhileDown);
+    expect(component.messages.some(m => m.content === 'вернулись?')).toBe(true);
+    expect(component.messagesLoadFailed()).toBe(false);
+  });
+
+  it('does not refetch on the initial connect', async () => {
+    mockApi.getMessages.and.returnValue(of([message(1, 2, 'привет', 5)]));
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+
+    const callsAfterOpen = mockApi.getMessages.calls.count();
+
+    // wsConnected flipping true the first time is just the socket opening, not a
+    // recovery. Without the false -> true filter this would refetch every time
+    // the chat was opened.
+    mockApi.wsConnected.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(mockApi.getMessages.calls.count()).toBe(callsAfterOpen);
+  });
+
+  it('retry re-requests the thread and clears the failure', async () => {
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+    expect(component.messagesLoadFailed()).toBe(true);
+
+    mockApi.getMessages.and.returnValue(of([message(1, 2, 'наконец-то', 1)]));
+    component.retryLoadMessages();
+    await fixture.whenStable();
+
+    expect(component.messagesLoadFailed()).toBe(false);
+    expect(component.messages.some(m => m.content === 'наконец-то')).toBe(true);
+  });
+
+  it('reloads when the already open conversation is clicked again', async () => {
+    mockApi.getMessages.and.returnValue(of([message(1, 2, 'привет', 5)]));
+    component.selectUser(ekaterina);
+    await fixture.whenStable();
+
+    const before = mockApi.getMessages.calls.count();
+    component.openChat(ekaterina);
+    await fixture.whenStable();
+
+    // Angular ignores navigation to the route already active, so the click used to
+    // do nothing at all. Re-selecting the open conversation should still refetch.
+    expect(mockApi.getMessages.calls.count()).toBeGreaterThan(before);
+  });
+});
+
+// Opening a deep link with no network needs a route that already carries the id,
+// which is why it gets its own TestBed rather than the shared one.
+describe('ChatComponent: deep link while offline', () => {
+  const ekaterina = {
+    id: 2, username: 'ekaterina', email: 'e@example.com', avatar_url: '', is_admin: false,
+    is_banned: false, created_at: '', is_online: true,
+  };
+  const me = {
+    id: 1, username: 'me', email: 'm@example.com', avatar_url: '', is_admin: false,
+    is_banned: false, created_at: '', is_online: true,
+  };
+
+  it('opens the chat from the cached user list', async () => {
+    localStorage.setItem('cachedUsers', JSON.stringify([me, ekaterina]));
+
+    const api: any = {
+      currentUser: signal(me),
+      chatHeaderInfo: signal(null),
+      cachedUsers: signal([]), cachedPins: signal([]),
+      unreadCounts: signal({}), unreadBoundaries: signal({}),
+      groupUnreadCounts: signal({}), groupUnreadBoundaries: signal({}),
+      totalUnread: computed(() => 0),
+      wsConnected: signal(false),
+      wsMessages$: new Subject<any>().asObservable(),
+      wsOnlineEvent: new Subject<any>().asObservable(),
+      groupInfoRequest$: new Subject<number>().asObservable(),
+      getUsers: jasmine.createSpy().and.returnValue(throwError(() => new Error('offline'))),
+      getPinned: jasmine.createSpy().and.returnValue(of({ pinned_user_ids: [] })),
+      getGroupChats: jasmine.createSpy().and.returnValue(of([])),
+      getGroupMessages: jasmine.createSpy().and.returnValue(of([])),
+      getFriends: jasmine.createSpy().and.returnValue(of([])),
+      getIncomingRequests: jasmine.createSpy().and.returnValue(of([])),
+      getFriendRequests: jasmine.createSpy().and.returnValue(of([])),
+      getUserDeviceKeys: jasmine.createSpy().and.returnValue(of([])),
+      getGiphyStatus: jasmine.createSpy().and.returnValue(of({ has_key: false })),
+      getUnread: jasmine.createSpy().and.returnValue(of({ users: [], groups: [] })),
+      hydrateUnread: jasmine.createSpy(),
+      clearUnread: jasmine.createSpy(), clearUnreadBoundary: jasmine.createSpy(),
+      clearGroupUnread: jasmine.createSpy(), clearGroupUnreadBoundary: jasmine.createSpy(),
+      incrementGroupUnread: jasmine.createSpy(),
+      markMessagesRead: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      markGroupRead: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      searchUsers: jasmine.createSpy().and.returnValue(of([])),
+      sendFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      acceptFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      rejectFriendRequest: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      reportDecryptFailure: jasmine.createSpy().and.returnValue(of({ ok: true })),
+      getMessages: jasmine.createSpy().and.returnValue(throwError(() => new Error('offline'))),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [ChatComponent],
+      providers: [
+        { provide: ApiService, useValue: api },
+        { provide: CryptoService, useValue: { init: jasmine.createSpy().and.returnValue(Promise.resolve()) } },
+        { provide: ClockService, useValue: { now: signal(Date.now()) } },
+        { provide: ActivatedRoute, useValue: {
+            snapshot: { paramMap: convertToParamMap({ userId: '2' }) },
+            paramMap: of(convertToParamMap({ userId: '2' })),
+            url: of(['/chat', '2']),
+          } },
+        { provide: Router, useValue: {
+            navigate: jasmine.createSpy(), navigateByUrl: jasmine.createSpy(),
+            createUrlTree: jasmine.createSpy(), serializeUrl: jasmine.createSpy(),
+            events: of(null), url: '/chat/2',
+          } },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(ChatComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const component = fixture.componentInstance;
+
+    // Before the fix, resolvePendingChat ran only inside the successful branch of
+    // getUsers. Offline it never ran: the friend row was on screen, and the pane
+    // said "choose a chat" instead.
+    expect(component.selectedUser?.id).toBe(ekaterina.id);
+    // And the thread load failing has to say so rather than look like an empty chat.
+    expect(component.messagesLoadFailed()).toBe(true);
+  });
 });

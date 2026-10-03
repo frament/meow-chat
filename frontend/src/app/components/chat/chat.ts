@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, HostListener, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, effect, EffectRef, HostListener, inject, Injector, runInInjectionContext } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -198,6 +198,12 @@ import { toMemoryFile } from '../../services/upload-utils';
           }
 
           <div #scrollContainerDesktop class="flex-1 overflow-y-auto" style="min-height:0;">
+              @if (messagesLoadFailed()) {
+                <div class="message-load-failed" role="alert">
+                  <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
+                  <button type="button" (click)="retryLoadMessages()">Повторить</button>
+                </div>
+              }
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
@@ -540,6 +546,13 @@ import { toMemoryFile } from '../../services/upload-utils';
       @if (showMobileChat && (selectedUser || selectedGroup)) {
         <div class="flex flex-col fixed inset-x-0 z-30" style="top:calc(3.5rem + env(safe-area-inset-top, 0px));" [style.height]="mobileChatHeight()">
           <div #scrollContainerMobile class="flex-1 overflow-y-auto" style="min-height:0;">
+              @if (messagesLoadFailed()) {
+                <div class="message-load-failed" role="alert">
+                  <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
+                  <button type="button" (click)="retryLoadMessages()">Повторить</button>
+                </div>
+              }
+
             <div class="p-4" style="display:flex;flex-direction:column;gap:8px;">
               @for (item of displayMessages; track $index) {
                 @if ($any(item)._divider) {
@@ -954,6 +967,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   inviteUrl = '';
   showQR = false;
   private subscriptions: Subscription[] = [];
+  // Kept so ngOnDestroy can release them, like the subscriptions above.
+  private effects: EffectRef[] = [];
+  private readonly injector = inject(Injector);
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
   // A group message that failed only because the group key wasn't available yet.
   // Retried automatically once the key arrives (group_key_ready WS event).
@@ -961,6 +977,18 @@ export class ChatComponent implements OnInit, OnDestroy {
   // Telemetry: conversations we already reported as undecryptable this session.
   private reportedDecryptFailures = new Set<string>();
   uploading = signal(false);
+
+  /**
+   * Set when loading the thread failed, so the UI can say so and offer a retry.
+   *
+   * It did not exist, and that is why a network failure looked like an empty
+   * conversation: getMessages has no error callback, so a failed request left
+   * the cached messages on screen and scrollToBottom was never called. Coming
+   * back onto wifi did not help either - nothing refetched, because the reload
+   * hung off visibilitychange (which does not fire when only the network
+   * changes) while the websocket reconnect refetched nothing.
+   */
+  readonly messagesLoadFailed = signal(false);
   uploadProgress = signal(0);
   sendError = signal('');
 
@@ -1216,35 +1244,93 @@ export class ChatComponent implements OnInit, OnDestroy {
     // sent from other tabs while this tab was in background)
     this.subscriptions.push(
       fromEvent(document, 'visibilitychange').subscribe(() => {
-        const user = this.selectedUser;
-        if (document.visibilityState === 'visible' && user && !this.selectedGroup) {
-          this.api.getMessages(this.currentUserId, user.id).subscribe(async (msgs: Message[]) => {
-            const existingIds = new Set(this.messages.map(m => m.id));
-            for (const msg of msgs) {
-              if (!existingIds.has(msg.id)) {
-                this.messages.push(await this.decryptMsg(msg, user.id));
-              } else {
-                const existing = this.messages.find(m => m.id === msg.id);
-                if (existing) existing.is_read = msg.is_read;
-              }
-            }
-            if (msgs.length > 0) {
-              this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-              this.persistCache(user.id);
-              this.scrollToBottom();
-            }
-            const unreadIds = this.messages.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
-            if (unreadIds.length > 0) {
-              this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
-                for (const m of this.messages) {
-                  if (unreadIds.includes(m.id)) m.is_read = true;
-                }
-              });
-            }
-          });
+        if (document.visibilityState === 'visible' && this.selectedUser && !this.selectedGroup) {
+          this.reloadOpenThread();
         }
       })
     );
+
+    // Coming back from a dead network. visibilitychange does not cover this: moving
+    // between LTE and wifi changes the network while the tab stays visible, so no
+    // event fires and a thread that failed to load simply stayed at the top of the
+    // cache. The websocket reconnect that eventually succeeded refetched nothing
+    // either - it only reopened the socket - and by then the other side had not sent
+    // anything new, so there was no frame to catch up from.
+    //
+    // wsConnected is the signal that flips on recovery. It is filtered to false ->
+    // true so the initial connect does not refetch a thread that was just loaded.
+    let wasConnected = this.api.wsConnected();
+    let everConnected = wasConnected;
+    // runInInjectionContext because effect() throws outside one, and ngOnInit is
+    // not one - the compiler accepts this and the runtime does not.
+    this.effects.push(
+      runInInjectionContext(this.injector, () =>
+        effect(() => {
+          const connected = this.api.wsConnected();
+          // Two cases, and the signal alone cannot tell them apart: the socket
+          // opening for the first time on a normal launch, and the socket opening
+          // for the first time *because the phone was offline when the app
+          // started*. Both are false -> true with no prior connection.
+          //
+          // They differ in what needs doing about it. The first has just loaded
+          // the thread and wants nothing. The second left a thread stuck at the
+          // top of its cache, and a failed load is the thing that says so - either
+          // the load failed, or we had a working session that dropped.
+          if (connected && !wasConnected && (everConnected || this.messagesLoadFailed())) {
+            this.reloadOpenThread();
+          }
+          if (connected) everConnected = true;
+          wasConnected = connected;
+        })
+      )
+    );
+  }
+
+  /**
+   * Refetches the open thread and settles it at the bottom.
+   *
+   * Shared by the visibility handler and the reconnect handler: both mean the same
+   * thing, "you may be looking at something stale".
+   */
+  private reloadOpenThread(): void {
+    const user = this.selectedUser;
+    if (!user || this.selectedGroup) return;
+
+    this.api.getMessages(this.currentUserId, user.id).subscribe({
+      next: async (msgs: Message[]) => {
+        // Cleared here, not only in selectUser: a recovery that arrives over the
+        // websocket goes through this path, and without it the "failed to load"
+        // banner stayed up over messages that had just loaded.
+        this.messagesLoadFailed.set(false);
+        const existingIds = new Set(this.messages.map(m => m.id));
+        for (const msg of msgs) {
+          if (!existingIds.has(msg.id)) {
+            this.messages.push(await this.decryptMsg(msg, user.id));
+          } else {
+            const existing = this.messages.find(m => m.id === msg.id);
+            if (existing) existing.is_read = msg.is_read;
+          }
+        }
+        // Scrolled regardless of whether anything was new. After a failed load the
+        // retry can return the same rows, and the thread still has to end up at the
+        // bottom - the alternative was a thread stuck at the top of its own cache.
+        if (msgs.length > 0) {
+          this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          this.persistCache(user.id);
+        }
+        this.scrollToBottom();
+
+        const unreadIds = this.messages.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
+        if (unreadIds.length > 0) {
+          this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
+            for (const m of this.messages) {
+              if (unreadIds.includes(m.id)) m.is_read = true;
+            }
+          });
+        }
+      },
+      error: () => this.messagesLoadFailed.set(true),
+    });
   }
 
   private loadFromCache() {
@@ -1257,17 +1343,32 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (cachedPins) {
       this.pinnedIds = new Set<number>(JSON.parse(cachedPins));
     }
+    // Opening a deep link such as /chat/2 must work offline. resolvePendingChat
+    // used to be called only from the successful branch of getUsers, so with no
+    // network it never ran at all - the friend row was right there on screen and
+    // the chat pane stayed on "choose a chat".
+    this.resolvePendingChat();
   }
 
   private loadFromServer() {
-    this.api.getUsers().subscribe((users: User[]) => {
-      this.users = users.filter((u) => u.id !== this.currentUserId);
-      localStorage.setItem('cachedUsers', JSON.stringify(users));
-      this.resolvePendingChat();
+    // Error callbacks throughout: without them a failed request threw out of the
+    // subscription and surfaced as an unhandled error in the console, which is
+    // what the offline case looks like - not as "no connection", as a stream of
+    // AppErrors. The cached lists stay on screen instead.
+    this.api.getUsers().subscribe({
+      next: (users: User[]) => {
+        this.users = users.filter((u) => u.id !== this.currentUserId);
+        localStorage.setItem('cachedUsers', JSON.stringify(users));
+        this.resolvePendingChat();
+      },
+      error: () => this.resolvePendingChat(),
     });
-    this.api.getPinned().subscribe((res) => {
-      this.pinnedIds = new Set(res.pinned_user_ids);
-      localStorage.setItem('cachedPins', JSON.stringify(res.pinned_user_ids));
+    this.api.getPinned().subscribe({
+      next: (res) => {
+        this.pinnedIds = new Set(res.pinned_user_ids);
+        localStorage.setItem('cachedPins', JSON.stringify(res.pinned_user_ids));
+      },
+      error: () => {},
     });
   }
 
@@ -1297,6 +1398,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.effects.forEach(e => e.destroy());
+    this.effects = [];
     this.api.chatHeaderInfo.set(null);
     for (const sub of this.subscriptions) sub.unsubscribe();
     if (this.boundaryTimer) clearTimeout(this.boundaryTimer);
@@ -1362,7 +1465,9 @@ export class ChatComponent implements OnInit, OnDestroy {
     const cached = localStorage.getItem(this.messageCacheKey(user.id));
     this.messages = cached ? JSON.parse(cached) : [];
 
-    this.api.getMessages(this.currentUserId, user.id).subscribe(async (msgs: Message[]) => {
+    this.messagesLoadFailed.set(false);
+    this.api.getMessages(this.currentUserId, user.id).subscribe({
+      next: async (msgs: Message[]) => {
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptMsg(msgs[i], user.id);
       }
@@ -1389,6 +1494,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       } else {
         this.unreadDividerIdx = -1;
       }
+      // Unconditionally, not only when the response had rows: after a failed load
+      // the retry that succeeds can legitimately return nothing new, and the
+      // thread still has to settle at the bottom.
       this.scrollToBottom();
       // Mark received messages as read
       const unreadIds = msgs.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
@@ -1399,12 +1507,33 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
         });
       }
+      },
+      error: () => {
+        // Without this the failure was invisible: the callback above never ran, so
+        // scrollToBottom was never called and the cached thread stayed put looking
+        // like the whole conversation rather than like a failure.
+        this.messagesLoadFailed.set(true);
+      },
     });
+  }
+
+  /** Retries the thread that failed to load. */
+  retryLoadMessages(): void {
+    const user = this.selectedUser;
+    if (user) this.selectUser(user);
   }
 
   openChat(user: User) {
     this.selectedGroup = null;
-    this.router.navigate(['/chat', user.id]);
+    // Navigate only when the route actually changes. Angular ignores navigation to
+    // the route you are already on, so clicking the open conversation did nothing
+    // at all - no reload of the thread, no error, just no response to the click.
+    if (this.selectedUser?.id !== user.id || this.router.url !== `/chat/${user.id}`) {
+      this.router.navigate(['/chat', user.id]);
+    }
+    if (this.selectedUser?.id === user.id) {
+      this.reloadOpenThread();
+    }
   }
 
   togglePin(userId: number, event: MouseEvent) {

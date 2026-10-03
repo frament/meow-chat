@@ -546,6 +546,36 @@ img {
   flex-shrink: 0;
 }
 
+/* Shown when loading the thread failed. Sits above the messages rather than
+   replacing them: the cached ones are still worth reading, and before this the
+   failure was indistinguishable from an empty conversation. */
+.message-load-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.message-load-failed button {
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.message-load-failed button:active {
+  opacity: 0.85;
+}
+
 .unread-divider {
   display: flex;
   align-items: center;

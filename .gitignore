@@ -27,3 +27,6 @@ vapid_keys.json
 # Brainstorm session files
 .superpowers/
 mockups/
+
+# Скриншоты панели браузера
+.openchamber/
