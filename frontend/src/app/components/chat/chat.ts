@@ -1105,6 +1105,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       if (nearBottom) container.scrollTop = container.scrollHeight;
     });
     observer.observe(inner);
+    // The container too, because its height changes without the thread's height
+    // changing - and that is exactly what the keyboard does. mobileChatHeight
+    // grows the phone layout when isKeyboardOpen flips, which leaves the thread's
+    // own size untouched: watching only the inner wrapper would leave the last
+    // messages under the keyboard, which is the bug this was meant to end.
+    // Same mechanism covers a rotated device and a collapsing browser toolbar.
+    observer.observe(container);
 
     this.stickyDisposers.push(() => {
       container.removeEventListener('scroll', onScroll);

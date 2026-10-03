@@ -21,17 +21,21 @@ import { ClockService } from '../../services/clock.service';
  */
 describe('ChatComponent thread pinning', () => {
   let fixture: ComponentFixture<ChatComponent>;
-  let resizeCallbacks: Array<() => void>;
+  /** One entry per ResizeObserver the component created, with what it watches. */
+  let observers: Array<{ callback: () => void; targets: Element[] }>;
   let observed: HTMLElement[];
   let originalResizeObserver: typeof ResizeObserver | undefined;
 
   /** Minimal stand-in: the component only ever calls observed callbacks. */
   class StubResizeObserver {
+    private readonly targets: Element[] = [];
+
     constructor(private readonly callback: () => void) {
-      resizeCallbacks.push(callback);
+      observers.push({ callback, targets: this.targets });
     }
     observe(target: Element): void {
-      observed.push(target as HTMLElement);
+      this.targets.push(target);
+      if (!observed.includes(target as HTMLElement)) observed.push(target as HTMLElement);
     }
     unobserve(): void {}
     disconnect(): void {}
@@ -55,9 +59,22 @@ describe('ChatComponent thread pinning', () => {
     return (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.chat-scroll > .thread-inner')[index];
   }
 
+  /**
+   * Fires observer `index` the way a resize of `target` would - and only if it is
+   * watching that target. Without this guard the stub would happily deliver a
+   * callback for a resize nothing was watching, and a test could pass while the
+   * observer was pointed at the wrong element.
+   */
+  function elementResized(index: number, target: Element): void {
+    if (!observers[index].targets.includes(target)) {
+      throw new Error(`observer #${index} does not watch ${target.className}`);
+    }
+    observers[index].callback();
+  }
+
   /** Fires the observer for one container the way a grown thread would. */
   function threadGrew(index: number): void {
-    resizeCallbacks[index]();
+    elementResized(index, threadInner(index));
   }
 
   function desktopContainer(): HTMLElement {
@@ -65,7 +82,7 @@ describe('ChatComponent thread pinning', () => {
   }
 
   beforeEach(async () => {
-    resizeCallbacks = [];
+    observers = [];
     observed = [];
     originalResizeObserver = window.ResizeObserver;
     window.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver;
@@ -133,7 +150,7 @@ describe('ChatComponent thread pinning', () => {
   });
 
   it('observes the desktop thread on first render', () => {
-    expect(observed).toEqual([threadInner(0)]);
+    expect(observed).toEqual([threadInner(0), desktopContainer()]);
   });
 
   it('wires the phone thread up when the layout switches to it', () => {
@@ -160,6 +177,21 @@ describe('ChatComponent thread pinning', () => {
     // Thread grows - a message arrives, an image finishes loading.
     Object.defineProperty(container, 'scrollHeight', { configurable: true, get: () => 1400 });
     threadGrew(0);
+
+    expect(container.scrollTop).toBe(1400);
+  });
+
+  it('re-pins when the container itself resizes and the thread does not', () => {
+    const container = desktopContainer();
+    giveGeometry(container, 1400, 400, 1000);
+    container.dispatchEvent(new Event('scroll'));
+
+    // The keyboard: mobileChatHeight grows the phone layout, the thread inside it
+    // stays the same size. Only the scroller changed, and the reader was at the
+    // bottom, so the bottom has to follow - otherwise the last messages sit under
+    // the keyboard.
+    Object.defineProperty(container, 'clientHeight', { configurable: true, get: () => 200 });
+    elementResized(0, container);
 
     expect(container.scrollTop).toBe(1400);
   });
