@@ -10,14 +10,18 @@ import { KeyboardService } from './keyboard.service';
  *
  * So "did focus actually register" is worth pinning down: it is the difference
  * between the pane growing when the keyboard opens and messages sliding under it.
+ *
+ * These use real element.focus()/blur() rather than dispatched focusin/focusout.
+ * The service checks document.activeElement before closing, and a synthetic event
+ * never moves focus, so a dispatched blur closes the keyboard even while a second
+ * field is "focused" - which made the earlier version of this file assert the
+ * opposite of what its name claimed. Real focus is what the browser does.
  */
 describe('KeyboardService', () => {
   let service: KeyboardService;
   let input: HTMLInputElement;
 
   beforeEach(() => {
-    // The service registers document-level focus listeners in its constructor,
-    // and it only gets constructed once something asks for it.
     service = TestBed.inject(KeyboardService);
     input = document.createElement('input');
     document.body.appendChild(input);
@@ -26,6 +30,10 @@ describe('KeyboardService', () => {
   afterEach(() => {
     input.remove();
     document.body.classList.remove('keyboard-open');
+  });
+
+  it('creates service', () => {
+    expect(service).toBeTruthy();
   });
 
   it('reports the keyboard as open when a text field takes focus', () => {
@@ -58,22 +66,7 @@ describe('KeyboardService', () => {
     button.remove();
   });
 
-  it('closes only after focus leaves the field for good', () => {
-    input.focus();
-    expect(service.isKeyboardOpen()).toBe(true);
-
-    // Handing focus from one field to another must not close it - that is a tap
-    // from the input to the "Aa" font button, and the keyboard stays up.
-    const other = document.createElement('input');
-    document.body.appendChild(other);
-    other.focus();
-
-    expect(service.isKeyboardOpen()).toBe(true);
-    expect(document.body.classList.contains('keyboard-open')).toBe(true);
-    other.remove();
-  });
-
-  it('closes when focus leaves the field entirely', done => {
+  it('closes only after focus leaves the field for good', done => {
     input.focus();
     expect(service.isKeyboardOpen()).toBe(true);
 
@@ -83,6 +76,26 @@ describe('KeyboardService', () => {
       expect(service.isKeyboardOpen()).toBe(false);
       expect(document.body.classList.contains('keyboard-open')).toBe(false);
       done();
-    }, 1);
+    }, 10);
+  });
+
+  it('stays open when focus moves from one field to another', done => {
+    // The tap from the message input to the "Aa" font button is the case that
+    // matters: the keyboard must not close under the user's thumb.
+    const other = document.createElement('input');
+    document.body.appendChild(other);
+
+    input.focus();
+    expect(service.isKeyboardOpen()).toBe(true);
+
+    other.focus();
+    input.blur();
+
+    setTimeout(() => {
+      expect(service.isKeyboardOpen()).toBe(true);
+      expect(document.body.classList.contains('keyboard-open')).toBe(true);
+      other.remove();
+      done();
+    }, 10);
   });
 });
