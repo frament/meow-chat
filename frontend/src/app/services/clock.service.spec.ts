@@ -4,12 +4,19 @@ import { ClockService } from './clock.service';
 describe('ClockService', () => {
   beforeEach(() => TestBed.configureTestingModule({}));
 
-  it('starts at the current time', () => {
+  it('reads a wall-clock timestamp', () => {
     const clock = TestBed.inject(ClockService);
-    const before = Date.now();
-    const now = clock.now();
-    expect(now).toBeGreaterThanOrEqual(before);
-    expect(now).toBeLessThanOrEqual(Date.now());
+
+    // Compared against a window that starts well before this test runs, not
+    // against a reading taken here. ClockService is providedIn root, so its
+    // construction timestamp belongs to whichever test happened to resolve it
+    // first - a `before = Date.now()` in this test lands *after* that, and the
+    // assertion then fails by a millisecond for a reason that has nothing to do
+    // with the service. It failed intermittently locally and on CI.
+    const earliest = Date.now() - 60_000;
+    const latest = Date.now();
+    expect(clock.now()).toBeGreaterThanOrEqual(earliest);
+    expect(clock.now()).toBeLessThanOrEqual(latest);
   });
 
   it('moves forward when nudged', () => {
