@@ -111,6 +111,12 @@ leankg query "federation" --kind file  # search session docs
 
 ## TBD (Future work)
 
+Три **плановых раунда качества** заведены 2026-10-03 в `ROADMAP.md` → «Плановые раунды качества». Порядок зафиксирован: **редизайн → аудит тестов → выравнивание кода**, каждый отдельным раундом, не по ходу фич.
+
+- **Редизайн** — снять визуальный шум. `.card` (`styles.css:210`) несёт рамку, скругление, `padding: 16px` **и** тень, меняющиеся на `:hover`, — три сигнала разделения там, где хватает одного. Проверять на телефоне: на 1440px лишняя рамка незаметна, ради неё и жалоба.
+- **Аудит тестов на честность** — не покрытие, а **мутационная проверка**: откатить исправление и убедиться, что тест красный. Три реальных случая фиктивных тестов уже были: `TestFindRoute_BFS` проверял несуществующие колонки; `cmd/e2e-test` не запускался, но печатал «✓ Both servers healthy»; заглушка `ResizeObserver` сегодня отдавала колбэк независимо от наблюдаемого. Зелёный тест без отношения к коду — обычное дело здесь, а не редкость.
+- **Выравнивание кода** — `chat.ts` вырос до 2387 строк, десктопная и мобильная разметка чата существуют в двух почти одинаковых копиях. Дубли уже стоили реального бага (`showMobileChat`: обсервер навешивался в `ngAfterViewInit` и не доставал до мобильного контейнера) — правка прокрутки чинила одну копию, а вторая осталась старой. Перед v2.0.0 (pure-Go SQLite, раздача фронта из бинаря, отказ от nginx) это дешевле, чем после.
+
 See `ROADMAP.md` for the versioned plan (milestones per release). Highlights:
 
 - **Multi-device E2EE** (ROADMAP v1.7.0): implemented — per-device key registry, per-device message envelopes, group key shares scoped to device + epoch, revocation. Key backup/restore by account password or recovery phrase (`/devices/backup-keys`, `/devices/recover`) + UI in settings and `device-auth`. **Residual limitation:** a revoked device still holds valid account credentials and can re-register itself; cryptographic revocation only prevents reading *new* messages without re-approval. Details: `docs/plans/per-device-e2ee.md`, section 12.
