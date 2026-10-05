@@ -16,7 +16,7 @@ services:
       # the source, so a missing JWT_SECRET would otherwise start a server whose
       # tokens anyone can forge - and this repo is public. main.go refuses to boot
       # without one, which turns a silent downgrade into a loud failure.
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is not set - generate one with: openssl rand -base64 48}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET_is_not_set}
     dns:
       - 192.168.1.1
     volumes:

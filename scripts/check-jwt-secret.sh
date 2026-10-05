@@ -46,7 +46,16 @@ echo "  ✓ дефолта в коде нет"
 echo "▸ compose требует секрет и не подставляет значение"
 grep -q 'JWT_SECRET=\${JWT_SECRET:?' docker-compose.yml \
   || fail "docker-compose.yml не требует JWT_SECRET — compose не откажется сам"
-echo "  ✓ compose требует JWT_SECRET"
+# The message must stay free of spaces: compose splits such a value into several
+# list items and fails with "must be a string", which looks like a YAML problem
+# rather than an interpolation one.
+if grep -oE 'JWT_SECRET=\$\{JWT_SECRET:\?[^}]*\}' docker-compose.yml | grep -q ' '; then
+  fail "в сообщении об ошибке JWT_SECRET есть пробелы — compose сломает список environment"
+fi
+# And the requirement has to actually hold, not just be spelled somewhere.
+( unset JWT_SECRET; docker compose config >/dev/null 2>&1 ) \
+  && fail "docker compose config проходит без JWT_SECRET — требование не работает"
+echo "  ✓ compose требует JWT_SECRET и отказывает без него"
 
 echo "▸ .env на сервере не попадает в git"
 git check-ignore -q .env || fail ".env не в .gitignore"
