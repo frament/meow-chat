@@ -1,5 +1,8 @@
 data/
 uploads/
+
+# Бэкапы БД, которые docker compose пишет на сервере
+backups/
 _ref/
 .idea/
 
