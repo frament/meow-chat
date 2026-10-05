@@ -302,7 +302,7 @@ export class App implements OnInit, OnDestroy {
     // Push subscription change from service worker
     navigator.serviceWorker?.addEventListener('message', (event) => {
       if (event.data?.type === 'push-subscription-changed') {
-        this.#logPush('subscription_changed', '', 'old=' + (event.data.oldEndpoint || ''));
+        this.logPush('subscription_changed', '', 'old=' + (event.data.oldEndpoint || ''));
         this.tryReSubscribePush();
       }
     });
@@ -409,9 +409,18 @@ export class App implements OnInit, OnDestroy {
       this.#api.connectWebSocket();
       this.#crypto.init().then(() => {
         this.#crypto.syncPublicKey();
-        this.registerThisDevice();
-        this.checkDeviceAuth();
-        this.deviceAuth?.loadPendingRequests();
+        // Held back so the first paint is not competing with three more requests.
+        // Each one needs its own TLS handshake, and on a mobile network that is
+        // the difference between a thread that appears and one that times out:
+        // six connections at once against a router that spends ~350-400ms on a
+        // handshake (measured from a HAR over LTE). Device registration matters
+        // for *sending*, not for showing anything, so a couple of seconds of
+        // delay costs nothing.
+        setTimeout(() => {
+          this.registerThisDevice();
+          this.checkDeviceAuth();
+          this.deviceAuth?.loadPendingRequests();
+        }, this.SETTLE_AFTER_PAINT_MS);
       });
     }
     this.#notif.requestPermission();
@@ -539,7 +548,7 @@ export class App implements OnInit, OnDestroy {
     navigator.serviceWorker?.controller?.postMessage({ type: 'flush-pending-sub' });
 
     const ok = await this.#notif.requestPermission();
-    if (!ok) { console.warn('Push: permission denied'); this.#logPush('permission_denied'); return; }
+    if (!ok) { console.warn('Push: permission denied'); this.logPush('permission_denied'); return; }
 
     const reg = await navigator.serviceWorker.ready.catch(() => null);
     if (!reg) { this.schedulePushRetry(); return; }
@@ -558,15 +567,15 @@ export class App implements OnInit, OnDestroy {
       const staleEndpoint = existingSub.endpoint;
       await existingSub.unsubscribe().catch(() => {});
       this.#api.pushUnsubscribe(staleEndpoint).subscribe({ error: () => {} });
-      this.#logPush('rotate', staleEndpoint);
+      this.logPush('rotate', staleEndpoint);
       existingSub = null;
     }
 
     if (existingSub) {
       const endpoint = existingSub.endpoint;
       this.#api.pushSubscribe(existingSub.toJSON()).subscribe({
-        next: () => this.#logPush('reuse', endpoint),
-        error: () => { this.schedulePushRetry(); this.#logPush('subscribe_error', endpoint, 'reuse POST failed'); },
+        next: () => this.logPush('reuse', endpoint),
+        error: () => { this.schedulePushRetry(); this.logPush('subscribe_error', endpoint, 'reuse POST failed'); },
       });
       localStorage.setItem('pushVapidKey', fingerprint);
       return;
@@ -581,24 +590,54 @@ export class App implements OnInit, OnDestroy {
       this.#api.pushSubscribe(sub.toJSON()).subscribe({
         next: () => {
           localStorage.setItem('pushVapidKey', fingerprint);
-          this.#logPush('subscribe', sub.endpoint);
+          this.logPush('subscribe', sub.endpoint);
           // A fresh subscription means a fresh install on iOS: nobody has ever
           // seen a notification from this device, so the permission grant is not
           // yet proof that anything works. Nudge once, from this path only - the
           // reuse branch above is a returning device and must stay quiet.
           this.#api.pushWelcome().subscribe({ error: () => {} });
         },
-        error: () => { this.schedulePushRetry(); this.#logPush('subscribe_error', sub.endpoint, 'POST failed'); },
+        error: () => { this.schedulePushRetry(); this.logPush('subscribe_error', sub.endpoint, 'POST failed'); },
       });
     } catch (err) {
       console.warn('Push subscribe failed:', err);
-      this.#logPush('subscribe_error', '', String(err));
+      this.logPush('subscribe_error', '', String(err));
       this.schedulePushRetry();
     }
   }
 
-  #logPush(kind: string, endpoint = '', detail = ''): void {
-    this.#api.pushLog({ kind, endpoint, detail }).subscribe({ error: () => {} });
+  logPush(kind: string, endpoint = '', detail = ''): void {
+    // Batched. Every push event used to be its own request, and subscribing fires
+    // several in a row - one connection and one TLS handshake each, at exactly the
+    // moment the app is trying to appear. Diagnostics keep the same content, they
+    // just stop arriving one-by-one.
+    this.#pushLogBuffer.push({ kind, endpoint, detail });
+    if (this.#pushLogTimer) return;
+    this.#pushLogTimer = setTimeout(() => this.flushPushLog(), this.PUSH_LOG_FLUSH_MS);
+  }
+
+  #pushLogBuffer: Array<{ kind: string; endpoint: string; detail: string }> = [];
+  #pushLogTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly PUSH_LOG_FLUSH_MS = 5000;
+
+  flushPushLog(): void {
+    const timer = this.#pushLogTimer;
+    if (timer) {
+      clearTimeout(timer);
+      this.#pushLogTimer = null;
+    }
+    const entries = this.#pushLogBuffer;
+    this.#pushLogBuffer = [];
+    if (entries.length === 0) return;
+    // If the batch endpoint is unavailable (older backend), fall back to one
+    // request per entry rather than dropping the diagnostics.
+    this.#api.pushLogBatch(entries).subscribe({
+      error: () => {
+        for (const e of entries) {
+          this.#api.pushLog(e).subscribe({ error: () => {} });
+        }
+      },
+    });
   }
 
   #messagePreview(msg: any): string {
@@ -644,6 +683,18 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    // Diagnostics are not worth keeping a PWA alive for, but losing the last
+    // few entries is also avoidable.
+    const timer = this.#pushLogTimer;
+    if (timer) {
+      clearTimeout(timer);
+      this.#pushLogTimer = null;
+      const entries = this.#pushLogBuffer;
+      this.#pushLogBuffer = [];
+      for (const e of entries) {
+        this.#api.pushLog(e).subscribe({ error: () => {} });
+      }
+    }
     this.#sub.unsubscribe();
     this.#maintenanceSub?.unsubscribe();
   }
@@ -685,6 +736,13 @@ export class App implements OnInit, OnDestroy {
       }
     } catch {}
   }
+
+  /**
+   * How long to let the first paint finish before firing the requests that only
+   * matter for sending. Long enough for the browser to render and for keep-alive
+   * to have the connection to itself, short enough that nobody notices.
+   */
+  private readonly SETTLE_AFTER_PAINT_MS = 2500;
 
   /** Keep this device's key registered so senders can wrap keys for it. */
   private async registerThisDevice() {

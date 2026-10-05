@@ -154,6 +154,41 @@ func (h *Handler) PushClientLog(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true})
 }
 
+// PushClientLogBatch is the same as PushClientLog, many at once.
+//
+// The client fires a run of these while subscribing - permission, rotate,
+// subscribe, and whatever the failures add - and one request each meant several
+// connections and TLS handshakes at exactly the moment the app was trying to
+// appear. Measured over LTE: 337-409ms per handshake. The entries are the same and
+// land in the same table; they just stop travelling separately.
+func (h *Handler) PushClientLogBatch(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+	var req struct {
+		Entries []struct {
+			Kind     string `json:"kind"`
+			Endpoint string `json:"endpoint"`
+			Detail   string `json:"detail"`
+		} `json:"entries"`
+	}
+	if err := c.BodyParser(&req); err != nil || len(req.Entries) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "entries required"})
+	}
+	// Bounded, so a malformed client cannot turn one request into thousands of
+	// writes. A subscribe run is a handful at most.
+	if len(req.Entries) > 50 {
+		req.Entries = req.Entries[:50]
+	}
+	written := 0
+	for _, e := range req.Entries {
+		if e.Kind == "" {
+			continue
+		}
+		logPush(userID, "client", e.Kind, e.Endpoint, "", "", "", e.Detail, "")
+		written++
+	}
+	return c.JSON(fiber.Map{"ok": true, "written": written})
+}
+
 // PushAck records a delivery acknowledgement from the service worker. It is
 // unauthenticated but keyed by the random ack id embedded in the push payload.
 func (h *Handler) PushAck(c *fiber.Ctx) error {

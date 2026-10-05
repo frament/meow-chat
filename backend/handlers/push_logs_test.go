@@ -160,3 +160,141 @@ func TestTruncateRunes(t *testing.T) {
 		t.Errorf("expected '😀😀...', got %q", got)
 	}
 }
+
+func TestPushClientLogBatch(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	// A subscribe run fires several of these in a row. One request each meant one
+	// connection and one TLS handshake each, at the moment the app was trying to
+	// appear - the thing that made the app slow to open on LTE.
+	body := `{"entries":[
+		{"kind":"permission_denied","detail":""},
+		{"kind":"rotate","endpoint":"https://example.push/old","detail":""},
+		{"kind":"subscribe","endpoint":"https://example.push/new","detail":"ok"}
+	]}`
+	req, _ := http.NewRequest("POST", "/push/log/batch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var out struct {
+		Written int `json:"written"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	written := out.Written
+	if written != 3 {
+		t.Fatalf("expected 3 written, got %d", written)
+	}
+
+	// Every entry has to land, not just the first - a batch that quietly wrote one
+	// row would look identical from the client.
+	rows, err := database.DB.Query(
+		"SELECT kind FROM push_logs WHERE user_id = ? ORDER BY id ASC", userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var kinds []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		kinds = append(kinds, k)
+	}
+	want := []string{"permission_denied", "rotate", "subscribe"}
+	if len(kinds) != len(want) {
+		t.Fatalf("expected %d rows, got %v", len(want), kinds)
+	}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Fatalf("row %d: expected %q, got %q", i, want[i], kinds[i])
+		}
+	}
+}
+
+func TestPushClientLogBatch_RejectsEmpty(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	for _, body := range []string{`{"entries":[]}`, `{}`} {
+		req, _ := http.NewRequest("POST", "/push/log/batch", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", bearerToken(t, userID, false))
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != 400 {
+			t.Fatalf("expected 400 for %s, got %d", body, resp.StatusCode)
+		}
+	}
+}
+
+// A malformed client must not be able to turn one request into thousands of
+// writes. 50 is far above any real subscribe run.
+func TestPushClientLogBatch_CapsEntries(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	entries := make([]map[string]string, 80)
+	for i := range entries {
+		entries[i] = map[string]string{"kind": "subscribe", "detail": "x"}
+	}
+	payload, _ := json.Marshal(map[string]any{"entries": entries})
+
+	req, _ := http.NewRequest("POST", "/push/log/batch", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var out struct {
+		Written int `json:"written"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	written := out.Written
+	if written != 50 {
+		t.Fatalf("expected the batch capped at 50, got %d", written)
+	}
+}
+
+func TestPushClientLogBatch_SkipsEntriesWithoutKind(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	body := `{"entries":[{"kind":"subscribe"},{"endpoint":"https://example.push/x"},{"kind":"rotate"}]}`
+	req, _ := http.NewRequest("POST", "/push/log/batch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var out struct {
+		Written int `json:"written"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	written := out.Written
+	if written != 2 {
+		t.Fatalf("expected 2 written, got %d", written)
+	}
+}

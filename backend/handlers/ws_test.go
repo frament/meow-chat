@@ -17,6 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	fastws "github.com/fasthttp/websocket"
+	"github.com/gofiber/contrib/websocket"
 	fiberws "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -401,6 +402,19 @@ func TestWS_ReconnectWithinGrace_DoesNotStampLastSeen(t *testing.T) {
 
 // waitForOffline polls the hub until the grace timer has fired and the user has
 // been marked offline.
+// waitFor polls until cond holds or the deadline passes. Used instead of a fixed
+// sleep so the suite is not paying for the slowest case on every run.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func waitForOffline(t *testing.T, h *Handler, userID int64) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -840,5 +854,118 @@ func TestWS_HTTP401_NoToken(t *testing.T) {
 
 	if resp.StatusCode != 401 {
 		t.Errorf("expected 401 for WS without token, got %d", resp.StatusCode)
+	}
+}
+
+// T-sockets: a user cannot accumulate sockets.
+//
+// A connection lost at LTE stays in h.clients until a write to it fails, and the
+// reconnect opens another on top. Three at once and the server broadcasts every
+// message three times to one person - the "one message, shown three times"
+// report. The cap closes the oldest first.
+func TestWS_CapsConnectionsPerUser(t *testing.T) {
+	h, userID, baseURL := setupWSTest(t)
+	conn := wsDial(t, baseURL, userID, false)
+	defer conn.Close()
+
+	waitFor(t, func() bool { return h.activeConnsFor(userID) == 1 })
+
+	// Fill past the cap. Each dial is a separate socket for the same user.
+	var extra []*fastws.Conn
+	for i := 0; i < 4; i++ {
+		c := wsDial(t, baseURL, userID, false)
+		extra = append(extra, c)
+	}
+
+	// Give the hub time to register them and evict the surplus.
+	waitFor(t, func() bool {
+		n := h.activeConnsFor(userID)
+		return n <= h.MaxConnsPerUser
+	})
+
+	if got := h.activeConnsFor(userID); got > h.MaxConnsPerUser {
+		t.Fatalf("expected at most %d sockets for one user, got %d", h.MaxConnsPerUser, got)
+	}
+	// The counter and the map must agree, or /api/ws-health starts lying.
+	if h.wsConnectionsTotal.Load() != int64(h.clientCount()) {
+		t.Fatalf("counter says %d, map holds %d", h.wsConnectionsTotal.Load(), h.clientCount())
+	}
+	for _, c := range extra {
+		c.Close()
+	}
+}
+
+// A user with two devices keeps both sockets: the cap must not turn into a ban.
+func TestWS_KeepsTwoConnectionsPerUser(t *testing.T) {
+	h, userID, baseURL := setupWSTest(t)
+
+	a := wsDial(t, baseURL, userID, false)
+	defer a.Close()
+	b := wsDial(t, baseURL, userID, false)
+	defer b.Close()
+
+	waitFor(t, func() bool { return h.activeConnsFor(userID) == 2 })
+	if got := h.activeConnsFor(userID); got != 2 {
+		t.Fatalf("expected 2 sockets for phone+laptop, got %d", got)
+	}
+}
+
+// The oldest socket goes first. Without this the cap could keep closing the newest
+// one and the user would reconnect forever.
+func TestWS_CapClosesOldestFirst(t *testing.T) {
+	h := NewHandler()
+	// Two of three must go, which is also the only way this distinguishes
+	// "closes the oldest" from "closes one, arbitrarily".
+	h.MaxConnsPerUser = 1
+
+	old := &websocket.Conn{}
+	mid := &websocket.Conn{}
+	newest := &websocket.Conn{}
+	base := time.Now()
+
+	h.clients[old] = 1
+	h.clients[mid] = 1
+	h.clients[newest] = 1
+	h.connOpened[old] = base
+	h.connOpened[mid] = base.Add(time.Second)
+	h.connOpened[newest] = base.Add(2 * time.Second)
+	h.wsConnectionsTotal.Store(3)
+
+	h.dropStaleSockets(1)
+
+	if _, ok := h.clients[old]; ok {
+		t.Error("expected the oldest socket to be closed")
+	}
+	if _, ok := h.clients[mid]; ok {
+		t.Error("expected the middle socket to close too - only one may stay")
+	}
+	if _, ok := h.clients[newest]; !ok {
+		t.Error("expected the newest socket to survive")
+	}
+	if got := h.wsConnectionsTotal.Load(); got != 1 {
+		t.Errorf("counter = %d, want 1", got)
+	}
+}
+
+// Two users are not cross-limited: the cap is per user, not global.
+func TestWS_CapIsPerUser(t *testing.T) {
+	h := NewHandler()
+	h.MaxConnsPerUser = 1
+
+	a1, a2 := &websocket.Conn{}, &websocket.Conn{}
+	b1 := &websocket.Conn{}
+	base := time.Now()
+	h.clients[a1], h.clients[a2], h.clients[b1] = 1, 1, 2
+	h.connOpened[a1] = base
+	h.connOpened[a2] = base.Add(time.Second)
+	h.connOpened[b1] = base
+
+	h.dropStaleSockets(1)
+
+	if _, ok := h.clients[a1]; ok {
+		t.Error("expected user 1's oldest socket to close")
+	}
+	if _, ok := h.clients[b1]; !ok {
+		t.Error("user 2's socket must not be touched by user 1's cap")
 	}
 }

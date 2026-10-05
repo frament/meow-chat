@@ -152,6 +152,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Get("/feed", AuthRequired, h.GetFeed)
 	app.Get("/giphy/status", AuthRequired, h.GiphyStatus)
 	app.Post("/push/log", AuthRequired, h.PushClientLog)
+	app.Post("/push/log/batch", AuthRequired, h.PushClientLogBatch)
 	app.Post("/push/ack", h.PushAck)
 	app.Post("/e2ee/decrypt-failed", AuthRequired, h.LogDecryptFailure)
 

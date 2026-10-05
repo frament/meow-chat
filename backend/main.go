@@ -217,6 +217,7 @@ func main() {
 	// to the caller's own devices.
 	api.Post("/push/welcome", h.SendWelcomePush)
 	api.Post("/push/log", h.PushClientLog)
+	api.Post("/push/log/batch", h.PushClientLogBatch)
 	api.Post("/e2ee/decrypt-failed", h.LogDecryptFailure)
 
 	api.Post("/webauthn/begin-registration", h.WebAuthnBeginRegistration)

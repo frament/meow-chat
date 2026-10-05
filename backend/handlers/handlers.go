@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +59,22 @@ type Handler struct {
 	wsConnectionsTotal  atomic.Int64
 	wsMessagesSentTotal atomic.Int64
 	wsWriteErrorsTotal  atomic.Int64
+	wsClosedTotal       atomic.Int64
+
+	// clientsMu guards clients and connOpened for the readers that exist outside
+	// the hub goroutine (tests, diagnostics). Writes still happen only in runHub.
+	clientsMu sync.RWMutex
+
+	// connOpened records when each socket was registered, so the oldest can be
+	// found when a user has more connections than MaxConnsPerUser. Map iteration
+	// order is random, so it is the only way to choose a victim on purpose.
+	connOpened map[*websocket.Conn]time.Time
+
+	// MaxConnsPerUser caps simultaneous sockets for one user. A lost connection
+	// keeps its socket here until a write to it fails, and a reconnect adds
+	// another; several at once and the server sends every message N times to the
+	// same person. Two covers "phone and laptop".
+	MaxConnsPerUser int
 
 	// Prepared statements for hot WS paths
 	stmtInsertMessage *sql.Stmt
@@ -110,8 +127,10 @@ func NewHandler() *Handler {
 		forceOffline:    make(chan int64, 1024),
 		onlineUsers:     make(map[int64]bool),
 		graceTimers:     make(map[int64]*time.Timer),
+		connOpened:      make(map[*websocket.Conn]time.Time),
 		stop:            make(chan struct{}),
 		GracePeriod:     30 * time.Second,
+		MaxConnsPerUser: 2,
 	}
 	if database.DB != nil {
 		h.stmtInsertMessage, _ = database.DB.Prepare(
@@ -187,13 +206,95 @@ func truncateRunes(s string, n int) string {
 	return string(r[:n]) + "..."
 }
 
+// dropStaleSockets closes the sockets a user has beyond the cap, oldest first.
+//
+// Map iteration order is random, so "oldest" is decided by the connection's own
+// creation time. A socket with no recorded time is treated as the oldest: that is
+// a socket registered before this existed, or one whose bookkeeping failed, and
+// either way it is the one worth questioning.
+func (h *Handler) dropStaleSockets(uid int64) {
+	type agedConn struct {
+		conn  *websocket.Conn
+		since time.Time
+	}
+	var mine []agedConn
+	for conn, cu := range h.clients {
+		if cu != uid {
+			continue
+		}
+		since, ok := h.connOpened[conn]
+		if !ok {
+			since = time.Time{}
+		}
+		mine = append(mine, agedConn{conn: conn, since: since})
+	}
+	if len(mine) <= h.MaxConnsPerUser {
+		return
+	}
+	sort.Slice(mine, func(i, j int) bool { return mine[i].since.Before(mine[j].since) })
+	for _, victim := range mine[:len(mine)-h.MaxConnsPerUser] {
+		log.Printf("Hub: closing excess socket for user %d", uid)
+		victim.conn.Close()
+		delete(h.clients, victim.conn)
+		delete(h.connOpened, victim.conn)
+		h.wsConnectionsTotal.Add(-1)
+	}
+}
+
+// closeConn is the single exit for a socket. Everything that removed a connection
+// before went through three different shapes, and the seven that did so on a write
+// error never touched the active-connection counter - so it climbed past reality
+// and /api/ws-health reported sockets that no longer existed.
+func (h *Handler) closeConn(conn *websocket.Conn, userID int64) {
+	if _, ok := h.clients[conn]; !ok {
+		return
+	}
+	conn.Close()
+	delete(h.clients, conn)
+	delete(h.connOpened, conn)
+	h.wsConnectionsTotal.Add(-1)
+	h.wsClosedTotal.Add(1)
+	log.Printf("WS disconnect: user %d disconnected (%d active)", userID, h.wsConnectionsTotal.Load())
+}
+
+// activeConnsFor and clientCount read the hub's maps from outside the hub
+// goroutine. They are for tests and diagnostics only - the maps belong to runHub,
+// and production code must go through the register/unregister channels.
+func (h *Handler) activeConnsFor(uid int64) int {
+	h.clientsMu.RLock()
+	defer h.clientsMu.RUnlock()
+	n := 0
+	for _, cu := range h.clients {
+		if cu == uid {
+			n++
+		}
+	}
+	return n
+}
+
+func (h *Handler) clientCount() int {
+	h.clientsMu.RLock()
+	defer h.clientsMu.RUnlock()
+	return len(h.clients)
+}
+
 func (h *Handler) runHub() {
 	defer h.wg.Done()
 	for {
 		select {
 		case client := <-h.register:
+			// One browser tab lost at LTE keeps its socket in h.clients until a
+			// write to it fails, and meanwhile the reconnect opens another. Several
+			// of those at once and the server is broadcasting every message N times
+			// to the same person - which is what "one message, three times" was.
+			// Cap it: a family chat needs a couple of devices, not a dozen sockets.
 			h.clients[client.conn] = client.uid
+			h.connOpened[client.conn] = time.Now()
 			h.wsConnectionsTotal.Add(1)
+			// After the insert, not before: trimming first left the map holding
+			// MaxConnsPerUser+1, because the incoming socket was then added on top
+			// of a set that was already at the cap.
+			h.dropStaleSockets(client.uid)
 			log.Printf("WS connect: user %d connected (%d active)", client.uid, h.wsConnectionsTotal.Load())
 			// Cancel any existing grace timer (reconnect within grace period)
 			if t, ok := h.graceTimers[client.uid]; ok {
@@ -205,19 +306,17 @@ func (h *Handler) runHub() {
 				for conn := range h.clients {
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(fiber.Map{"type": "user_online", "user_id": client.uid}); err != nil {
-						conn.Close()
-						delete(h.clients, conn)
+						h.closeConn(conn, client.uid)
 					}
 				}
 			}
 
 		case client := <-h.unregister:
-			if _, ok := h.clients[client.conn]; ok {
-				delete(h.clients, client.conn)
-				client.conn.Close()
-			}
-			h.wsConnectionsTotal.Add(-1)
-			log.Printf("WS disconnect: user %d disconnected (%d active)", client.uid, h.wsConnectionsTotal.Load())
+			// closeConn is the single exit, and it only counts a socket that is
+			// still in the map. Unconditional Add(-1) here used to double-count a
+			// disconnect for a socket the cap had already evicted, which drove the
+			// active-connection figure below zero.
+			h.closeConn(client.conn, client.uid)
 			hasOthers := false
 			for _, uid := range h.clients {
 				if uid == client.uid {
@@ -260,8 +359,7 @@ func (h *Handler) runHub() {
 				for conn := range h.clients {
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(fiber.Map{"type": "user_offline", "user_id": uid}); err != nil {
-						conn.Close()
-						delete(h.clients, conn)
+						h.closeConn(conn, uid)
 					}
 				}
 			}
@@ -270,8 +368,7 @@ func (h *Handler) runHub() {
 			log.Printf("Hub forceOffline for user %d", uid)
 			for conn, cu := range h.clients {
 				if cu == uid {
-					conn.Close()
-					delete(h.clients, conn)
+					h.closeConn(conn, uid)
 				}
 			}
 			if !h.onlineUsers[uid] {
@@ -330,8 +427,7 @@ func (h *Handler) runHub() {
 					if err != nil {
 						log.Println("WebSocket write error:", err)
 						h.wsWriteErrorsTotal.Add(1)
-						conn.Close()
-						delete(h.clients, conn)
+						h.closeConn(conn, uid)
 					} else if uid == msg.to {
 						delivered = true
 						if msg.messageID > 0 {
@@ -404,8 +500,7 @@ func (h *Handler) runHub() {
 						if err := conn.WriteJSON(payload); err != nil {
 							log.Println("WebSocket group write error:", err)
 							h.wsWriteErrorsTotal.Add(1)
-							conn.Close()
-							delete(h.clients, conn)
+							h.closeConn(conn, uid)
 						} else {
 							delivered = true
 						}
@@ -433,8 +528,7 @@ func (h *Handler) runHub() {
 				if err := conn.WriteJSON(msg); err != nil {
 					log.Println("WebSocket broadcastAll write error:", err)
 					h.wsWriteErrorsTotal.Add(1)
-					conn.Close()
-					delete(h.clients, conn)
+					h.closeConn(conn, 0)
 				}
 			}
 
@@ -444,8 +538,7 @@ func (h *Handler) runHub() {
 					conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					if err := conn.WriteJSON(m.data); err != nil {
 						h.wsWriteErrorsTotal.Add(1)
-						conn.Close()
-						delete(h.clients, conn)
+						h.closeConn(conn, uid)
 					}
 				}
 			}
@@ -461,6 +554,8 @@ func (h *Handler) WSHealth(c *fiber.Ctx) error {
 		"connections":   h.wsConnectionsTotal.Load(),
 		"messages_sent": h.wsMessagesSentTotal.Load(),
 		"write_errors":  h.wsWriteErrorsTotal.Load(),
+		"closed":        h.wsClosedTotal.Load(),
+		"max_per_user":  h.MaxConnsPerUser,
 	})
 }
 

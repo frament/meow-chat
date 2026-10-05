@@ -961,6 +961,11 @@ export class ApiService {
     });
   }
 
+  /** Several push-log entries in one request; see PushClientLogBatch. */
+  pushLogBatch(entries: Array<{ kind: string; endpoint?: string; detail?: string }>) {
+    return this.http.post(`${this.baseUrl}/push/log/batch`, { entries });
+  }
+
   pushLog(event: { kind: string; endpoint?: string; detail?: string }) {
     return this.http.post(`${this.baseUrl}/push/log`, event);
   }

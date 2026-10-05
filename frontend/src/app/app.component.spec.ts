@@ -9,7 +9,7 @@ import { PwaInstallService } from './services/pwa-install.service';
 import { Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { signal, computed } from '@angular/core';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 // Minimal PushSubscriptionJSON-like object for mock
 function makeSubJSON(endpoint = 'https://example.push'): PushSubscriptionJSON {
@@ -44,7 +44,7 @@ describe('App', () => {
     mockApi = jasmine.createSpyObj('ApiService', [
       'connectWebSocket', 'incrementUnread', 'clearUnread',
       'incrementGroupUnread', 'clearGroupUnread', 'markGroupRead',
-      'getUnread', 'hydrateUnread', 'pushUnsubscribe', 'pushLog',
+      'getUnread', 'hydrateUnread', 'pushUnsubscribe', 'pushLog', 'pushLogBatch',
       'checkHealth', 'getVapidPublicKey', 'pushSubscribe', 'pushWelcome',
       'registerDevice', 'logout', 'checkUpdate', 'retryConnection',
       'getAuthRequests', 'getAuthRequest',
@@ -72,6 +72,10 @@ describe('App', () => {
     (mockApi.getAuthRequests as jasmine.Spy).and.returnValue(of([]));
     (mockApi.getVapidPublicKey as jasmine.Spy).and.returnValue(of({ publicKey: 'test-vapid-key' }));
     (mockApi.pushLog as jasmine.Spy).and.returnValue(of({}));
+    // Batching exists so a subscribe run is one request, not five. The mock needs
+    // it too, or the batched flush throws inside a timer and the test fails with
+    // "pushLogBatch is not a function" instead of what it is about.
+    (mockApi.pushLogBatch as jasmine.Spy).and.returnValue(of({}));
     (mockApi.pushUnsubscribe as jasmine.Spy).and.returnValue(of({}));
 
     mockCrypto = jasmine.createSpyObj('CryptoService', [
@@ -371,6 +375,112 @@ describe('App', () => {
 
       expect(mockApi.pushSubscribe).toHaveBeenCalled();
       expect(mockApi.pushWelcome).not.toHaveBeenCalled();
+    }));
+  });
+  describe('startup request pacing', () => {
+    // The HAR from LTE: six requests to /api in one second, each needing its own
+    // TLS handshake, which on that link costs 337-409ms. Device registration is
+    // needed for *sending*, not for showing a feed, so it waits for the first
+    // paint instead of competing with it.
+    beforeEach(() => {
+      (mockCrypto.init as jasmine.Spy).and.returnValue(Promise.resolve());
+      (mockCrypto.ensureDeviceKeyPair as jasmine.Spy).and.returnValue(Promise.resolve());
+      (mockCrypto.getDevicePublicKeySPKI as jasmine.Spy).and.returnValue(Promise.resolve('spki'));
+      (mockApi.registerDevice as jasmine.Spy).and.returnValue(of({}));
+      (mockApi.getAuthRequests as jasmine.Spy).and.returnValue(of([]));
+      mockApi.currentUser.set({ id: 1, username: 'me', avatar_url: '' } as any);
+    });
+
+    it('holds device registration back until after the first paint', fakeAsync(() => {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      // crypto.init() is a resolved promise, so its .then() body runs on the next
+      // microtask - long before any macrotask timer. tick(0) drains microtasks
+      // only, which is exactly the window the deferral exists to protect.
+      tick(0);
+
+      expect((mockApi.registerDevice as jasmine.Spy)).not.toHaveBeenCalled();
+
+      tick(3000);
+      expect((mockApi.registerDevice as jasmine.Spy)).toHaveBeenCalled();
+
+      app.flushPushLog();
+      tick(6000);
+    }));
+
+    it('does not let the deferred work stack up on repeated init', fakeAsync(() => {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      tick(0);
+      const app = fixture.componentInstance as any;
+
+      tick(3000);
+      app.flushPushLog();
+      tick(6000);
+
+      // One registration per load, not one per pending timer.
+      expect((mockApi.registerDevice as jasmine.Spy).calls.count()).toBe(1);
+    }));
+  });
+
+  describe('push log batching', () => {
+    // A subscribe run fires several log entries in a row, and one request each
+    // meant one connection and one TLS handshake each - at the moment the app was
+    // trying to appear. Measured over LTE: 337-409ms per handshake.
+    function makeApp() {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const app = fixture.componentInstance as any;
+      // ngOnInit asks for notification permission, and the mocked service logs
+      // 'permission_denied' when it is refused. Drain whatever that produced
+      // before the test starts recording, so the counts are about the entries the
+      // test itself adds.
+      app.flushPushLog();
+      tick(6000);
+      (mockApi.pushLog as jasmine.Spy).calls.reset();
+      (mockApi.pushLogBatch as jasmine.Spy).calls.reset();
+      return app;
+    }
+
+    it('sends several entries in one request instead of one each', fakeAsync(() => {
+      const app = makeApp();
+
+      app.logPush('permission_denied');
+      app.logPush('rotate', 'https://old.push');
+      app.logPush('subscribe', 'https://new.push');
+      tick(6000);
+
+      expect((mockApi.pushLog as jasmine.Spy)).not.toHaveBeenCalled();
+      expect((mockApi.pushLogBatch as jasmine.Spy).calls.count()).toBe(1);
+      const entries = (mockApi.pushLogBatch as jasmine.Spy).calls.mostRecent().args[0];
+      expect(entries.length).toBe(3);
+      expect(entries.map((e: any) => e.kind)).toEqual([
+        'permission_denied', 'rotate', 'subscribe',
+      ]);
+    }));
+
+    it('does not send anything before the flush window closes', fakeAsync(() => {
+      const app = makeApp();
+
+      app.logPush('subscribe', 'https://new.push');
+      tick(1000);
+
+      expect((mockApi.pushLogBatch as jasmine.Spy)).not.toHaveBeenCalled();
+      tick(5000);
+      expect((mockApi.pushLogBatch as jasmine.Spy).calls.count()).toBe(1);
+    }));
+
+    it('falls back to individual requests when the batch endpoint is missing', fakeAsync(() => {
+      // An older backend has no /push/log/batch. Diagnostics must survive that
+      // rather than vanish - they are what a push failure gets diagnosed from.
+      const app = makeApp();
+      (mockApi.pushLogBatch as jasmine.Spy).and.returnValue(throwError(() => new Error('404')));
+
+      app.logPush('subscribe_error', '', 'boom');
+      tick(6000);
+
+      expect((mockApi.pushLog as jasmine.Spy).calls.count()).toBe(1);
     }));
   });
 });
