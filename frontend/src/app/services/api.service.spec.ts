@@ -443,4 +443,194 @@ describe('ApiService', () => {
     httpMock.expectNone('/api/refresh');
     expect(wsSpy.calls.count()).toBe(initialWsCount + 1);
   }));
+  // ── Handshake watchdog ──
+  //
+  // The bug this covers: on a mobile network packets are dropped rather than
+  // refused, so a socket can sit in CONNECTING indefinitely. Neither onopen nor
+  // onclose ever fires, wsConnecting stays true, and the guard at the top of
+  // connectWebSocket rejects every later attempt - the socket dies silently and
+  // nothing recovers it. Observed on LTE: HTTP came back, the WebSocket never did,
+  // zero "WS connect" in ten minutes.
+
+  it('gives up on a handshake that stalls, and schedules a retry', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const before = wsSpy.calls.count();
+
+    // No onopen and no onclose - the handshake just hangs.
+    expect((service as any).wsConnecting).toBe(true);
+
+    tick((service as any).WS_CONNECT_TIMEOUT + 100);
+
+    // Cleared, so the next attempt is allowed through.
+    expect((service as any).wsConnecting).toBe(false);
+    expect(service.wsConnected()).toBe(false);
+
+    // And the backoff timer fired, opening a new socket.
+    tick(35000);
+    expect(wsSpy.calls.count()).toBeGreaterThan(before);
+  }));
+
+  it('lets a handshake that completes in time stand - the watchdog must not fire', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const socket = wsSpy.calls.mostRecent().returnValue;
+    const countAfterConnect = wsSpy.calls.count();
+
+    // The handshake succeeds, as it would on a healthy network.
+    socket.onopen(new Event('open'));
+    expect(service.wsConnected()).toBe(true);
+
+    // Well past the watchdog deadline: nothing should happen.
+    tick((service as any).WS_CONNECT_TIMEOUT + 60000);
+    expect(wsSpy.calls.count()).toBe(countAfterConnect);
+    expect(service.wsConnected()).toBe(true);
+  }));
+
+  it('does not stack two retries when the watchdog drops a stalled socket', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+
+    // Watchdog fires; it detaches onclose before closing so that close cannot
+    // schedule a second reconnect on top of the one already asked for.
+    tick((service as any).WS_CONNECT_TIMEOUT + 100);
+    const afterWatchdog = wsSpy.calls.count();
+
+    // Over a long window, backoff opens sockets at 1s, 2s, 4s, 8s, 16s, 30s...
+    // One extra attempt per step is correct; a doubled rate is not.
+    const single = (service as any).wsRetryCount;
+    tick(120000);
+
+    // Roughly six steps in two minutes - nowhere near double that.
+    expect((service as any).wsRetryCount - single).toBeLessThan(12);
+    expect(wsSpy.calls.count()).toBeGreaterThan(afterWatchdog);
+  }));
+
+  it('stops retrying after logout even if a handshake was in flight', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const count = wsSpy.calls.count();
+
+    // The socket is still handshaking when the user signs out.
+    expect((service as any).wsConnecting).toBe(true);
+    service.logout();
+    // logout() tells the server to drop the refresh token; drain that request.
+    const logoutReq = httpMock.expectOne('/api/logout');
+    logoutReq.flush({ ok: true });
+
+    tick((service as any).WS_CONNECT_TIMEOUT + 120000);
+
+    // No token, no reconnect - and the watchdog found nothing left to clear.
+    expect((service as any).wsConnecting).toBe(false);
+    expect(wsSpy.calls.count()).toBe(count);
+  }));
+
+  it('caps the backoff at the ceiling instead of jumping to a minute', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    // Push the retry counter far past the old WS_MAX_RETRIES threshold.
+    (service as any).wsRetryCount = 40;
+    triggerWsOnclose();
+
+    // The ceiling is 30s. It used to become 60s here, which read as a dead socket.
+    tick(31000);
+    expect((service as any).wsRetryCount).toBeGreaterThan(40);
+  }));
+  it('does not leave the watchdog armed after a clean close', fakeAsync(() => {
+    // A timer left running is not harmless: it holds the service alive through the
+    // backoff window and fires against a socket that no longer exists. Asserted
+    // directly rather than through behaviour, because every observable effect is
+    // indistinguishable from "the watchdog did nothing" - which is exactly the kind
+    // of test that passes while the bug is present.
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    // The handshake fails normally: the server refuses, onclose arrives.
+    triggerWsOnclose();
+
+    expect((service as any).wsConnectTimer).toBeNull();
+  }));
+
+  it('does not leave the watchdog armed when the socket opens', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    wsSpy.calls.mostRecent().returnValue.onopen(new Event('open'));
+
+    expect((service as any).wsConnectTimer).toBeNull();
+  }));
+
+  it('does not leave the watchdog armed when the constructor throws', fakeAsync(() => {
+    const futureToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 9999999999 })) + '.fakesig';
+    (globalThis as any).WebSocket = jasmine.createSpy('WebSocket').and.throwError('blocked');
+    service.storeAuth({
+      access_token: futureToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    expect((service as any).wsConnectTimer).toBeNull();
+  }));
 });

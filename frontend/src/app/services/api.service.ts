@@ -318,10 +318,13 @@ export class ApiService {
   private wsReconnecting = false;
   private wsRetryCount = 0;
   private wsConnecting = false;
+  private wsConnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly WS_MAX_RETRY_DELAY = 30000;
   private readonly WS_INITIAL_RETRY_DELAY = 1000;
-  private readonly WS_MAX_RETRIES = 20;
-  private readonly WS_SLOW_POLL_DELAY = 60000;
+  // How long a handshake may stay in progress before it counts as failed. On a
+  // mobile network packets are dropped rather than refused, so the socket sits in
+  // CONNECTING forever and neither onopen nor onclose ever fires.
+  private readonly WS_CONNECT_TIMEOUT = 12000;
   private baseUrl = '/api';
 
   constructor(private http: HttpClient) {
@@ -999,15 +1002,31 @@ export class ApiService {
 
     this.wsConnecting = true;
 
+    // The handshake watchdog. Without it a socket whose handshake stalls stays in
+    // CONNECTING forever: neither onopen nor onclose fires, wsConnecting stays
+    // true, and the guard at the top of this method then rejects every later
+    // attempt. The WebSocket dies silently and never comes back - which is what
+    // was observed on LTE, where packets vanish instead of being refused.
+    this.#clearConnectTimer();
+    this.wsConnectTimer = setTimeout(() => {
+      this.wsConnectTimer = null;
+      if (this.wsConnecting) {
+        this.#dropSocket();
+        this.scheduleReconnect();
+      }
+    }, this.WS_CONNECT_TIMEOUT);
+
     try {
       this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
     } catch {
+      this.#clearConnectTimer();
       this.wsConnecting = false;
       this.scheduleReconnect();
       return;
     }
 
     this.ws.onopen = () => {
+      this.#clearConnectTimer();
       this.wsConnecting = false;
       this.wsConnected.set(true);
       this.wsRetryCount = 0;
@@ -1031,13 +1050,41 @@ export class ApiService {
     };
 
     this.ws.onclose = () => {
+      this.#clearConnectTimer();
       this.ws = null;
       this.wsConnecting = false;
       this.wsConnected.set(false);
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = () => {};
+    // Was empty. A failed handshake is the most useful thing to see when working
+    // out why messages stopped arriving, and it costs one line.
+    this.ws.onerror = () => {
+      console.warn('WebSocket error', { retry: this.wsRetryCount });
+    };
+  }
+
+  /** Closes and forgets the socket, leaving wsConnecting clear for a retry. */
+  #dropSocket(): void {
+    const ws = this.ws;
+    this.ws = null;
+    this.wsConnecting = false;
+    if (!ws) return;
+    // Detach first: close() fires onclose, which would otherwise schedule a second
+    // reconnect on top of the one the watchdog already asked for.
+    ws.onclose = null;
+    ws.onerror = null;
+    ws.onopen = null;
+    ws.onmessage = null;
+    try {
+      ws.close();
+    } catch {}
+  }
+
+  #clearConnectTimer(): void {
+    if (!this.wsConnectTimer) return;
+    clearTimeout(this.wsConnectTimer);
+    this.wsConnectTimer = null;
   }
 
   private isJwtExpired(token: string): boolean {
@@ -1056,11 +1103,14 @@ export class ApiService {
 
     this.wsReconnecting = true;
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
-    // After WS_MAX_RETRIES attempts, switch to slow-poll (60s) for PWA support
-    const delay = this.wsRetryCount < this.WS_MAX_RETRIES
-      ? Math.min(this.WS_INITIAL_RETRY_DELAY * Math.pow(2, this.wsRetryCount), this.WS_MAX_RETRY_DELAY)
-      : this.WS_SLOW_POLL_DELAY;
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s. Past WS_MAX_RETRIES it stays
+    // at the ceiling rather than jumping to a minute: a 60s gap looks exactly like
+    // a dead socket to whoever is waiting, and nothing is gained by waiting longer
+    // when the backoff has already done its job.
+    const delay = Math.min(
+      this.WS_INITIAL_RETRY_DELAY * Math.pow(2, this.wsRetryCount),
+      this.WS_MAX_RETRY_DELAY,
+    );
     const jitter = Math.random() * 1000;
 
     this.wsRetryCount++;
