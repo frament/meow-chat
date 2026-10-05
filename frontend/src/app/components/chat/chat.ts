@@ -1052,6 +1052,37 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * a short thread overflows; JS alone is what missed the bottom in the first
    * place.
    */
+  /**
+   * Ids already accepted into `messages`, as a Set.
+   *
+   * The old check was `this.messages.some(m => m.id === data.id)`, which scans the
+   * whole thread on every frame and, worse, ran *before* the decryption awaits. Two
+   * frames for the same message arriving back to back both passed the check and
+   * both were pushed once their awaits resolved - which is how one message came to
+   * be shown three times.
+   */
+  private seenMessageIds = new Set<number>();
+
+  /** Rebuilds the set from the current thread, e.g. after switching chats. */
+  private reindexSeen(): void {
+    this.seenMessageIds = new Set(this.messages.map(m => m.id));
+  }
+
+  /**
+   * Claims an id. Returns false when it is already claimed or was never supplied.
+   *
+   * Called *after* decryption, immediately before the push, so the window the old
+   * code lost between its check and its push is closed. A frame without an id is
+   * not deduplicated - the server always sends one, and a synthetic Date.now() id
+   * would collide with the next one.
+   */
+  private claimMessage(id: number | undefined): boolean {
+    if (!id) return true;
+    if (this.seenMessageIds.has(id)) return false;
+    this.seenMessageIds.add(id);
+    return true;
+  }
+
   private scrollToBottom(): void {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -1196,10 +1227,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         if (data.type === 'message' && this.selectedUser && (data.from === this.selectedUser.id || data.from === this.currentUserId)) {
           // Skip own messages (already handled via optimistic send + API response)
           if (data.from === this.currentUserId) return;
-          // Skip if this message already exists
-          if (data.id && this.messages.some(m => m.id === data.id)) {
-            return;
-          }
           let content = data.content;
           let decryptedOk = true;
           if (data.env_content && data.envelopes?.length) {
@@ -1215,6 +1242,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             if (!content) content = '[Зашифрованное сообщение]';
           }
           if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
+          // Claimed here, after decryption and immediately before the push. Three
+          // frames for one message arrive nearly together; each awaits the key
+          // first, and they would all have passed a check made before those awaits.
+          if (!this.claimMessage(data.id)) return;
           const msg: Message = {
             id: data.id || Date.now(),
             from_user_id: data.from,
@@ -1241,10 +1272,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         if (data.type === 'group_message' && this.selectedGroup && data.group_id === this.selectedGroup.id) {
           // Skip own messages (already handled via optimistic send + API response)
           if (data.from === this.currentUserId) return;
-          // Skip if this message already exists
-          if (data.id && this.messages.some(m => m.id === data.id)) {
-            return;
-          }
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv) {
             let decryptedOk = false;
@@ -1255,6 +1282,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             if (!content) content = '[Зашифрованное сообщение]';
             if (!decryptedOk) this.reportDecryptFailure('group', { group_id: data.group_id, msg_type: data.msg_type });
           }
+          // Same reason as in direct messages: claim after the awaits, before the push.
+          if (!this.claimMessage(data.id)) return;
           const msg: Message = {
             id: data.id || Date.now(),
             from_user_id: data.from,
@@ -1390,6 +1419,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         const existingIds = new Set(this.messages.map(m => m.id));
         for (const msg of msgs) {
           if (!existingIds.has(msg.id)) {
+            // Claim as well: the WS frame for one of these may arrive right after
+            // the load, and the index has to already know about it.
+            this.seenMessageIds.add(msg.id);
             this.messages.push(await this.decryptMsg(msg, user.id));
           } else {
             const existing = this.messages.find(m => m.id === msg.id);
@@ -1573,6 +1605,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const cached = localStorage.getItem(this.messageCacheKey(user.id));
     this.messages = cached ? JSON.parse(cached) : [];
+    // Switching threads replaces the list wholesale, so the index of claimed ids
+    // has to follow it - otherwise ids from the previous chat would suppress
+    // messages in this one.
+    this.reindexSeen();
 
     this.messagesLoadFailed.set(false);
     this.api.getMessages(this.currentUserId, user.id).subscribe({
@@ -1584,6 +1620,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       const existingIds = new Set(this.messages.map(m => m.id));
       for (const msg of msgs) {
         if (!existingIds.has(msg.id)) {
+          this.seenMessageIds.add(msg.id);
           this.messages.push(msg);
         } else {
           const existing = this.messages.find(m => m.id === msg.id);
@@ -1911,7 +1948,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const idx = this.messages.findIndex(m => m.id === tempId);
     if (idx !== -1) {
       this.messages[idx].pending = false;
-      if (server?.id) this.messages[idx].id = server.id;
+      if (server?.id) {
+        // The id changes under the index's feet here: the temporary one must make
+        // way for the server's, or the next frame for that message would look
+        // unclaimed and arrive as a duplicate of what is already on screen.
+        this.seenMessageIds.delete(this.messages[idx].id);
+        this.messages[idx].id = server.id;
+        this.seenMessageIds.add(server.id);
+      }
       if (server?.images && server.images.length > 0) {
         this.messages[idx].images = server.images.map((url: string) => ({ id: 0, image_url: url }));
       }
@@ -1925,6 +1969,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sending = false;
     const idx = this.messages.findIndex(m => m.id === tempId);
     if (idx !== -1) {
+      this.seenMessageIds.delete(tempId);
       this.messages.splice(idx, 1);
       if (this.selectedUser) {
         this.persistCache(this.selectedUser.id);
@@ -2086,6 +2131,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.messages = [];
+    this.reindexSeen();
     this.api.getGroupMessages(group.id).subscribe(async (msgs: Message[]) => {
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
@@ -2094,6 +2140,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       const existingIds = new Set(this.messages.map(m => m.id));
       for (const msg of msgs) {
         if (!existingIds.has(msg.id)) {
+          this.seenMessageIds.add(msg.id);
           this.messages.push(msg);
         }
       }
