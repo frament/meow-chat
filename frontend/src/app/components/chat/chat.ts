@@ -200,7 +200,7 @@ import { toMemoryFile } from '../../services/upload-utils';
           <div #scrollContainerDesktop class="flex-1 overflow-y-auto chat-scroll" style="min-height:0;">
               @if (messagesLoadFailed()) {
                 <div class="message-load-failed" role="alert">
-                  <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
+                  <span>{{ loadFailureReason() }}</span>
                   <button type="button" (click)="retryLoadMessages()">Повторить</button>
                 </div>
               }
@@ -375,9 +375,10 @@ import { toMemoryFile } from '../../services/upload-utils';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (paste)="onPaste($event)"
-              style="flex:1;height:36px;box-sizing:border-box;"
-              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
+              <textarea #composer rows="1" [(ngModel)]="messageContent" (keydown)="onComposerKeydown($event)"
+              (input)="autoGrowComposer($event)" (paste)="onPaste($event)"
+              style="flex:1;min-height:36px;max-height:140px;box-sizing:border-box;resize:none;overflow-y:auto;field-sizing:content;"
+              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'"></textarea>
               <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -548,7 +549,7 @@ import { toMemoryFile } from '../../services/upload-utils';
           <div #scrollContainerMobile class="flex-1 overflow-y-auto chat-scroll" style="min-height:0;">
               @if (messagesLoadFailed()) {
                 <div class="message-load-failed" role="alert">
-                  <span>Не удалось загрузить сообщения — нет связи или сервер недоступен.</span>
+                  <span>{{ loadFailureReason() }}</span>
                   <button type="button" (click)="retryLoadMessages()">Повторить</button>
                 </div>
               }
@@ -725,9 +726,10 @@ import { toMemoryFile } from '../../services/upload-utils';
                   </div>
                 }
               </div>
-              <input type="text" [(ngModel)]="messageContent" (keyup.enter)="sendMessage()" (paste)="onPaste($event)"
-              style="flex:1;height:36px;box-sizing:border-box;"
-              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'">
+              <textarea #composer rows="1" [(ngModel)]="messageContent" (keydown)="onComposerKeydown($event)"
+              (input)="autoGrowComposer($event)" (paste)="onPaste($event)"
+              style="flex:1;min-height:36px;max-height:140px;box-sizing:border-box;resize:none;overflow-y:auto;field-sizing:content;"
+              [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'"></textarea>
               <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
               style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;transition:all 0.2s;">
               <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -989,6 +991,29 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * changes) while the websocket reconnect refetched nothing.
    */
   readonly messagesLoadFailed = signal(false);
+
+  /** What actually went wrong, as far as the client can tell. */
+  readonly loadFailureReason = signal('Не удалось загрузить сообщения — нет связи или сервер недоступен.');
+
+  private noteLoadFailure(status?: number): void {
+    this.messagesLoadFailed.set(true);
+    if (status === 401 || status === 403) {
+      // The interceptor refreshes the token and retries; if it reaches here the
+      // session is gone. Saying "no network" and offering "retry" would send
+      // someone looking at their Wi-Fi for a problem that is a login.
+      this.loadFailureReason.set('Сессия истекла — нужно войти заново. Повтор не поможет.');
+    } else if (status === 404) {
+      this.loadFailureReason.set('Чат не найден на сервере.');
+    } else if (typeof status === 'number' && status >= 500) {
+      this.loadFailureReason.set('Сервер отвечает с ошибкой. Попробуйте ещё раз.');
+    } else {
+      this.loadFailureReason.set('Не удалось загрузить сообщения — нет связи или сервер недоступен.');
+    }
+  }
+
+  private noteLoadSuccess(): void {
+    this.messagesLoadFailed.set(false);
+  }
   uploadProgress = signal(0);
   sendError = signal('');
 
@@ -1415,7 +1440,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         // Cleared here, not only in selectUser: a recovery that arrives over the
         // websocket goes through this path, and without it the "failed to load"
         // banner stayed up over messages that had just loaded.
-        this.messagesLoadFailed.set(false);
+        this.noteLoadSuccess();
         const existingIds = new Set(this.messages.map(m => m.id));
         for (const msg of msgs) {
           if (!existingIds.has(msg.id)) {
@@ -1439,14 +1464,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
         const unreadIds = this.messages.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
         if (unreadIds.length > 0) {
-          this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
-            for (const m of this.messages) {
-              if (unreadIds.includes(m.id)) m.is_read = true;
-            }
+          this.api.markMessagesRead(unreadIds, user.id).subscribe({
+            error: () => {},
+            next: () => {
+              for (const m of this.messages) {
+                if (unreadIds.includes(m.id)) m.is_read = true;
+              }
+            },
           });
         }
       },
-      error: () => this.messagesLoadFailed.set(true),
+      error: (err) => this.noteLoadFailure(err?.status),
     });
   }
 
@@ -1610,7 +1638,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     // messages in this one.
     this.reindexSeen();
 
-    this.messagesLoadFailed.set(false);
+    this.noteLoadSuccess();
     this.api.getMessages(this.currentUserId, user.id).subscribe({
       next: async (msgs: Message[]) => {
       for (let i = 0; i < msgs.length; i++) {
@@ -1647,10 +1675,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       // Mark received messages as read
       const unreadIds = msgs.filter(m => m.from_user_id === user.id && !m.is_read).map(m => m.id);
       if (unreadIds.length > 0) {
-        this.api.markMessagesRead(unreadIds, user.id).subscribe(() => {
-          for (const m of this.messages) {
-            if (unreadIds.includes(m.id)) m.is_read = true;
-          }
+        this.api.markMessagesRead(unreadIds, user.id).subscribe({
+          error: () => {},
+          next: () => {
+            for (const m of this.messages) {
+              if (unreadIds.includes(m.id)) m.is_read = true;
+            }
+          },
         });
       }
       },
@@ -1658,7 +1689,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         // Without this the failure was invisible: the callback above never ran, so
         // scrollToBottom was never called and the cached thread stayed put looking
         // like the whole conversation rather than like a failure.
-        this.messagesLoadFailed.set(true);
+        this.noteLoadFailure();
       },
     });
   }
@@ -1771,6 +1802,32 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private sending = false;
 
+  /**
+   * Enter sends, Shift+Enter inserts a newline.
+   *
+   * This was an `<input>`, which has no newline at all - so "new paragraph" on a
+   * phone was impossible and Enter was the only way out. It was reported as an
+   * iPhone problem; it was not one, and no iOS setting changes it.
+   *
+   * keydown rather than keyup: keyup fires after the character is already in the
+   * field, which meant the newline stayed behind on every send.
+   */
+  onComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    // On a touch keyboard the modifier is not reported by every layout, so a
+    // plain Enter sends unless Shift is held - the desktop convention.
+    if (event.shiftKey) return;
+    event.preventDefault();
+    this.sendMessage();
+  }
+
+  /** Grows with the content up to the CSS max-height, then scrolls. */
+  autoGrowComposer(event: Event): void {
+    const el = event.target as HTMLTextAreaElement;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
   async sendMessage() {
     if (this.sending) return;
     if (!this.selectedUser && !this.selectedGroup) return;
@@ -1854,6 +1911,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.messages.push(optimisticMsg);
       this.messages = [...this.messages];
       this.messageContent = '';
+      this.resetComposerHeight();
       this.clearFiles();
       this.scrollToBottom();
 
@@ -1902,6 +1960,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.messages = [...this.messages];
       this.persistCache(this.selectedUser.id);
       this.messageContent = '';
+      this.resetComposerHeight();
       this.clearFiles();
       this.scrollToBottom();
 
@@ -1941,6 +2000,16 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (type === 'image') {
       this.messageType = 'text';
     }
+    this.resetComposerHeight();
+  }
+
+  /** An empty composer must be one row tall again, not stay stretched. */
+  private resetComposerHeight(): void {
+    const els = document.querySelectorAll<HTMLTextAreaElement>('textarea[rows="1"]');
+    els.forEach((el) => {
+      el.style.height = 'auto';
+      el.style.height = '';
+    });
   }
 
   private finalizeOptimistic(tempId: number, server?: any) {
@@ -2132,7 +2201,15 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.messages = [];
     this.reindexSeen();
-    this.api.getGroupMessages(group.id).subscribe(async (msgs: Message[]) => {
+    this.api.getGroupMessages(group.id).subscribe({
+      error: (err) => {
+        // Same bug the direct chats had: a failed request never reached the
+        // callback, so nothing scrolled and the thread sat at the top looking
+        // empty. The banner and its retry belong to the group thread too.
+        this.noteLoadFailure(err?.status);
+      },
+      next: async (msgs: Message[]) => {
+      this.noteLoadSuccess();
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
       }
@@ -2158,6 +2235,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.unreadDividerIdx = -1;
       }
       this.scrollToBottom();
+      },
     });
   }
 
@@ -2287,12 +2365,16 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const epochNow = await this.crypto.getCurrentGroupEpoch(groupId);
     const key = await this.crypto.getGroupKey(groupId, epochNow);
     if (!key) return;
-    this.api.getGroupMessages(groupId).subscribe(async (msgs: Message[]) => {
+    this.api.getGroupMessages(groupId).subscribe({
+      error: (err) => this.noteLoadFailure(err?.status),
+      next: async (msgs: Message[]) => {
+      this.noteLoadSuccess();
       for (let i = 0; i < msgs.length; i++) {
         msgs[i] = await this.decryptGroupMsg(msgs[i], groupId);
       }
       this.messages = msgs;
       this.scrollToBottom();
+      },
     });
   }
 
@@ -2323,6 +2405,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   async createGroup() {
     if (!this.newGroupName.trim()) return;
     this.api.createGroupChat(this.newGroupName.trim()).subscribe({
+      // A creation that failed must say so, otherwise the dialog closes on a
+      // success that never happened.
+      error: (err) => this.notice.show(err?.error?.error || 'Не удалось создать группу.', 'error'),
       next: async (res) => {
         this.showCreateGroup = false;
         this.newGroupName = '';
@@ -2344,21 +2429,29 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   loadGroupChats() {
-    this.api.getGroupChats().subscribe((groups: GroupChat[]) => {
+    this.api.getGroupChats().subscribe({
+      // An offline sidebar is not a reason to throw out of the subscription: the
+      // cached list stays and the failure is not a blank panel.
+      error: () => {},
+      next: (groups: GroupChat[]) => {
       this.groupChats = groups;
       const groupId = this.route.snapshot.paramMap.get('groupId');
       if (groupId && !this.selectedGroup) {
         this.resolvePendingGroupChat(Number(groupId));
       }
+      },
     });
   }
 
   loadGroupInfo() {
     if (!this.selectedGroup) return;
-    this.api.getGroupChat(this.selectedGroup.id).subscribe((res) => {
+    this.api.getGroupChat(this.selectedGroup.id).subscribe({
+      error: () => { this.showGroupInfo = false; },
+      next: (res) => {
       this.groupMembers = res.members;
       this.showGroupInfo = true;
       this.loadFriendCandidates();
+      },
     });
   }
 
@@ -2368,8 +2461,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     const memberIds = new Set(this.groupMembers.map((m) => m.user_id));
-    this.api.getFriends().subscribe((friends) => {
+    this.api.getFriends().subscribe({
+      error: () => {},
+      next: (friends) => {
       this.groupFriendCandidates = friends.filter((f) => f.id !== this.currentUserId && !memberIds.has(f.id));
+      },
     });
   }
 
@@ -2386,8 +2482,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         // Share the group E2EE key with the new member right away.
         this.distributeGroupKeyToMember(this.selectedGroup!.id, friend.id);
       },
-      error: () => {
-        this.groupFriendCandidates = this.groupFriendCandidates.filter((f) => f.id !== friend.id);
+      error: (err) => {
+        // It used to remove the person from the list, which reads as "added" while
+        // nothing happened. Now it says what happened, and leaves them there so the
+        // tap can be repeated.
+        this.notice.show(err?.error?.error || 'Не удалось добавить участника.', 'error');
       },
     });
   }
@@ -2396,6 +2495,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!this.selectedGroup) return;
     this.inviteToken = '';
     this.api.createGroupInvite(this.selectedGroup.id).subscribe({
+      error: (err) => this.notice.show(err?.error?.error || 'Не удалось создать приглашение.', 'error'),
       next: (res) => {
         this.inviteToken = res.token;
         const baseUrl = window.location.origin;
