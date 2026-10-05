@@ -12,6 +12,11 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_ORIGIN=${WEBAUTHN_RP_ORIGIN:-http://localhost:4200}
       - VAPID_CONTACT=${VAPID_CONTACT:-admin@gmail.com}
+      # No default on purpose. backend/auth falls back to a secret that lives in
+      # the source, so a missing JWT_SECRET would otherwise start a server whose
+      # tokens anyone can forge - and this repo is public. main.go refuses to boot
+      # without one, which turns a silent downgrade into a loud failure.
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is not set - generate one with: openssl rand -base64 48}
     dns:
       - 192.168.1.1
     volumes:

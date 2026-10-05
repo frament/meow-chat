@@ -260,7 +260,13 @@ func bearerToken(t *testing.T, userID int64, isAdmin bool) string {
 }
 
 func init() {
-	os.Setenv("JWT_SECRET", "test-secret-for-testing")
+	// auth.init() runs first and now stays silent when the variable is missing,
+	// so tests can install their own secret. JWT_SECRET may still arrive from the
+	// environment (CI does that); SetJWTSecret is idempotent and this only decides
+	// who wins, and "the test value" always losing would be the surprising part.
+	if os.Getenv("JWT_SECRET") == "" {
+		auth.SetJWTSecret("test-secret-for-testing")
+	}
 }
 
 // mustExec runs a statement and fails the test on error. A bare db.Exec on a

@@ -30,6 +30,10 @@ func cleanupOldPushLogs() {
 }
 
 func main() {
+	// Before anything opens a database or a socket. Without this the server would
+	// sign tokens with an empty key, which anyone could forge - see auth.RequireSecret.
+	auth.RequireSecret()
+
 	database.InitDB()
 	database.SeedAdmin()
 

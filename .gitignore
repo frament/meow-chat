@@ -18,6 +18,12 @@ meow-chat-server.exe
 # Generated keys (contains private key)
 vapid_keys.json
 
+# Secrets. JWT_SECRET lives here and this repo is public: without this the file
+# would be committed and every token in production becomes forgeable.
+.env
+.env.*
+!.env.example
+
 # LeanKG
 .leankg/
 
