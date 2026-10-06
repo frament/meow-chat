@@ -86,6 +86,12 @@ if not re.search(r'^\s*access_log\s+\S+\s+timed\b', conf, re.M):
 if '$upstream_response_time' not in conf:
     print('✗ в format нет $upstream_response_time — не видно, сколько думал бэкенд')
     sys.exit(1)
+# Without a timestamp a log of repeated requests cannot be told apart from a log
+# of one request a minute, which is the difference between a retry loop and normal
+# traffic.
+if '$time_iso8601' not in conf:
+    print('✗ в format нет $time_iso8601 — не отличить цикл повторов от обычных запросов')
+    sys.exit(1)
 print('  ✓ тайминги пишутся в лог')
 PY
 
