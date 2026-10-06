@@ -380,6 +380,22 @@ describe('App', () => {
       expect(mockApi.pushWelcome).not.toHaveBeenCalled();
     }));
   });
+  describe('startup connection', () => {
+    it('checks the stored token before opening the socket', fakeAsync(() => {
+      // connectWebSocket opens with whatever token is in storage, so an app
+      // started with a stale one - the normal case after the phone has slept -
+      // went straight to a handshake the server answers with 401: a run of
+      // `GET /api/ws ... 401` in the logs with no /api/refresh anywhere near it.
+      // retryConnection refreshes first.
+      mockApi.currentUser.set({ id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false });
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+
+      expect((mockApi.retryConnection as jasmine.Spy)).toHaveBeenCalled();
+      expect((mockApi.connectWebSocket as jasmine.Spy)).not.toHaveBeenCalled();
+    }));
+  });
+
   describe('startup request pacing', () => {
     // The HAR from LTE: six requests to /api in one second, each needing its own
     // TLS handshake, which on that link costs 337-409ms. Device registration is

@@ -373,7 +373,13 @@ export class ApiService {
       if (token && this.isJwtExpired(token)) {
         this.refreshAccessToken().subscribe({
           next: () => this.connectWebSocket(),
-          error: () => this.connectWebSocket(),
+          // Not connecting on failure, deliberately. The token is known to be
+          // expired, so a socket opened now is rejected with a 401 - that is the
+          // run of `GET /api/ws ... 401` the old logs showed, with no refresh
+          // anywhere near it. The retry timer will try again properly.
+          error: (err) => {
+            if (err?.status === 401) this.logout();
+          },
         });
         return;
       }

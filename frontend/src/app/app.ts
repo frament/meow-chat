@@ -406,7 +406,13 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit() {
     if (this.#api.currentUser()) {
-      this.#api.connectWebSocket();
+      // retryConnection, not connectWebSocket: it checks the stored token first
+      // and refreshes it if it has expired. connectWebSocket opens with whatever
+      // is in storage, so an app started with a stale token - the normal case
+      // after the phone has been asleep - went straight to a handshake the server
+      // answers with 401. The reconnect path always refreshed; the startup path
+      // did not.
+      this.#api.retryConnection();
       this.#crypto.init().then(() => {
         this.#crypto.syncPublicKey();
         // Held back so the first paint is not competing with three more requests.

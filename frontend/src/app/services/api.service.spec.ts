@@ -633,4 +633,30 @@ describe('ApiService', () => {
 
     expect((service as any).wsConnectTimer).toBeNull();
   }));
+  it('does not open a socket when the token is expired and the refresh fails', fakeAsync(() => {
+    // The old behaviour connected anyway, which is the run of
+    // `GET /api/ws ... 401` with the same stale token that production logs showed
+    // and no /api/refresh next to it.
+    const expiredToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 0 })) + '.fakesig';
+    service.storeAuth({
+      access_token: expiredToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    // Let storeAuth's own connect settle, then measure from there.
+    tick(60000);
+    (service as any).ws = null;
+    const before = wsSpy.calls.count();
+    spyOn(service, 'logout');
+
+    service.retryConnection();
+    httpMock.expectOne('/api/refresh').flush('nope', { status: 500, statusText: 'Server Error' });
+    tick();
+
+    expect(wsSpy.calls.count()).toBe(before);
+  }));
 });
