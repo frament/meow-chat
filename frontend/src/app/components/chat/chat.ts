@@ -1814,11 +1814,30 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   onComposerKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
-    // On a touch keyboard the modifier is not reported by every layout, so a
-    // plain Enter sends unless Shift is held - the desktop convention.
-    if (event.shiftKey) return;
-    event.preventDefault();
-    this.sendMessage();
+    // A hardware keyboard: Enter sends, Shift+Enter is a paragraph break.
+    if (!this.usesSoftwareKeyboard()) {
+      if (event.shiftKey) return;
+      event.preventDefault();
+      this.sendMessage();
+      return;
+    }
+    // A phone keyboard has no Shift, so Shift+Enter is unreachable and Enter is
+    // the only way to break a line. Taking Enter for "send" left no way to make a
+    // paragraph at all - which is what iOS users reported. Enter inserts the
+    // newline there; the send button sends.
+  }
+
+  /**
+   * Whether the on-screen keyboard is the thing being used.
+   *
+   * A coarse pointer means touch, and touch means the software keyboard, which has
+   * no modifiers. A desktop with a touchscreen reports both; there a real keyboard
+   * is present too, so Enter can safely send - the pointer check is on its own not
+   * enough, hence the hover test, which only a device with a real pointer passes.
+   */
+  private usesSoftwareKeyboard(): boolean {
+    return window.matchMedia('(pointer: coarse)').matches
+      && !window.matchMedia('(hover: hover)').matches;
   }
 
   /** Grows with the content up to the CSS max-height, then scrolls. */

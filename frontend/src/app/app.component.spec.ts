@@ -145,7 +145,10 @@ describe('App', () => {
     const app = fixture.componentInstance;
     expect(app.maintenanceMode()).toBeFalse();
 
-    tick(3000);
+    // The poll interval is 15s, not 3s: switchMap used to cancel the in-flight
+    // check at exactly the interval, which is what "health is cut off after three
+    // seconds" turned out to be. exhaustMap lets the check finish.
+    tick(15000);
     expect(app.maintenanceMode()).toBeTrue();
   }));
 
@@ -481,6 +484,98 @@ describe('App', () => {
       tick(6000);
 
       expect((mockApi.pushLog as jasmine.Spy).calls.count()).toBe(1);
+    }));
+  });
+  describe('health poll', () => {
+    function makeApp() {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      return fixture.componentInstance as any;
+    }
+
+    it('lets a slow check finish instead of cancelling it at the interval', fakeAsync(() => {
+      // The reported bug. A check that takes longer than the poll interval was
+      // cancelled by switchMap every single time, so the maintenance overlay never
+      // appeared and the request was never allowed to complete.
+      mockApi.currentUser.set({ id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false });
+      const answers = new Subject<{ status: string }>();
+      (mockApi.checkHealth as jasmine.Spy).and.returnValue(answers.asObservable());
+
+      const app = makeApp();
+      tick(15000);                       // first tick, the check starts
+      // Five seconds pass unanswered. The old code polled every 3s with switchMap,
+      // so this is where it was cancelled - every time, forever, and the answer
+      // below never landed. Five is chosen to be past that point on purpose.
+      tick(5000);
+      answers.next({ status: 'maintenance' });
+      tick(0);
+      expect(app.maintenanceMode()).toBeTrue();
+    }));
+
+    it('does not let one hung check stop the poll for good', fakeAsync(() => {
+      // Without the timeout, exhaustMap would wait on that request forever and no
+      // further tick would ever start a check - the poll would be dead for the rest
+      // of the session, silently, which is how it would look on a bad connection.
+      mockApi.currentUser.set({ id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false });
+      (mockApi.checkHealth as jasmine.Spy).and.returnValue(new Subject().asObservable()); // never answers
+
+      makeApp();
+      tick(15000);                        // check #1 starts and hangs
+      expect((mockApi.checkHealth as jasmine.Spy).calls.count()).toBe(1);
+
+      // Past the timeout and the next interval: another check must have started.
+      tick(40000);
+      expect((mockApi.checkHealth as jasmine.Spy).calls.count()).toBeGreaterThan(1);
+    }));
+
+    it('bounds a check by a timeout shorter than the interval', () => {
+      // The invariant behind the fix. If the timeout could outlast the interval, a
+      // request would still be in flight when the next tick arrived - and a
+      // cancellation-style operator would tear it down, which is the bug. Keeping
+      // the deadline inside the interval makes that impossible by construction.
+      const app = makeApp() as any;
+      expect(app.HEALTH_TIMEOUT_MS).toBeLessThanOrEqual(app.HEALTH_POLL_MS);
+    });
+
+    it('keeps polling after a failed check', fakeAsync(() => {
+      mockApi.currentUser.set({ id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false });
+      let calls = 0;
+      (mockApi.checkHealth as jasmine.Spy).and.callFake(() => {
+        calls++;
+        return calls === 1
+          ? throwError(() => new Error('offline'))
+          : of({ status: 'maintenance' });
+      });
+
+      const app = makeApp();
+      tick(15000);                       // first check fails
+      expect(app.maintenanceMode()).toBeFalse();
+      tick(15000);                       // second must still run
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(app.maintenanceMode()).toBeTrue();
+    }));
+
+    it('treats a timeout as no answer, not as healthy', fakeAsync(() => {
+      // Mistaking a timeout for "healthy" would reload the page in the middle of a
+      // maintenance window, which is the opposite of what the poll is for.
+      mockApi.currentUser.set({ id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false });
+      (mockApi.checkHealth as jasmine.Spy).and.returnValue(of({ status: 'maintenance' }));
+
+      // reload() is what a "false" reading triggers. Spied on because the signal
+      // alone would not show it: the overlay stays up either way, and a reload in
+      // the middle of a maintenance window is the visible damage.
+      const app = makeApp();
+      const reload = spyOn(app, 'reloadPage');
+      tick(15000);
+      expect(app.maintenanceMode()).toBeTrue();
+      const reloadsSoFar = reload.calls.count();
+
+      // Now health stops answering entirely - the likely case on a flaky link.
+      (mockApi.checkHealth as jasmine.Spy).and.returnValue(new Subject().asObservable());
+      tick(200000);
+
+      expect(app.maintenanceMode()).toBeTrue();
+      expect(reload.calls.count()).toBe(reloadsSoFar);
     }));
   });
 });

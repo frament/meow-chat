@@ -125,21 +125,48 @@ describe('ChatComponent composer', () => {
     expect(messageInputs.length).toBe(0);
   });
 
-  it('sends on a plain Enter', () => {
-    const event = new KeyboardEvent('keydown', { key: 'Enter' });
+  /** Pretends the device is one thing or the other. */
+  function pretendPointer(coarse: boolean, hover: boolean): void {
+    spyOn(window, 'matchMedia').and.callFake((query: string) => ({
+      matches: query.includes('pointer: coarse') ? coarse : hover,
+    }) as MediaQueryList);
+  }
+
+  it('sends on a plain Enter with a hardware keyboard', () => {
+    pretendPointer(false, true);
+    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
     composer().dispatchEvent(event);
     expect(sendMessage).toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('does not send on Shift+Enter, and lets the newline through', () => {
-    // This is the whole point of the change: a paragraph break on a phone.
+    pretendPointer(false, true);
     const event = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, cancelable: true });
     composer().dispatchEvent(event);
     expect(sendMessage).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it('leaves Enter alone on a phone keyboard, so a paragraph is possible', () => {
+    // The reported bug: a software keyboard has no Shift, so Shift+Enter is
+    // unreachable and taking Enter for "send" left no way to break a line.
+    pretendPointer(true, false);
+    const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    composer().dispatchEvent(event);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('still sends on Enter when a touchscreen laptop also has a keyboard', () => {
+    // Coarse pointer *and* hover: a real keyboard is present, so Enter sends.
+    pretendPointer(true, true);
+    composer().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    expect(sendMessage).toHaveBeenCalled();
+  });
+
   it('ignores every other key', () => {
+    pretendPointer(false, true);
     for (const key of ['a', 'Tab', 'ArrowDown', 'Escape']) {
       sendMessage.calls.reset();
       composer().dispatchEvent(new KeyboardEvent('keydown', { key }));

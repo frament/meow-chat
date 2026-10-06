@@ -1,7 +1,7 @@
 import { Component, inject, signal, effect, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
-import { interval, fromEvent, merge, filter, tap, map, switchMap, Subscription, firstValueFrom } from 'rxjs';
+import { interval, fromEvent, merge, filter, tap, map, switchMap, exhaustMap, timeout, catchError, of, Subscription, firstValueFrom } from 'rxjs';
 import { ApiService } from './services/api.service';
 import { PwaInstallService } from './services/pwa-install.service';
 import { NotificationService } from './services/notification.service';
@@ -515,17 +515,33 @@ export class App implements OnInit, OnDestroy {
       })
     );
 
-    this.#maintenanceSub = interval(3000)
+    // exhaustMap, not switchMap. switchMap cancels the in-flight request when the
+    // next tick arrives, so on a link where a check takes longer than the interval
+    // it is cancelled at exactly the interval - every time, forever. That is the
+    // "health gets cut off after three seconds" report: not a timeout anywhere,
+    // this line. Other requests hang for as long as the browser allows precisely
+    // because nothing cancels them.
+    this.#maintenanceSub = interval(this.HEALTH_POLL_MS)
       .pipe(
         filter(() => this.#api.currentUser() !== null),
-        switchMap(() => this.#api.checkHealth()),
+        exhaustMap(() => this.#api.checkHealth().pipe(
+          // Bounds a check that never answers, so one stuck request cannot stop
+          // the poll for the rest of the session.
+          timeout(this.HEALTH_TIMEOUT_MS),
+          // A failed check must not end the stream. Without this the first blip
+          // on a mobile network killed maintenance polling until a reload.
+          catchError(() => of(null)),
+        )),
+        // null means "no answer". Filtering it out leaves the current state alone -
+        // treating a timeout as "healthy" would reload the page mid-maintenance.
+        filter((res): res is { status: string } => res !== null),
         map(res => res.status === 'maintenance')
       )
       .subscribe(isMaintenance => {
         if (isMaintenance && !this.maintenanceMode()) {
           this.maintenanceMode.set(true);
         } else if (!isMaintenance && this.maintenanceMode()) {
-          location.reload();
+          this.reloadPage();
         }
       });
 
@@ -743,6 +759,24 @@ export class App implements OnInit, OnDestroy {
    * to have the connection to itself, short enough that nobody notices.
    */
   private readonly SETTLE_AFTER_PAINT_MS = 2500;
+
+  /**
+   * Leaves maintenance mode by reloading, so the app comes back on the new build.
+   *
+   * A method rather than a bare location.reload() call because reload is what a
+   * wrong "healthy" reading does to a running session, and location.reload cannot
+   * be spied on in the test browser. Without it the test could only see the
+   * overlay, which looks identical whether the page was reloaded or not.
+   */
+  reloadPage(): void {
+    location.reload();
+  }
+
+  // Maintenance is rare; this is the interval between checks, not a deadline.
+  private readonly HEALTH_POLL_MS = 15000;
+  // A check that has not answered within this is treated as "no answer" and the
+  // next tick is allowed through.
+  private readonly HEALTH_TIMEOUT_MS = 10000;
 
   /** Keep this device's key registered so senders can wrap keys for it. */
   private async registerThisDevice() {
