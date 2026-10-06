@@ -33,6 +33,12 @@ jobs:
       - name: JWT secret is required
         run: ./scripts/check-jwt-secret.sh
 
+      # nginx and ngsw are only exercised in a browser, so a mistake there reaches
+      # production and shows up as "the API does not work on my phone" rather than
+      # as a failing test. Both were wrong at once.
+      - name: Proxy and service worker config
+        run: ./scripts/check-proxy-config.sh
+
   backend:
     name: Backend · go test
     # Pinned rather than ubuntu-latest: the label is mid-migration to Ubuntu 26
