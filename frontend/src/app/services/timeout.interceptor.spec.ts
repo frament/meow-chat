@@ -7,7 +7,7 @@ import {
 import { HttpErrorResponse } from '@angular/common/http';
 import { fakeAsync, tick } from '@angular/core/testing';
 
-import { timeoutInterceptor, REQUEST_TIMEOUT } from './timeout.interceptor';
+import { timeoutInterceptor, REQUEST_TIMEOUT, REQUEST_RETRY_DELAY } from './timeout.interceptor';
 
 /**
  * A request that never gets a reply used to leave the UI spinning forever: on one
@@ -33,7 +33,9 @@ describe('timeoutInterceptor', () => {
     // Requests the timeout already gave up on are still open in the testing
     // backend - that is the whole point of the interceptor - so they are drained
     // before verify(), which would otherwise report them as unexpected.
-    httpMock.match(() => true).forEach((r) => r.flush({}));
+    httpMock.match(() => true).forEach((r) => {
+      if (!r.cancelled) r.flush({});
+    });
     httpMock.verify();
   });
 
@@ -45,6 +47,8 @@ describe('timeoutInterceptor', () => {
     // ended - the point of the timeout is that the client gives up on its own.
     httpMock.expectOne('/api/feed');
     tick(REQUEST_TIMEOUT + 1);
+    // One retry follows the first timeout; let it time out too before asserting.
+    tick(REQUEST_RETRY_DELAY + REQUEST_TIMEOUT + 1);
 
     expect(failure).toBeTruthy();
     expect(failure!.status).toBe(0);
@@ -58,6 +62,7 @@ describe('timeoutInterceptor', () => {
 
     httpMock.expectOne('/api/feed');
     tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + REQUEST_TIMEOUT + 1);
 
     expect(failure instanceof HttpErrorResponse).toBeTrue();
     expect(failure!.status).toBe(0);
@@ -88,5 +93,53 @@ describe('timeoutInterceptor', () => {
     expect(settled).toBeFalse();
     httpMock.expectOne('/api/posts').flush({ id: 1 });
     expect(settled).toBeTrue();
+  }));
+  it('retries a timed-out GET once, on a fresh request', fakeAsync(() => {
+    // Aborting the stuck request is what makes the browser drop the connection it
+    // was blocked on, so the retry has a real chance of going out at all.
+    let body: unknown;
+    http.get('/api/feed').subscribe({ next: (r) => (body = r), error: () => {} });
+
+    const first = httpMock.expectOne('/api/feed');
+    tick(REQUEST_TIMEOUT + 1);
+
+    // A second request, not the same one replayed.
+    tick(REQUEST_RETRY_DELAY + 1);
+    const second = httpMock.expectOne('/api/feed');
+    expect(second).not.toBe(first);
+
+    second.flush([{ id: 7 }]);
+    tick();
+    expect(body).toEqual([{ id: 7 }]);
+  }));
+
+  it('does not retry a POST - it may already have had an effect', fakeAsync(() => {
+    // A timed-out POST may still be processing; repeating it would duplicate the
+    // message or the post.
+    let failed = false;
+    http.post('/api/messages', { content: 'hi' }).subscribe({ error: () => (failed = true) });
+
+    httpMock.expectOne('/api/messages');
+    tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + REQUEST_TIMEOUT + 1);
+
+    expect(failed).toBeTrue();
+    // No second request was made: expectOne below would throw if there were two.
+    expect(httpMock.match('/api/messages').length).toBe(0);
+  }));
+
+  it('retries only once, not in a loop', fakeAsync(() => {
+    let failed = false;
+    http.get('/api/feed').subscribe({ error: () => (failed = true) });
+
+    httpMock.expectOne('/api/feed');
+    tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + 1);
+    httpMock.expectOne('/api/feed');
+    tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + REQUEST_TIMEOUT + 1);
+
+    expect(failed).toBeTrue();
+    expect(httpMock.match('/api/feed').length).toBe(0);
   }));
 });

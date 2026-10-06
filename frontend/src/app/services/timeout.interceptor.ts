@@ -1,27 +1,34 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
-import { TimeoutError, throwError } from 'rxjs';
-import { timeout, catchError } from 'rxjs/operators';
+import { TimeoutError, throwError, timer } from 'rxjs';
+import { timeout, catchError, retryWhen, mergeMap } from 'rxjs/operators';
 
 /**
- * Puts a ceiling on how long a request may stay unanswered.
+ * Ceilings on how long a request may stay unanswered, and one retry when it does.
  *
- * Without one an API call that never gets a reply leaves the UI spinning
- * indefinitely - which is what was reported: requests to /api circling forever in
- * the network tab, with the server never seeing them. A hung request is worse than
- * a failed one: a failure can be shown, retried and dismissed, while a hang keeps
- * every dependent piece of the screen waiting and the user with no idea why.
+ * Measured on LTE, through the router's proxy: eleven requests issued at once all
+ * sat `blocked` in the browser for ~216 seconds and then completed together the
+ * moment the queue cleared. `wait` was ~120ms throughout, so the server was never
+ * the slow part - the requests were not even sent. That is the "sometimes it
+ * breaks through after a while, but F5 breaks it again" report.
  *
- * Uploads are excluded. A photo over a slow mobile link can legitimately take
- * minutes; cutting it off would lose the upload rather than report a problem.
+ * A blocked request is worse than a failed one: a failure can be shown and
+ * retried, while a block keeps every dependent piece of the screen waiting. The
+ * timeout bounds it, and the single retry is not just a second attempt - aborting
+ * a request that is stuck on a connection is what makes the browser drop that
+ * connection, so the retry has a real chance of going out on a fresh one.
+ *
+ * Uploads are excluded: a photo over a slow link can legitimately take minutes,
+ * and aborting it would lose the upload rather than report a problem with it.
  */
 const REQUEST_TIMEOUT_MS = 30000;
+const RETRY_DELAY_MS = 500;
 
 export const timeoutInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.body instanceof FormData) {
     return next(req);
   }
 
-  return next(req).pipe(
+  const attempt = next(req).pipe(
     timeout(REQUEST_TIMEOUT_MS),
     catchError((err) => {
       if (err instanceof TimeoutError) {
@@ -38,7 +45,28 @@ export const timeoutInterceptor: HttpInterceptorFn = (req, next) => {
       return throwError(() => err);
     }),
   );
+
+  // Retried only when the request cannot have had an effect. A POST that timed out
+  // may still be processing on the server, and repeating it would duplicate the
+  // message or the post.
+  if (req.method !== 'GET') {
+    return attempt;
+  }
+
+  return attempt.pipe(
+    retryWhen((errors) => errors.pipe(
+      mergeMap((err, index) =>
+        // One retry, and only for a timeout - a 401 or a 500 is an answer, and
+        // asking again would produce the same one.
+        index === 0 && err instanceof HttpErrorResponse && err.status === 0
+          ? timer(RETRY_DELAY_MS)
+          : throwError(() => err),
+      ),
+    )),
+  );
 };
 
 /** Exported so a test cannot drift from the value the app actually uses. */
 export const REQUEST_TIMEOUT = REQUEST_TIMEOUT_MS;
+/** Exported for the same reason, so a test can advance past it. */
+export const REQUEST_RETRY_DELAY = RETRY_DELAY_MS;
