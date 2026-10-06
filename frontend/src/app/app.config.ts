@@ -4,6 +4,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './services/auth.interceptor';
+import { timeoutInterceptor } from './services/timeout.interceptor';
 import { provideServiceWorker } from '@angular/service-worker';
 
 // Logs actionable error text instead of Angular's default "[object Object]".
@@ -27,7 +28,9 @@ export const appConfig: ApplicationConfig = {
     { provide: ErrorHandler, useClass: LoggingErrorHandler },
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    // Timeout first: it wraps the request the interceptor chain builds, so the
+    // ceiling applies to the retried request too, not only the original.
+    provideHttpClient(withInterceptors([timeoutInterceptor, authInterceptor])),
     provideServiceWorker('sw-push-handler.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
