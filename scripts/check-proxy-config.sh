@@ -10,7 +10,13 @@
 # 2. nginx's Connection header. "upgrade" is for WebSocket and was being sent on
 #    every /api request, which stops nginx reusing its connection to the backend.
 #
-# Neither shows up in a unit test, and neither failed loudly. This script is the
+# 3. nginx's compression, which was absent altogether. Without it a cold load on a
+#    phone pulled 1.16 MB instead of ~508 KB - the full 762 KB of JS in the clear -
+#    which on LTE was the whole difference between "loads" and "spins forever". The
+#    same check guards the favicon, which was a 1024x1024 PNG: 259 KB that gzip
+#    cannot touch, downloaded on every cold load.
+#
+# None of these show up in a unit test, and none failed loudly. This script is the
 # only thing that would have caught them.
 set -euo pipefail
 
@@ -93,6 +99,70 @@ if '$time_iso8601' not in conf:
     print('✗ в format нет $time_iso8601 — не отличить цикл повторов от обычных запросов')
     sys.exit(1)
 print('  ✓ тайминги пишутся в лог')
+PY
+
+echo "▸ nginx сжимает то, что стоит сжать"
+python3 - <<'PY' || exit 1
+import re, sys
+
+conf = open('frontend/nginx.conf', encoding='utf-8').read()
+
+# Anchored to live directives for the same reason as log_format above: a
+# commented-out line still matches a loose search.
+if not re.search(r'^\s*gzip\s+on\s*;', conf, re.M):
+    print('✗ нет активного gzip on — телефон тянет 762 КБ JS вместо 194 КБ')
+    sys.exit(1)
+
+level = re.search(r'^\s*gzip_comp_level\s+(\d+)\s*;', conf, re.M)
+if not level:
+    print('✗ нет gzip_comp_level — nginx по умолчанию жмёт на уровне 1,')
+    print('  это почти исходный размер; нужен 6')
+    sys.exit(1)
+if int(level.group(1)) < 5:
+    print(f"✗ gzip_comp_level {level.group(1)} — слишком слабо, нужен хотя бы 5")
+    sys.exit(1)
+
+m = re.search(r'^\s*gzip_types\s*((?:[^;]|\n)*);', conf, re.M)
+if not m:
+    print('✗ нет gzip_types — сжимается только text/html, а JS и CSS проходят мимо')
+    sys.exit(1)
+types = {t.strip().lower() for t in m.group(1).split() if t.strip()}
+for required in ('application/javascript', 'text/css', 'application/json'):
+    if required not in types:
+        print(f'✗ {required} не в gzip_types — самый тяжёлый трафик не сжимается')
+        sys.exit(1)
+
+# Formats that are already compressed. Gzipping these burns CPU and produces a
+# slightly larger body; the favicon was 259 KB of exactly this.
+for wasted in ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'font/woff2'):
+    if wasted in types:
+        print(f'✗ {wasted} в gzip_types — формат уже сжат, gzip только испортит')
+        sys.exit(1)
+
+# `off` would switch gzip off for any request the router forwards.
+if re.search(r'^\s*gzip_proxied\s+off\s*;', conf, re.M):
+    print('✗ gzip_proxied off — роутер добавляет Via, и gzip выключится')
+    sys.exit(1)
+
+print('  ✓ gzip включён, уровень 6, сжимаются только сжимаемые типы')
+PY
+
+echo "▸ фавиконка не весит полмегабайта"
+python3 - <<'PY' || exit 1
+import os, sys
+
+# 259 KB for a 1024x1024 PNG. PNG does not compress, so nothing on the server can
+# claw it back - the only fix is a smaller file, fetched on every cold load.
+path = 'frontend/public/favicon.png'
+if not os.path.exists(path):
+    print(f'✗ {path} отсутствует')
+    sys.exit(1)
+size = os.path.getsize(path)
+limit = 64 * 1024
+if size > limit:
+    print(f'✗ фавиконка {size} байт (предел {limit}) — это чистая трата холодной загрузки')
+    sys.exit(1)
+print(f'  ✓ фавиконка {size} байт')
 PY
 
 echo
