@@ -3,7 +3,7 @@ import { LoginComponent } from './login';
 import { ApiService } from '../../services/api.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
@@ -103,4 +103,61 @@ describe('LoginComponent', () => {
 
     expect(mockApi.webauthnHasCredentials).toHaveBeenCalledWith('alice');
   }));
+  it('does not send a second login while the first is still in flight', fakeAsync(() => {
+    // Two taps on a slow link used to produce two POSTs. The first came back in
+    // 444ms; the duplicate then sat in Safari's dispatch queue and timed out 30
+    // seconds later, which read as a broken app rather than as a double tap.
+    const pending = new Subject<{ access_token: string; refresh_token: string }>();
+    mockApi.login.and.returnValue(pending);
+    init();
+
+    component.onSubmit();
+    component.onSubmit();
+
+    expect(mockApi.login).toHaveBeenCalledTimes(1);
+
+    pending.next({ access_token: 'at', refresh_token: 'rt' });
+    pending.complete();
+    tick();
+  }));
+
+  it('lets the next attempt through once a failed one has settled', fakeAsync(() => {
+    // The guard has to be released on failure, or one bad link would lock the
+    // user out of the form until they reloaded the page.
+    mockApi.login.and.returnValue(throwError(() => ({ status: 0 })));
+    init();
+
+    component.onSubmit();
+    tick();
+    expect(component.submitting).toBeFalse();
+
+    mockApi.login.and.returnValue(of({ access_token: 'at', refresh_token: 'rt' }));
+    component.onSubmit();
+    tick();
+    expect(mockApi.login).toHaveBeenCalledTimes(2);
+  }));
+
+  it('does not blame the password when the link dropped the request', fakeAsync(() => {
+    // "Wrong password" is the one reply that is certainly wrong here: the user
+    // goes off to reset a password that was fine.
+    mockApi.login.and.returnValue(throwError(() => ({ status: 0 })));
+    init();
+
+    component.onSubmit();
+    tick();
+
+    expect(component.error).toContain('не ответил');
+    expect(component.error).not.toContain('пароль');
+  }));
+
+  it('still says the password is wrong when the server says so', fakeAsync(() => {
+    mockApi.login.and.returnValue(throwError(() => ({ status: 401 })));
+    init();
+
+    component.onSubmit();
+    tick();
+
+    expect(component.error).toContain('пароль');
+  }));
+
 });

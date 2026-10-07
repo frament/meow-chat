@@ -35,8 +35,9 @@ import { ApiService } from '../../services/api.service';
               <input type="text" [(ngModel)]="inviteToken" name="invite_token" required class="form-input mt-1" placeholder="Вставьте токен">
             </div>
           }
-          <button type="submit" class="btn-primary" style="width:100%;padding:10px 20px;">
-            Зарегистрироваться
+          <button type="submit" class="btn-primary" style="width:100%;padding:10px 20px;"
+            [disabled]="submitting">
+            {{ submitting ? 'Регистрация...' : 'Зарегистрироваться' }}
           </button>
         </form>
         <p class="mt-4 text-center text-sm" style="color:var(--text-secondary);">
@@ -57,6 +58,8 @@ export class RegisterComponent implements OnInit {
   email = '';
   password = '';
   inviteToken = '';
+  /** Held for the whole POST, so a second tap cannot register twice. */
+  submitting = false;
   error = '';
   success = '';
   checking = false;
@@ -88,13 +91,25 @@ export class RegisterComponent implements OnInit {
 
   onSubmit() {
     if (!this.inviteToken) return;
+    // Without this a second tap sends a second registration while the first is
+    // still in flight; over a slow link that duplicate waits behind the first and
+    // then times out, which looks like a broken app rather than a double tap.
+    if (this.submitting) return;
+    this.submitting = true;
+
     this.api.register(this.username, this.email, this.password, this.inviteToken).subscribe({
       next: () => {
         this.success = 'Регистрация успешна! Перенаправляю...';
         setTimeout(() => this.router.navigate(['/login']), 1500);
       },
       error: (err) => {
-        if (err.status === 400) {
+        this.submitting = false;
+        // Status 0 is a timeout or a dead connection, not a rejection: reporting
+        // "user already exists" there sends people off to reset a password that
+        // was fine.
+        if (err.status === 0) {
+          this.error = 'Сервер не ответил. Проверьте соединение и попробуйте ещё раз.';
+        } else if (err.status === 400) {
           this.error = err.error?.error || 'Ошибка: недействительный invite-токен';
         } else {
           this.error = 'Ошибка регистрации. Возможно, пользователь уже существует.';

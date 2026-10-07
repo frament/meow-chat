@@ -21,8 +21,9 @@ import { NotificationService } from '../../services/notification.service';
             <label class="block text-sm font-medium" style="color:var(--text-secondary);">Пароль</label>
             <input type="password" [(ngModel)]="password" name="password" required class="form-input mt-1">
           </div>
-          <button type="submit" class="btn-primary" style="width:100%;padding:10px 20px;">
-            Войти
+          <button type="submit" class="btn-primary" style="width:100%;padding:10px 20px;"
+            [disabled]="submitting">
+            {{ submitting ? 'Вход...' : 'Войти' }}
           </button>
         </form>
         @if (hasBiometric) {
@@ -46,6 +47,8 @@ export class LoginComponent implements OnInit {
   redirectUrl = '';
   hasBiometric = false;
   biometricLoading = false;
+  /** Set for the whole lifetime of the POST, so a second tap cannot start another. */
+  submitting = false;
   private bioCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -136,6 +139,14 @@ export class LoginComponent implements OnInit {
   }
 
   onSubmit() {
+    // A second tap while the first POST is still in flight sends a second one. On a
+    // good link the duplicate is invisible and wasteful; over LTE the first request
+    // can leave the connection busy for seconds, and the duplicate then waits behind
+    // it and times out - which reads as "the app is broken" rather than as "you
+    // tapped twice".
+    if (this.submitting) return;
+    this.submitting = true;
+
     this.notif.requestPermission();
     this.api.login(this.username, this.password).subscribe({
       next: (res) => {
@@ -143,8 +154,14 @@ export class LoginComponent implements OnInit {
         this.api.storeAuth(res);
         this.router.navigateByUrl(this.redirectUrl);
       },
-      error: () => {
-        this.error = 'Неверное имя пользователя или пароль';
+      error: (err) => {
+        this.submitting = false;
+        // Saying "wrong password" to someone whose link dropped the request is the
+        // one reply that is certainly wrong: they will go and reset a password that
+        // was fine. Status 0 is what both a timeout and a dead connection look like.
+        this.error = err?.status === 0
+          ? 'Сервер не ответил. Проверьте соединение и попробуйте ещё раз.'
+          : 'Неверное имя пользователя или пароль';
       },
     });
   }

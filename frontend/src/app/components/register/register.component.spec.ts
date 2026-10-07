@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { RegisterComponent } from './register';
 import { ApiService } from '../../services/api.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 describe('RegisterComponent', () => {
   let component: RegisterComponent;
@@ -118,4 +118,34 @@ describe('RegisterComponent', () => {
     expect(mockApi.checkInvite).toHaveBeenCalledWith('tok99');
     expect(component.inviteToken).toBe('tok99');
   }));
+  it('does not send a second registration while the first is still in flight', fakeAsync(() => {
+    // A double tap on a slow link produced a duplicate POST that waited behind
+    // the first one and then timed out.
+    const pending = new Subject<{}>();
+    mockApi.register.and.returnValue(pending);
+    init();
+    component.inviteToken = 'tok';
+
+    component.onSubmit();
+    component.onSubmit();
+
+    expect(mockApi.register).toHaveBeenCalledTimes(1);
+
+    pending.next({});
+    pending.complete();
+    tick();
+  }));
+
+  it('does not report a dropped request as a taken username', fakeAsync(() => {
+    mockApi.register.and.returnValue(throwError(() => ({ status: 0 })));
+    init();
+    component.inviteToken = 'tok';
+
+    component.onSubmit();
+    tick();
+
+    expect(component.error).toContain('не ответил');
+    expect(component.submitting).toBeFalse();
+  }));
+
 });
