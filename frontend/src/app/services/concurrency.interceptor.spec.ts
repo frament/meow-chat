@@ -109,4 +109,12 @@ describe('concurrencyInterceptor', () => {
     // The upload went straight out; it is long by nature and must not wait.
     expect(httpMock.match('/api/posts').length).toBe(1);
   }));
+  it('is pinned to the measured limit of the relay, not chosen for looks', () => {
+    // Замерено на LTE через релей: залп из трёх доходит целиком, из четырёх -
+    // только один, остальные не доходят до хоста вовсе. Остальные тесты этого
+    // файла сравнивают с константой, поэтому значение можно было бы поднять
+    // обратно, и ни один тест не покраснел бы.
+    expect(MAX_CONCURRENT).toBe(2);
+  });
+
 });
