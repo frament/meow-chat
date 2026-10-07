@@ -146,6 +146,57 @@ if not any('/*.js' in g.get('resources', {}).get('files', []) for g in cfg.get('
 print('  ✓ prefetch только у маленькой оболочки, бандлы и картинки — lazy')
 PY
 
+echo "▸ загруженные файлы кэшируются, а не перепроверяются каждый раз"
+python3 - <<'PY2' || exit 1
+import re, sys
+
+conf = open('frontend/nginx.conf', encoding='utf-8').read()
+
+blocks = []
+for m in re.finditer(r'location\s+(\S+)\s*\{', conf):
+    depth, i = 0, m.end() - 1
+    while i < len(conf):
+        if conf[i] == '{': depth += 1
+        elif conf[i] == '}':
+            depth -= 1
+            if depth == 0: break
+        i += 1
+    blocks.append((m.group(1), conf[m.end():i]))
+
+uploads = dict(blocks).get('/uploads', '')
+if not uploads:
+    print('✗ нет location /uploads')
+    sys.exit(1)
+if not re.search(r'Cache-Control[^;]*immutable', uploads):
+    print('✗ /uploads без Cache-Control immutable — каждая аватарка перепроверяется')
+    print('  при каждой загрузке страницы, через релей, который держит три соединения')
+    sys.exit(1)
+print('  ✓ /uploads отдаётся с immutable')
+PY2
+
+echo "▸ service worker ставится вовремя, а не через полминуты"
+python3 - <<'PY2' || exit 1
+import re, sys
+
+src = open('frontend/src/app/app.config.ts', encoding='utf-8').read()
+m = re.search(r"registerWhenStable:(\d+)", src)
+if not m:
+    if 'registerImmediately' in src:
+        print('  ✓ регистрация немедленная')
+        raise SystemExit(0)
+    print('✗ не задана стратегия регистрации service worker')
+    sys.exit(1)
+delay = int(m.group(1))
+# При тридцати секундах обычная перезагрузка случается раньше, чем worker
+# зарегистрируется, и обновление не доходит вообще: страницу отдаёт старый
+# worker из своего кеша. Проверено - приложение два дня работало на старом бандле.
+if delay > 10000:
+    print(f'✗ registerWhenStable:{delay} - перезагрузка случится раньше,')
+    print('  и новая версия не установится никогда')
+    sys.exit(1)
+print(f'  ✓ регистрация через {delay} мс')
+PY2
+
 echo "▸ nginx сжимает то, что стоит сжать"
 python3 - <<'PY' || exit 1
 import re, sys

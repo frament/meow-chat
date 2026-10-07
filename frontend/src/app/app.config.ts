@@ -43,7 +43,12 @@ export const appConfig: ApplicationConfig = {
     ),
     provideServiceWorker('sw-push-handler.js', {
       enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000',
+      // Пять секунд, а не тридцать. При тридцати обновление не ставилось вовсе,
+      // если страницу перезагрузили раньше: service worker не зарегистрирован —
+      // новой версии нет. Проверено на себе - HAR показывал main-JKU7KMLV.js,
+      // тогда как прод уже отдавал main-2OLX7FD7.js. То есть приложение целиком
+      // работало на старом бандле, и все правки после него не действовали.
+      registrationStrategy: 'registerWhenStable:5000',
     }),
   ],
 };
