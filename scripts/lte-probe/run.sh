@@ -30,6 +30,7 @@ case "${1:-start}" in
       -p "$BIND:$PORT:8090" \
       -v "$DIR/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
       -v "$DIR/index.html:/usr/share/nginx/html/index.html:ro" \
+      -v "$DIR/bulk.txt:/usr/share/nginx/html/bulk.txt:ro" \
       nginx:alpine >/dev/null
     sleep 1
     # Проверка с самого хоста: если заглушка не отвечает здесь, до телефона
