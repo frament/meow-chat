@@ -10,6 +10,7 @@ import { CryptoService } from './services/crypto.service';
 import { DeviceAuthComponent } from './components/device-auth/device-auth';
 import { DeviceLinkService } from './services/device-link.service';
 import { NoticeComponent } from './components/notice/notice';
+import { ConnectivityService } from './services/connectivity.service';
 
 @Component({
   selector: 'app-root',
@@ -71,12 +72,31 @@ import { NoticeComponent } from './components/notice/notice';
         <span>{{ pullReady() ? 'Отпустите для подключения' : 'Потяните для подключения' }}</span>
       </div>
     }
+    @if (conn.problem(); as problem) {
+      <div class="update-banner offline-banner" role="status">
+        <span>{{ problem.reason }}</span>
+        <button (click)="reloadPage()">Повторить</button>
+      </div>
+    }
     <app-device-auth #deviceAuth />
     <app-notice />
     <router-outlet />
   `,
   styles: [`
     @keyframes spin { to { transform: rotate(360deg); } }
+    .offline-banner {
+      background: #b3261e;
+      color: #fff;
+    }
+    .offline-banner button {
+      background: #fff;
+      color: #b3261e;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
     .update-banner {
       position: fixed;
       top: 0;
@@ -269,6 +289,8 @@ import { NoticeComponent } from './components/notice/notice';
   `],
 })
 export class App implements OnInit, OnDestroy {
+  /** Set when a request could not reach the server; rendered as a banner. */
+  protected readonly conn = inject(ConnectivityService);
   readonly #sw = inject(SwUpdate);
   readonly #swPush = inject(SwPush);
   readonly #api = inject(ApiService);

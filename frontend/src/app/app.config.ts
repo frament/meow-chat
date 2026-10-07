@@ -6,6 +6,7 @@ import { routes } from './app.routes';
 import { authInterceptor } from './services/auth.interceptor';
 import { timeoutInterceptor } from './services/timeout.interceptor';
 import { concurrencyInterceptor } from './services/concurrency.interceptor';
+import { connectivityInterceptor } from './services/connectivity.interceptor';
 import { provideServiceWorker } from '@angular/service-worker';
 
 // Logs actionable error text instead of Angular's default "[object Object]".
@@ -29,12 +30,17 @@ export const appConfig: ApplicationConfig = {
     { provide: ErrorHandler, useClass: LoggingErrorHandler },
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    // Timeout first: it wraps the request the interceptor chain builds, so the
-    // ceiling applies to the retried request too, not only the original.
-    // Order matters. Concurrency outermost, so a slot is held for the whole chain
-    // including the retry; timeout next, so a stuck request gives its slot back;
-    // auth innermost, so its refresh-and-retry does not take a second slot.
-    provideHttpClient(withInterceptors([concurrencyInterceptor, timeoutInterceptor, authInterceptor])),
+    // Order matters, outermost first:
+    //   concurrency - a slot is held for the whole chain, including the retry;
+    //   timeout     - a stuck request gives its slot back instead of keeping it
+    //                 for the full ceiling;
+    //   connectivity- sees the status the user is finally shown, and sees it
+    //                 after the timeout has turned a hang into a status 0;
+    //   auth        - innermost, so a 401 that the refresh token then fixed is
+    //                 never reported to the banner.
+    provideHttpClient(
+      withInterceptors([concurrencyInterceptor, timeoutInterceptor, connectivityInterceptor, authInterceptor]),
+    ),
     provideServiceWorker('sw-push-handler.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',

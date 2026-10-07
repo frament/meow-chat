@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { signal, computed } from '@angular/core';
 import { Subject, of, throwError } from 'rxjs';
+import { ConnectivityService } from './services/connectivity.service';
 
 // Minimal PushSubscriptionJSON-like object for mock
 function makeSubJSON(endpoint = 'https://example.push'): PushSubscriptionJSON {
@@ -594,4 +595,49 @@ describe('App', () => {
       expect(reload.calls.count()).toBe(reloadsSoFar);
     }));
   });
+  describe('плашка «нет связи»', () => {
+    it('появляется, когда сервер не ответил, и исчезает после успеха', () => {
+      // Без этой проверки тот же баг вернётся молча: сервис есть, плашка есть,
+      // а на экране — ничего. Именно так было с плашкой только в чате.
+      const fixture = TestBed.createComponent(App);
+      const conn = TestBed.inject(ConnectivityService);
+      const text = () => (fixture.nativeElement.textContent || '') as string;
+
+      fixture.detectChanges();
+      expect(text()).not.toContain('Нет связи с сервером');
+
+      conn.reportFailure(0);
+      fixture.detectChanges();
+      expect(text()).toContain('Нет связи с сервером');
+
+      conn.reportSuccess();
+      fixture.detectChanges();
+      expect(text()).not.toContain('Нет связи с сервером');
+    });
+
+    it('не появляется на 401 — это истёкшая сессия, а не связь', () => {
+      const fixture = TestBed.createComponent(App);
+      const conn = TestBed.inject(ConnectivityService);
+
+      conn.reportFailure(401);
+      fixture.detectChanges();
+
+      expect((fixture.nativeElement.textContent || '')).not.toContain('Нет связи с сервером');
+    });
+
+    it('при 504 говорит про сервер, а не про связь', () => {
+      // На LTE прокси перед приложением отвечает 504, не передав запрос дальше.
+      // «Нет связи» в этом случае отправит человека чинить Wi-Fi.
+      const fixture = TestBed.createComponent(App);
+      const conn = TestBed.inject(ConnectivityService);
+
+      conn.reportFailure(504);
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement.textContent || '') as string;
+      expect(text).toContain('Сервер отвечает с ошибкой');
+      expect(text).not.toContain('Нет связи с сервером');
+    });
+  });
+
 });
