@@ -3,14 +3,24 @@
   "index": "/index.html",
   "assetGroups": [
     {
-      "name": "app",
+      "name": "shell",
       "installMode": "prefetch",
+      "updateMode": "prefetch",
       "resources": {
         "files": [
           "/index.csr.html",
           "/index.html",
           "/manifest.webmanifest",
-          "/sw-push-handler.js",
+          "/sw-push-handler.js"
+        ]
+      }
+    },
+    {
+      "name": "bundles",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": {
+        "files": [
           "/*.css",
           "/*.js"
         ]
@@ -19,10 +29,13 @@
     {
       "name": "assets",
       "installMode": "lazy",
-      "updateMode": "prefetch",
+      "updateMode": "lazy",
       "resources": {
         "files": [
           "/**/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|mp3)"
+        ],
+        "exclude": [
+          "/uploads/**"
         ]
       }
     }

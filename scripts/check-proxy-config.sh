@@ -101,6 +101,51 @@ if '$time_iso8601' not in conf:
 print('  ✓ тайминги пишутся в лог')
 PY
 
+echo "▸ service worker не тянет весь сайт при каждом обновлении"
+python3 - <<'PY' || exit 1
+import json, sys
+
+cfg = json.load(open('frontend/ngsw-config.json', encoding='utf-8'))
+
+# `prefetch` means the worker downloads the whole group the moment it installs or
+# updates - which is exactly while the page is trying to make its own requests. It
+# was pulling 585 KB (the whole JS bundle plus every uploaded image) at the moment
+# the app was blocked for 20 seconds with nothing reaching the server.
+for group in cfg.get('assetGroups', []):
+    prefetching = 'prefetch' in (group.get('installMode'), group.get('updateMode'))
+    if not prefetching:
+        continue
+    name = group.get('name', '?')
+    files = group.get('resources', {}).get('files', [])
+    for pattern in files:
+        # `/*.js` and `/*.css` are the bundles. A `/**` glob reaches /uploads, and
+        # /uploads grows with every photo the family posts - it has no upper bound,
+        # so prefetching it fills a phone's storage with a family's photo library
+        # that can never be evicted.
+        heavy = (
+            pattern in ('/*.js', '/*.css')
+            or pattern.startswith('/**')
+            or pattern.startswith('/uploads/')
+        )
+        if heavy:
+            print(f'✗ группа {name} в режиме prefetch тянет {pattern} — '
+                  f'{len(files)} файлов на каждом обновлении SW')
+            print('  это и есть источник тех 20 секунд, когда страница молчит')
+            sys.exit(1)
+    for excluded in group.get('resources', {}).get('exclude', []):
+        if excluded.lstrip('!').rstrip('*') == '/uploads/':
+            print(f'✗ группа {name} в режиме prefetch исключает {excluded} — '
+                  'а exclude без glob означает, что группа всё равно его тянет')
+            sys.exit(1)
+
+# The bundles have to be cached somewhere, or an offline start finds no JS.
+groups = {g.get('name') for g in cfg.get('assetGroups', [])}
+if not any('/*.js' in g.get('resources', {}).get('files', []) for g in cfg.get('assetGroups', [])):
+    print('✗ ни одна группа не кэширует *.js — офлайн-старт останется без кода')
+    sys.exit(1)
+print('  ✓ prefetch только у маленькой оболочки, бандлы и картинки — lazy')
+PY
+
 echo "▸ nginx сжимает то, что стоит сжать"
 python3 - <<'PY' || exit 1
 import re, sys
