@@ -78,10 +78,23 @@ const linkRe = /[ \t]*<link[^>]*rel=["']stylesheet["'][^>]*>\s*/gi;
 const linksFound = (html.match(linkRe) || []).length;
 if (linksFound === 0) die('в index.html нет ссылок на stylesheet — встраивать нечего');
 html = html.replace(linkRe, '');
-html = html.replace(
-  '</head>',
-  `<!-- styles-inlined --><style>${safeForTag(css)}</style></head>`,
-);
+
+// Beasties кладёт в документ критические стили - подмножество того же файла.
+// Раз полный CSS уезжает следом, второй блок с теми же @font-face и теми же
+// селекторами просто дублирует байты и сбивает с толку того, кто это читает.
+// Убираются все <style> до нашего маркера, и только они: всё, что после
+// маркера, наше по построению.
+const MARK = '<!-- styles-inlined -->';
+const headEnd = html.indexOf('</head>');
+const head = html.slice(0, headEnd);
+const stripped = head.replace(/<style>[\s\S]*?<\/style>\s*/gi, '');
+if (stripped.length === head.length) {
+  console.error('· в <head> не было блоков <style> от Beasties');
+} else {
+  const saved = head.length - stripped.length;
+  console.log(`  удалено дублирующих блоков <style>: ${(saved / 1024).toFixed(1)} КБ`);
+}
+html = stripped + MARK + `<style>${safeForTag(css)}</style>` + html.slice(headEnd);
 
 // --- фавиконка в документ -----------------------------------------------------
 const iconPath = await findByPrefix('favicon', '.png');
@@ -128,7 +141,6 @@ const boot = [
   "  m.rel = 'manifest';",
   `  m.href = '${manifestUri}';`,
   '  document.head.appendChild(m);',
-  "  var f = document.createElement('link'); f.rel = 'stylesheet';",
   '})();',
   '</script>',
 ].join('\n');
