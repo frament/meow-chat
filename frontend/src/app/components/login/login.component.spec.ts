@@ -160,4 +160,46 @@ describe('LoginComponent', () => {
     expect(component.error).toContain('пароль');
   }));
 
+  describe('политика запросов', () => {
+    it('на чистом браузере не делает ни одного запроса', fakeAsync(() => {
+      // Ничего не запомнено - спрашивать не о чем. Ноль запросов важнее одного:
+      // это состояние, с которого начинается первый вход в жизни.
+      mockApi.webauthnHasCredentials.calls.reset();
+      localStorage.removeItem('lastUsername');
+      init();
+      tick();
+
+      expect(mockApi.webauthnHasCredentials).not.toHaveBeenCalled();
+    }));
+
+    it('при сохранённом имени спрашивает ровно один раз', fakeAsync(() => {
+      // Проверка биометрии - единственное, что можно узнать о человеке без его
+      // участия. Один раз, а не на каждое нажатие и не по три подряд: на сети,
+      // где соединений мало, каждый лишний отнимает слот у авторизации.
+      mockApi.webauthnHasCredentials.calls.reset();
+      localStorage.setItem('lastUsername', 'frament');
+      try {
+        init();
+        // 400 мс - это debounce у checkBiometric.
+        tick(400);
+        expect(mockApi.webauthnHasCredentials).toHaveBeenCalledTimes(1);
+        expect(mockApi.login).not.toHaveBeenCalled();
+      } finally {
+        localStorage.removeItem('lastUsername');
+      }
+    }));
+
+    it('при отправке формы делает только запрос авторизации', fakeAsync(() => {
+      init();
+      tick();
+      mockApi.login.calls.reset();
+
+      component.onSubmit();
+      tick();
+
+      // Ровно один запрос на отправку формы. Проверка биометрии при этом уже была
+      // при открытии страницы - повторять её незачем.
+      expect(mockApi.login).toHaveBeenCalledTimes(1);
+    }));
+  });
 });

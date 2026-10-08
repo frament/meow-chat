@@ -449,6 +449,10 @@ describe('App', () => {
     // meant one connection and one TLS handshake each - at the moment the app was
     // trying to appear. Measured over LTE: 337-409ms per handshake.
     function makeApp() {
+        // Журнал уходит только с токеном: без сессии ответ заведомо 401, и
+        // на странице входа он отнимал слот у авторизации. Тестам про журнал
+        // сессия нужна, поэтому выдаётся явно.
+        (mockApi.accessToken as unknown as ReturnType<typeof signal<string>>).set('at');
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
       const app = fixture.componentInstance as any;
@@ -505,6 +509,10 @@ describe('App', () => {
   });
   describe('health poll', () => {
     function makeApp() {
+        // Журнал уходит только с токеном: без сессии ответ заведомо 401, и
+        // на странице входа он отнимал слот у авторизации. Тестам про журнал
+        // сессия нужна, поэтому выдаётся явно.
+        (mockApi.accessToken as unknown as ReturnType<typeof signal<string>>).set('at');
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
       return fixture.componentInstance as any;
@@ -638,6 +646,51 @@ describe('App', () => {
       expect(text).toContain('Сервер отвечает с ошибкой');
       expect(text).not.toContain('Нет связи с сервером');
     });
+  });
+
+  describe('журнал событий push', () => {
+    it('не уходит без сессии: ответ был бы заведомым 401', fakeAsync(() => {
+      // Токена нет - токен и не пришлют, сервер ответит 401. На странице входа
+      // это были два POST, отнимавшие слот у настоящей авторизации.
+      const fixture = TestBed.createComponent(App);
+      const api = TestBed.inject(ApiService) as unknown as jasmine.SpyObj<ApiService>;
+      api.pushLog.calls.reset();
+      api.pushLogBatch.calls.reset();
+      fixture.detectChanges();
+
+      (fixture.componentInstance as unknown as { logPush: (k: string) => void })
+        .logPush('permission_denied');
+      tick(6000);
+
+      expect(api.pushLog).not.toHaveBeenCalled();
+      expect(api.pushLogBatch).not.toHaveBeenCalled();
+    }));
+
+    it('уходит после входа и вместе с записями, сделанными до него', fakeAsync(() => {
+      const fixture = TestBed.createComponent(App);
+      const api = TestBed.inject(ApiService) as unknown as jasmine.SpyObj<ApiService>;
+      api.pushLog.calls.reset();
+      api.pushLogBatch.calls.reset();
+      fixture.detectChanges();
+
+      const app = fixture.componentInstance as unknown as {
+        logPush: (k: string, e?: string, d?: string) => void;
+      };
+      app.logPush('permission_denied');
+      tick(6000);
+      expect(api.pushLogBatch).not.toHaveBeenCalled();
+
+      // Появилась сессия.
+      (api.accessToken as unknown as ReturnType<typeof signal<string>>).set('at');
+      app.logPush('subscribe', 'https://push.example/1');
+      tick(6000);
+
+      expect(api.pushLogBatch).toHaveBeenCalledTimes(1);
+      const batch = api.pushLogBatch.calls.mostRecent().args[0] as Array<{ kind: string }>;
+      // Запись до входа не теряется - иначе диагностика push была бы дырявой.
+      expect(batch.map((e) => e.kind)).toContain('permission_denied');
+      expect(batch.map((e) => e.kind)).toContain('subscribe');
+    }));
   });
 
 });

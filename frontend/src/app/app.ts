@@ -435,6 +435,8 @@ export class App implements OnInit, OnDestroy {
       // answers with 401. The reconnect path always refreshed; the startup path
       // did not.
       this.#api.retryConnection();
+      // Записи журнала, сделанные до входа, теперь можно отправить.
+      this.#drainPushLogBeforeSession();
       this.#crypto.init().then(() => {
         this.#crypto.syncPublicKey();
         // Held back so the first paint is not competing with three more requests.
@@ -651,6 +653,19 @@ export class App implements OnInit, OnDestroy {
   }
 
   logPush(kind: string, endpoint = '', detail = ''): void {
+    // Журнал уходит с токеном, и без сессии токена нет - ответ заведомо 401.
+    // На странице входа это были два POST, которые не могли ничего дать, но
+    // занимали соединение: на сети, где соединений мало, именно они отнимали
+    // слот у запроса, который действительно был нужен.
+    //
+    // Событие не выбрасывается, а ждёт: после входа журнал уходит вместе с
+    // остальными, и диагностика push не теряет запись о том, что человек
+    // отказался от разрешения ещё до входа.
+    if (!this.#api.accessToken()) {
+      this.#pushLogBeforeSession.push({ kind, endpoint, detail });
+      this.#pushLogPending = true;
+      return;
+    }
     // Batched. Every push event used to be its own request, and subscribing fires
     // several in a row - one connection and one TLS handshake each, at exactly the
     // moment the app is trying to appear. Diagnostics keep the same content, they
@@ -661,10 +676,29 @@ export class App implements OnInit, OnDestroy {
   }
 
   #pushLogBuffer: Array<{ kind: string; endpoint: string; detail: string }> = [];
+  /** Журнал, накопленный до входа. Отправляется вместе с остальным. */
+  #pushLogBeforeSession: Array<{ kind: string; endpoint: string; detail: string }> = [];
+  #pushLogPending = false;
   #pushLogTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly PUSH_LOG_FLUSH_MS = 5000;
 
+  /**
+   * Что накопилось до входа. Живёт отдельно от рабочего буфера, чтобы запись о
+   * том, что разрешение спросили ещё на странице входа, не мешала текущей
+   * диагностике и не терялась при входе.
+   */
+  #drainPushLogBeforeSession(): void {
+    if (!this.#pushLogPending || this.#pushLogBeforeSession.length === 0) return;
+    const pending = this.#pushLogBeforeSession;
+    this.#pushLogBeforeSession = [];
+    this.#pushLogPending = false;
+    for (const e of pending) this.#pushLogBuffer.push(e);
+    if (this.#pushLogTimer) return;
+    this.#pushLogTimer = setTimeout(() => this.flushPushLog(), this.PUSH_LOG_FLUSH_MS);
+  }
+
   flushPushLog(): void {
+    this.#drainPushLogBeforeSession();
     const timer = this.#pushLogTimer;
     if (timer) {
       clearTimeout(timer);
