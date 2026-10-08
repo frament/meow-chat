@@ -18,11 +18,14 @@
  *   - zone.js переносится в документ. Модульные скрипты выполняются в порядке
  *     появления, поэтому inline-polyfills перед main.js даёт тот же порядок,
  *     что и два внешних тега.
- *   - манифест и шрифт подключаются скриптом сразу после старта приложения.
- *     Манифест весит 367 Б и на установку не влияет — его читает iOS, когда
- *     страница уже загружена. Шрифт при font-display:swap не блокирует
- *     отрисовку: текст появляется системным шрифтом и подменяется, когда файл
- *     пришёл.
+ *   - манифест подключается скриптом сразу после старта приложения. Он весит
+ *     367 Б и на установку не влияет — его читает iOS, когда страница уже
+ *     загружена.
+ *
+ * Шрифт подключать отдельно не нужно и даже вредно: в styles.css четыре правила
+ * @font-face, они уезжают в документ вместе со стилями, и браузер сам берёт
+ * нужные подмножества. Лишний <link> на тот же woff2 добавлял соединение,
+ * которого мы как раз хотели избежать.
  */
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -114,24 +117,18 @@ const manifestUri =
   'data:application/manifest+json,' +
   encodeURIComponent(await readFile(join(BROWSER_DIR, manifestName), 'utf8'));
 
-const fontPath = await findByPrefix('PlusJakartaSans-latin', '.woff2');
-if (!fontPath) die('не найден PlusJakartaSans-latin.woff2');
-
 const boot = [
   '<script>',
-  '/* Ассеты, убранные из разметки, чтобы не занимать соединение на пути к',
+  '/* Манифест убран из разметки, чтобы не занимать соединение на пути к',
   '   запуску: релей держит три одновременных соединения, и каждый лишний файл',
-  '   на критическом пути - шанс, что приложение вообще не стартует.',
-  '   Подключаются сразу после загрузки main.js. */',
+  '   на критическом пути — шанс, что приложение вообще не стартует.',
+  '   Подключается сразу после загрузки main.js. */',
   '(function () {',
   "  var m = document.createElement('link');",
   "  m.rel = 'manifest';",
   `  m.href = '${manifestUri}';`,
   '  document.head.appendChild(m);',
-  "  var f = document.createElement('link');",
-  "  f.rel = 'stylesheet';",
-  `  f.href = '/fonts/${basename(fontPath)}';`,
-  '  document.head.appendChild(f);',
+  "  var f = document.createElement('link'); f.rel = 'stylesheet';",
   '})();',
   '</script>',
 ].join('\n');
@@ -141,6 +138,6 @@ await writeFile(indexPath, html);
 
 const { gzipSync } = await import('node:zlib');
 console.log(`✓ index.html: ${(html.length / 1024).toFixed(1)} КБ, ${(gzipSync(Buffer.from(html)).length / 1024).toFixed(1)} КБ gzip`);
-console.log(`  ссылок на стили убрано: ${linksFound}, zone.js встроен, манифест и шрифт — после старта`);
+console.log(`  ссылок на стили убрано: ${linksFound}, zone.js встроен, манифест — после старта`);
 console.log('  соединений на холодной загрузке: 5 → 2');
 console.log('    /index.html (стили, иконка, zone.js внутри) и /main-*.js');

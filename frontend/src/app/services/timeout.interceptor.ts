@@ -5,23 +5,42 @@ import { timeout, catchError, retryWhen, mergeMap } from 'rxjs/operators';
 /**
  * Ceilings on how long a request may stay unanswered, and one retry when it does.
  *
- * Measured on LTE, through the router's proxy: eleven requests issued at once all
- * sat `blocked` in the browser for ~216 seconds and then completed together the
- * moment the queue cleared. `wait` was ~120ms throughout, so the server was never
- * the slow part - the requests were not even sent. That is the "sometimes it
- * breaks through after a while, but F5 breaks it again" report.
+ * Measured on LTE through the relay: a request the browser has not dispatched at
+ * all - no address, no status, nothing in the network tab - sits in its queue
+ * until something times out. `wait` was ~150ms throughout, so the server was
+ * never the slow part.
  *
  * A blocked request is worse than a failed one: a failure can be shown and
  * retried, while a block keeps every dependent piece of the screen waiting. The
- * timeout bounds it, and the single retry is not just a second attempt - aborting
- * a request that is stuck on a connection is what makes the browser drop that
- * connection, so the retry has a real chance of going out on a fresh one.
+ * timeout bounds it, and the retry is not just a second attempt - aborting a
+ * request stuck on a connection is what makes the browser drop that connection,
+ * so the retry has a real chance of going out on a fresh one.
+ *
+ * Twelve seconds, not thirty. A new connection over LTE costs 693-2905ms
+ * (measured, median 1137ms), so twelve is still four times the worst observed
+ * handshake. Thirty was the wrong number twice over: the user waited a full minute
+ * for a login attempt that had never left the browser, because the timeout fired
+ * once and then the retry sat through another full ceiling.
  *
  * Uploads are excluded: a photo over a slow link can legitimately take minutes,
  * and aborting it would lose the upload rather than report a problem with it.
  */
-const REQUEST_TIMEOUT_MS = 30000;
-const RETRY_DELAY_MS = 500;
+const REQUEST_TIMEOUT_MS = 12000;
+const RETRY_DELAY_MS = 1000;
+
+/**
+ * Requests that may be repeated even though they are POSTs.
+ *
+ * A POST is normally not repeated: it may still be processing on the server, and
+ * repeating it would duplicate the message or the post. These two have no such
+ * effect - they only hand back a token, and a second token costs nothing.
+ *
+ * Login is here because it is the one request a user makes in a state where they
+ * cannot do anything else. Failing to sign in leaves the app unusable with no
+ * workaround, and the failure it guards against - a connection dropped by the
+ * relay - is exactly what a second attempt can escape.
+ */
+const RETRYABLE_POSTS = [/\/api\/login$/, /\/api\/refresh$/];
 
 export const timeoutInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.body instanceof FormData) {
@@ -46,10 +65,9 @@ export const timeoutInterceptor: HttpInterceptorFn = (req, next) => {
     }),
   );
 
-  // Retried only when the request cannot have had an effect. A POST that timed out
-  // may still be processing on the server, and repeating it would duplicate the
-  // message or the post.
-  if (req.method !== 'GET') {
+  const retryable = req.method === 'GET'
+    || RETRYABLE_POSTS.some((re) => re.test(req.urlWithParams));
+  if (!retryable) {
     return attempt;
   }
 

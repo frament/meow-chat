@@ -212,13 +212,18 @@ required = {
     'CSS':            "findByPrefix('styles-', '.css')",
     'zone.js':        "findByPrefix('polyfills-', '.js')",
     'манифест — после старта': "m.rel = 'manifest'",
-    'шрифт — после старта':    "f.rel = 'stylesheet'",
 }
 for what, needle in required.items():
     if needle not in src:
         print(f'\u2717 сборка больше не встраивает {what}')
         print('  на пути к запуску появится лишнее соединение')
         sys.exit(1)
+# Отдельная ссылка на шрифт вредна: @font-face уже в документе, и второй <link>
+# на тот же woff2 добавлял соединение на пути к запуску.
+if "f.rel = 'stylesheet'" in src:
+    print('\u2717 шрифт подключается отдельной ссылкой — @font-face уже в документе,')
+    print('  а лишний запрос на тот же woff2 занимает соединение')
+    sys.exit(1)
 print('  \u2713 на пути к запуску только документ и main-*.js')
 PY2
 

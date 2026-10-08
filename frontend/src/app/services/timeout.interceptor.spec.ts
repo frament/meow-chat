@@ -142,4 +142,55 @@ describe('timeoutInterceptor', () => {
     expect(failed).toBeTrue();
     expect(httpMock.match('/api/feed').length).toBe(0);
   }));
+  it('retries a timed-out login, so a dropped relay does not lock the user out', fakeAsync(() => {
+    // Вход - единственный запрос, из-за которого приложением нельзя пользоваться
+    // вообще: подсказки нет, обойти нечем. Повтор делается один раз, и только
+    // для таймаута, и только потому что повторный вход просто выдаёт ещё один
+    // токен и ничего не создаёт.
+    let done = false;
+    http.post('/api/login', { username: 'u', password: 'p' }).subscribe({
+      next: () => (done = true),
+      error: () => {},
+    });
+
+    httpMock.expectOne('/api/login');
+    tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + 1);
+    const second = httpMock.expectOne('/api/login');
+
+    second.flush({ access_token: 'at', refresh_token: 'rt' });
+    tick();
+    expect(done).toBeTrue();
+  }));
+
+  it('still refuses to repeat a POST that creates something', fakeAsync(() => {
+    // Повтор отправленного сообщения создал бы второе сообщение. Потолок
+    // повторов не должен распространяться на это.
+    let failed = false;
+    http.post('/api/messages', { content: 'hi' }).subscribe({ error: () => (failed = true) });
+
+    httpMock.expectOne('/api/messages');
+    tick(REQUEST_TIMEOUT + 1);
+    tick(REQUEST_RETRY_DELAY + REQUEST_TIMEOUT + 1);
+
+    expect(failed).toBeTrue();
+    expect(httpMock.match('/api/messages').length).toBe(0);
+  }));
+
+  it('does not retry a login the server answered - a 401 is an answer', fakeAsync(() => {
+    http.post('/api/login', { username: 'u', password: 'p' }).subscribe({ error: () => {} });
+    httpMock.expectOne('/api/login').flush('nope', { status: 401, statusText: 'Unauthorized' });
+
+    // Ни одной попытки повторно: неверный пароль не станет верным.
+    expect(httpMock.match('/api/login').length).toBe(0);
+  }));
+
+  it('waits twelve seconds, not thirty', () => {
+    // Тридцать секунд означали минуту ожидания: потолок срабатывал, повтор
+    // садился на следующий полный потолок. Новое соединение по LTE стоит
+    // 693-2905 мс, то есть двенадцати секунд с большим запасом.
+    expect(REQUEST_TIMEOUT).toBe(12000);
+    expect(REQUEST_RETRY_DELAY).toBe(1000);
+  });
+
 });
