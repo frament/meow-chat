@@ -70,7 +70,13 @@ func (b *BroadcastLog) OfType(event string) []fiber.Map {
 
 func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	t.Helper()
-	os.MkdirAll("./uploads/messages", 0755)
+	// All four, matching what database.migrate creates in production. Only
+	// "messages" was here, so a sticker upload failed with a 500 from c.SaveFile
+	// while the production directory existed the whole time - the fixture hid a
+	// path the handler depends on.
+	for _, dir := range []string{"avatars", "posts", "messages", "stickers"} {
+		os.MkdirAll("./uploads/"+dir, 0755)
+	}
 
 	tmpFile, err := os.CreateTemp("", "chat-test-*.db")
 	if err != nil {
@@ -202,6 +208,17 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	admin.Delete("/federation/servers/:id", h.AdminDeleteFederationServer)
 	admin.Delete("/federation/cache/:serverId", h.AdminClearFederationCache)
 	admin.Post("/federation/servers/:id/sync-stickers", h.AdminSyncStickerPacks)
+
+	// Sticker packs. Registered here because AdminRenameStickerPack and
+	// AdminUploadSticker had no route in the harness at all - the exact
+	// "endpoint exists in main.go, test forgot it" case the Backlog describes
+	// under «Таблица маршрутов дублируется».
+	app.Get("/sticker-packs", h.GetStickerPacks)
+	admin.Post("/sticker-packs", h.AdminCreateStickerPack)
+	admin.Put("/sticker-packs/:id", h.AdminRenameStickerPack)
+	admin.Delete("/sticker-packs/:id", h.AdminDeleteStickerPack)
+	admin.Post("/sticker-packs/:id/stickers", h.AdminUploadSticker)
+	admin.Delete("/sticker-packs/:id/stickers/:stickerId", h.AdminDeleteSticker)
 	admin.Get("/backup/settings", h.GetBackupSettings)
 	admin.Put("/backup/settings", h.UpdateBackupSettings)
 	admin.Get("/backups", h.AdminListBackups)

@@ -493,6 +493,14 @@ func (h *Handler) runHub() {
 			}
 
 			for _, memberID := range memberIDs {
+				// The author never gets a push for their own message. Their WS
+				// delivery can still fail - several tabs open, a dropped socket
+				// that reconnects a moment later, a write error right here - and
+				// the fallback below then fired at them too. Direct chats already
+				// only counted msg.to as delivered (see the branch above).
+				if memberID == msg.from {
+					continue
+				}
 				delivered := false
 				for conn, uid := range h.clients {
 					if uid == memberID {
@@ -1380,6 +1388,11 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	}
 	if pollData != nil {
 		resp["poll"] = pollData
+	}
+	// Same reason as in groups.go: the optimistic bubble knows only the sticker
+	// id, and our own WS frame is ignored client-side.
+	if stickerURL != "" {
+		resp["sticker_url"] = stickerURL
 	}
 	return c.Status(201).JSON(resp)
 }

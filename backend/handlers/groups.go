@@ -713,5 +713,12 @@ func (h *Handler) SendGroupMessage(c *fiber.Ctx) error {
 	if pollData != nil {
 		resp["poll"] = pollData
 	}
+	// The sender's own optimistic bubble carries only the sticker id, and the
+	// WS frame carrying sticker_url is dropped client-side as our own echo.
+	// Without this in the response the author sees an empty bubble until the
+	// next page load, while everyone else sees the sticker.
+	if stickerURL != "" {
+		resp["sticker_url"] = stickerURL
+	}
 	return c.Status(201).JSON(resp)
 }

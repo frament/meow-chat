@@ -68,16 +68,20 @@ func (h *Handler) GetStickerPacks(c *fiber.Ctx) error {
 
 func (h *Handler) AdminCreateStickerPack(c *fiber.Ctx) error {
 	var req models.CreateStickerPackRequest
-	if err := c.BodyParser(&req); err != nil || req.Name == "" {
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Name is required"})
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Name is required"})
 	}
 
-	result, err := database.DB.Exec("INSERT INTO sticker_packs (name) VALUES (?)", req.Name)
+	result, err := database.DB.Exec("INSERT INTO sticker_packs (name) VALUES (?)", name)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create sticker pack"})
 	}
 	id, _ := result.LastInsertId()
-	return c.Status(201).JSON(fiber.Map{"id": id, "name": req.Name})
+	return c.Status(201).JSON(fiber.Map{"id": id, "name": name})
 }
 
 func (h *Handler) AdminRenameStickerPack(c *fiber.Ctx) error {
@@ -86,12 +90,19 @@ func (h *Handler) AdminRenameStickerPack(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid pack ID"})
 	}
 
+	// Trimmed, and emptiness judged after trimming: `req.Name == ""` let a name
+	// of three spaces through and left the pack named "   " - invisible in the
+	// list and impossible to tell apart from a rendering bug.
 	var req models.CreateStickerPackRequest
-	if err := c.BodyParser(&req); err != nil || req.Name == "" {
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Name is required"})
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Name is required"})
 	}
 
-	_, err = database.DB.Exec("UPDATE sticker_packs SET name = ? WHERE id = ?", req.Name, packID)
+	_, err = database.DB.Exec("UPDATE sticker_packs SET name = ? WHERE id = ?", name, packID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to rename sticker pack"})
 	}
@@ -135,12 +146,30 @@ func (h *Handler) AdminUploadSticker(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Sticker image required"})
 	}
 
+	// ".apng" is here because that is what an animated iPhone sticker is, and
+	// that is the only way one leaves the sticker keyboard. It is a PNG with
+	// extra animation chunks, so the signature check in imageproc.Sniff still
+	// recognises it as PNG.
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid image format (jpg, png, gif, webp allowed)"})
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".apng":
+	default:
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid image format (jpg, png, gif, webp, apng allowed)"})
 	}
 	if file.Size > 5*1024*1024 {
 		return c.Status(400).JSON(fiber.Map{"error": "Image too large (max 5MB)"})
+	}
+
+	// Stored as .png even when it arrived as .apng. Go's mime table knows
+	// image/apng and app.Static would serve it faithfully, but no browser
+	// renders that type - an <img> pointed at one shows nothing at all. APNG is
+	// a valid PNG whose extra chunks browsers animate on their own, so renaming
+	// loses nothing and makes the file display. Note this is the extension
+	// being corrected, not the bytes being sniffed: stickers are deliberately
+	// kept out of imageproc, which is why no image/* file can end up here under
+	// a name that contradicts it beyond this rename.
+	if ext == ".apng" {
+		ext = ".png"
 	}
 
 	// Get next sort order

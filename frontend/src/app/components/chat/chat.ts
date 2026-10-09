@@ -901,6 +901,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!sticker) return;
     this.messageContent = String(sticker.id);
     this.messageType = 'sticker';
+    // Remembered for the optimistic bubble: the template renders sticker_url,
+    // and the response only arrives after the request does. finalizeOptimistic
+    // still sets it, so a lost/failed URL still ends up correct.
+    this.pendingStickerURL = sticker.image_url;
     this.sendMessage();
   }
 
@@ -976,6 +980,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   // A group message that failed only because the group key wasn't available yet.
   // Retried automatically once the key arrives (group_key_ready WS event).
   private pendingGroupSend: { content: string; type: MsgType } | null = null;
+  // Sticker image URL from the picker, consumed by the next optimistic bubble.
+  private pendingStickerURL: string | null = null;
   // Telemetry: conversations we already reported as undecryptable this session.
   private reportedDecryptFailures = new Set<string>();
   uploading = signal(false);
@@ -1208,12 +1214,26 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private e2eeReady = false;
 
+  /**
+   * Waits for the crypto store to be usable instead of asking whether it is.
+   *
+   * e2eeReady was set from a .then() and every decryption path consulted it
+   * *before* trying, so a message arriving in that window was rendered as
+   * "[Зашифрованное сообщение]" and never decrypted afterwards. init() is
+   * idempotent (it memoises its promise), so awaiting it is cheap and correct
+   * on every path - including the ones that used to check the flag and skip.
+   */
+  private async cryptoReady(): Promise<void> {
+    await this.crypto.init();
+    this.e2eeReady = true;
+  }
+
   ngOnInit() {
     this.currentUserId = this.api.currentUser()?.id ?? 0;
 
-    this.crypto.init().then(() => {
-      this.e2eeReady = true;
-    });
+    // Warm the store up front so the first decryption does not wait on it, but
+    // nothing may branch on the outcome: every consumer awaits cryptoReady().
+    this.cryptoReady();
 
     this.route.paramMap.subscribe((params) => {
       const userId = params.get('userId');
@@ -1260,10 +1280,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           }
           if (!content && data.encrypted_content && data.encrypted_iv) {
             decryptedOk = false;
-            if (this.e2eeReady) {
-              const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
-              if (decrypted !== null) { content = decrypted; decryptedOk = true; }
-            }
+            await this.cryptoReady();
+            const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
+            if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             if (!content) content = '[Зашифрованное сообщение]';
           }
           if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
@@ -1300,10 +1319,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           let content = data.content;
           if (data.encrypted_content && data.encrypted_iv) {
             let decryptedOk = false;
-            if (this.e2eeReady) {
-              const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv, data.epoch ?? 0);
-              if (decrypted !== null) { content = decrypted; decryptedOk = true; }
-            }
+            await this.cryptoReady();
+            const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv, data.epoch ?? 0);
+            if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             if (!content) content = '[Зашифрованное сообщение]';
             if (!decryptedOk) this.reportDecryptFailure('group', { group_id: data.group_id, msg_type: data.msg_type });
           }
@@ -1383,7 +1401,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     // sent from other tabs while this tab was in background)
     this.subscriptions.push(
       fromEvent(document, 'visibilitychange').subscribe(() => {
-        if (document.visibilityState === 'visible' && this.selectedUser && !this.selectedGroup) {
+        // Either kind of open thread, not just direct chats: a group left open in
+        // a background tab missed every frame sent while it was hidden.
+        if (document.visibilityState === 'visible' && (this.selectedUser || this.selectedGroup)) {
           this.reloadOpenThread();
         }
       })
@@ -1433,7 +1453,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private reloadOpenThread(): void {
     const user = this.selectedUser;
-    if (!user || this.selectedGroup) return;
+    if (this.selectedGroup) {
+      this.reloadOpenGroup();
+      return;
+    }
+    if (!user) return;
 
     this.api.getMessages(this.currentUserId, user.id).subscribe({
       next: async (msgs: Message[]) => {
@@ -1475,6 +1499,49 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       },
       error: (err) => this.noteLoadFailure(err?.status),
+    });
+  }
+
+  /**
+   * The group counterpart of reloadOpenThread, and the fix for messages that
+   * only ever arrived as a push.
+   *
+   * A push is sent exactly when the WS write failed, so the frame was never
+   * delivered and nothing put the message into `messages`. The direct-chat
+   * recovery above covered that case; this one used to bail out on
+   * `this.selectedGroup`, leaving the group thread stale until the user
+   * re-selected it or reloaded the page.
+   *
+   * Merged rather than replaced, and the unread boundary is recomputed the same
+   * way selectGroup does it: this runs while a thread is open, so the optimistic
+   * sends in flight have to survive it.
+   */
+  private reloadOpenGroup(): void {
+    const group = this.selectedGroup;
+    if (!group) return;
+
+    this.api.getGroupMessages(group.id).subscribe({
+      error: (err) => this.noteLoadFailure(err?.status),
+      next: async (msgs: Message[]) => {
+        this.noteLoadSuccess();
+        const existingIds = new Set(this.messages.map(m => m.id));
+        let added = 0;
+        for (const msg of msgs) {
+          if (existingIds.has(msg.id)) continue;
+          this.seenMessageIds.add(msg.id);
+          this.messages.push(await this.decryptGroupMsg(msg, group.id));
+          added++;
+        }
+        if (added > 0) {
+          this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        }
+        this.messages = [...this.messages];
+        if (!document.hidden) {
+          this.api.markGroupRead(group.id).subscribe({ error: () => {} });
+          this.api.clearGroupUnread(group.id);
+        }
+        this.scrollToBottom();
+      },
     });
   }
 
@@ -1696,6 +1763,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Retries the thread that failed to load. */
   retryLoadMessages(): void {
+    const group = this.selectedGroup;
+    if (group) {
+      this.reloadOpenGroup();
+      return;
+    }
     const user = this.selectedUser;
     if (user) this.selectUser(user);
   }
@@ -1926,10 +1998,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         from_user: this.api.currentUser()?.username ?? '',
         pending: true,
         images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
+        sticker_url: type === 'sticker' ? (this.pendingStickerURL ?? undefined) : undefined,
       };
       this.messages.push(optimisticMsg);
       this.messages = [...this.messages];
       this.messageContent = '';
+      this.pendingStickerURL = null;
       this.resetComposerHeight();
       this.clearFiles();
       this.scrollToBottom();
@@ -1974,11 +2048,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         from_user: this.api.currentUser()?.username ?? '',
         pending: true,
         images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
+        sticker_url: type === 'sticker' ? (this.pendingStickerURL ?? undefined) : undefined,
       };
       this.messages.push(optimisticMsg);
       this.messages = [...this.messages];
       this.persistCache(this.selectedUser.id);
       this.messageContent = '';
+      this.pendingStickerURL = null;
       this.resetComposerHeight();
       this.clearFiles();
       this.scrollToBottom();
@@ -2046,6 +2122,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       if (server?.images && server.images.length > 0) {
         this.messages[idx].images = server.images.map((url: string) => ({ id: 0, image_url: url }));
+      }
+      // A sticker bubble renders sticker_url, and the optimistic one only ever
+      // held the sticker id in `content` - so without this the author sees an
+      // empty bubble. The response carries the resolved URL precisely because
+      // our own WS frame is skipped as an echo.
+      if (server?.sticker_url) {
+        this.messages[idx].sticker_url = server.sticker_url;
       }
       if (this.selectedUser) {
         this.persistCache(this.selectedUser.id);
@@ -2201,7 +2284,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.api.markGroupRead(group.id).subscribe({ error: () => {} });
 
     // Sync the newest key epoch, ensure we have the group key, and distribute.
-    if (this.e2eeReady) {
+    // Awaited rather than guarded by the readiness flag: opening a group right
+    // after login used to skip this whole block, so the thread loaded with no
+    // key available and came back encrypted.
+    await this.cryptoReady();
+    {
       try {
         const { epoch } = await firstValueFrom(this.api.getGroupKeyEpoch(group.id));
         const localEpoch = await this.crypto.getCurrentGroupEpoch(group.id);
@@ -2303,7 +2390,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * device from future group messages.
    */
   private async rotateGroupKeys(revokedDeviceId: string) {
-    if (!this.e2eeReady) return;
+    await this.cryptoReady();
     try {
       const groups = await firstValueFrom(this.api.getGroupChats());
       for (const g of groups) {
@@ -2350,7 +2437,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Encrypt the group key for a single member (used on key requests / member add). */
   private async distributeGroupKeyToMember(groupId: number, memberId: number) {
-    if (!this.e2eeReady || !memberId || memberId === this.currentUserId) return;
+    if (!memberId || memberId === this.currentUserId) return;
+    await this.cryptoReady();
     try {
       const epoch = await this.crypto.getCurrentGroupEpoch(groupId);
       const raw = await this.crypto.getRawGroupKey(groupId, epoch);
@@ -2409,7 +2497,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async decryptGroupMsg(msg: Message, groupId: number): Promise<Message> {
-    if (msg.encrypted_content && msg.encrypted_iv && this.e2eeReady) {
+    if (msg.encrypted_content && msg.encrypted_iv) {
+      // Awaited, not tested: a thread loaded before init() finished used to skip
+      // decryption entirely and render every message as encrypted.
+      await this.cryptoReady();
       const decrypted = await this.crypto.decryptGroupMessage(groupId, msg.encrypted_content, msg.encrypted_iv, msg.epoch ?? 0);
       if (decrypted !== null) {
         msg.content = decrypted;
@@ -2432,8 +2523,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.newGroupName = '';
         this.loadGroupChats();
 
-        // Generate E2EE group key and upload share for self
-        if (this.e2eeReady) {
+        // Generate E2EE group key and upload share for self.
+        // Awaited: creating a group in the first moments after login used to
+        // leave it with no key at all - and that group stays undecryptable for
+        // everyone, since nobody has a key to share.
+        await this.cryptoReady();
+        {
           const rawKeyBytes = await this.crypto.generateGroupKey(res.id);
           if (rawKeyBytes) {
             const selfShare = await this.crypto.encryptGroupKeyForPeer(rawKeyBytes, this.currentUserId);

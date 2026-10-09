@@ -19,6 +19,7 @@ describe('AdminComponent', () => {
     getAdminGroupChats: jasmine.createSpy().and.returnValue(of([])),
     adminDeleteGroupChat: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
     getBackups: jasmine.createSpy().and.returnValue(of([])),
+    getStickerPacks: jasmine.createSpy().and.returnValue(of([])),
     createBackup: jasmine.createSpy().and.returnValue(of({ filename: 'b.zip', size_bytes: 100, created_at: '' })),
     uploadBackup: jasmine.createSpy().and.returnValue(of({ type: HttpEventType.Response, body: { filename: 'b.zip' } })),
     deleteBackup: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
@@ -97,5 +98,35 @@ describe('AdminComponent', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(component.activeTab).toBe('files');
+  });
+
+  it('loads sticker packs when the stickers tab is opened via the mobile select', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const select = compiled.querySelector('select') as HTMLSelectElement;
+    select.value = 'stickers';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.activeTab).toBe('stickers');
+    expect(mockApi.getStickerPacks).toHaveBeenCalled();
+  });
+
+  it('loads chats and backups from the mobile select too, not only push and decrypt', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const select = compiled.querySelector('select') as HTMLSelectElement;
+
+    select.value = 'chats';
+    select.dispatchEvent(new Event('change'));
+    expect(mockApi.getAdminGroupChats).toHaveBeenCalled();
+
+    select.value = 'backups';
+    select.dispatchEvent(new Event('change'));
+    expect(mockApi.getBackups).toHaveBeenCalled();
+  });
+
+  it('keeps showing the current tab in the mobile select after a reload', () => {
+    component.selectTab('stickers');
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector('select') as HTMLSelectElement;
+    expect(select.value).toBe('stickers');
   });
 });

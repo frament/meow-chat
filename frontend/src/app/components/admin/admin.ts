@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, HostListener } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpEventType } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -43,31 +43,31 @@ interface BackupEntry {
         <div class="w-48 flex-shrink-0">
           <h1 class="text-xl font-bold mb-6" style="color:var(--text-primary);">Панель администратора</h1>
           <nav class="flex flex-col gap-1">
-            <button (click)="activeTab = 'users'"
+            <button (click)="selectTab('users')"
               class="admin-nav-btn" [class.active]="activeTab === 'users'">
               Пользователи
             </button>
-            <button (click)="activeTab = 'files'"
+            <button (click)="selectTab('files')"
               class="admin-nav-btn" [class.active]="activeTab === 'files'">
               Файлы
             </button>
-            <button (click)="activeTab = 'chats'; loadGroupChats()"
+            <button (click)="selectTab('chats')"
               class="admin-nav-btn" [class.active]="activeTab === 'chats'">
               Чаты
             </button>
-            <button (click)="activeTab = 'backups'; loadBackups()"
+            <button (click)="selectTab('backups')"
               class="admin-nav-btn" [class.active]="activeTab === 'backups'">
               Бэкапы
             </button>
-            <button (click)="activeTab = 'federation'; loadFederation()"
+            <button (click)="selectTab('federation')"
               class="admin-nav-btn" [class.active]="activeTab === 'federation'">
               Федерация
             </button>
-            <button (click)="activeTab = 'stickers'; loadStickers()"
+            <button (click)="selectTab('stickers')"
               class="admin-nav-btn" [class.active]="activeTab === 'stickers'">
               Стикеры
             </button>
-            <button (click)="activeTab = 'settings'"
+            <button (click)="selectTab('settings')"
               class="admin-nav-btn" [class.active]="activeTab === 'settings'">
               Настройки
             </button>
@@ -466,8 +466,23 @@ interface BackupEntry {
               @for (pack of stickerPacks; track pack.id) {
                 <div style="margin-bottom:20px;padding:16px;border-radius:12px;border:1px solid var(--border-default);">
                   <div class="flex items-center gap-3 mb-3">
-                    <span style="font-size:16px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
-                    <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить пак</button>
+                    @if (renamingPackId === pack.id) {
+                      <input #renameInput type="text" [(ngModel)]="stickerRenameDraft"
+                        (keydown.enter)="commitRename(pack)" (keydown.escape)="cancelRename()"
+                        placeholder="Название пака..."
+                        class="text-base font-semibold"
+                        style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-family:inherit;">
+                      <button (click)="commitRename(pack)" [disabled]="!stickerRenameDraft.trim()"
+                        title="Сохранить"
+                        style="padding:6px 12px;border-radius:8px;border:none;background:var(--accent-gradient);color:#fff;cursor:pointer;font-size:12px;font-weight:600;">Сохранить</button>
+                      <button (click)="cancelRename()" title="Отмена"
+                        style="padding:6px 10px;border-radius:8px;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Отмена</button>
+                    } @else {
+                      <span style="font-size:16px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
+                      <button (click)="startRename(pack)" title="Переименовать"
+                        style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">Переименовать</button>
+                      <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить пак</button>
+                    }
                   </div>
                   <div class="flex flex-wrap gap-3 mb-3">
                     @for (sticker of pack.stickers; track sticker.id) {
@@ -479,12 +494,33 @@ interface BackupEntry {
                       </div>
                     }
                   </div>
-                  <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm cursor-pointer"
-                    style="border:2px dashed var(--border-default);color:var(--text-secondary);">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    Добавить стикер
-                    <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
-                  </label>
+                  <div class="inline-flex flex-col items-start gap-1">
+                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
+                      [style.border]="'2px dashed ' + (stickerDragOver === pack.id ? 'var(--accent)' : 'var(--border-default)')"
+                      [style.background]="stickerDragOver === pack.id ? 'var(--accent-light)' : 'transparent'"
+                      style="color:var(--text-secondary);"
+                      [attr.tabindex]="0"
+                      [attr.aria-label]="'Добавить стикер в пак ' + pack.name + ' — можно перетащить файл или вставить из буфера'"
+                      (focus)="onStickerZoneArmed(pack.id)"
+                      (click)="onStickerZoneArmed(pack.id)"
+                      (keydown.enter)="onStickerZoneArmed(pack.id)"
+                      (dragover)="onStickerDragOver(pack.id, $event)"
+                      (dragleave)="onStickerDragLeave(pack.id)"
+                      (drop)="onStickerDropped(pack, $event)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                      <label class="cursor-pointer" style="display:inline-flex;align-items:center;gap:8px;">
+                        Добавить стикер
+                        <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
+                      </label>
+                    </div>
+                    <span style="font-size:12px;color:var(--text-tertiary);">
+                      @if (stickerPasteTarget === pack.id) {
+                        Вставьте стикер: ⌘V или два пальца
+                      } @else {
+                        Перетащите файл или нажмите и вставьте из буфера
+                      }
+                    </span>
+                  </div>
                 </div>
               }
             }
@@ -630,7 +666,7 @@ interface BackupEntry {
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-lg font-bold" style="color:var(--text-primary);">Админка</h1>
         <div style="position:relative;">
-          <select (change)="onTabChange($any($event.target).value)"
+          <select [value]="activeTab" (change)="selectTab($any($event.target).value)"
             style="appearance:none;padding:8px 32px 8px 12px;border-radius:10px;border:1px solid var(--border-default);background:var(--bg-surface);font-size:14px;font-weight:500;color:var(--text-primary);cursor:pointer;font-family:inherit;min-width:160px;">
             <option value="users">Пользователи</option>
             <option value="files">Файлы</option>
@@ -968,9 +1004,22 @@ interface BackupEntry {
           } @else {
             @for (pack of stickerPacks; track pack.id) {
               <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid var(--border-default);">
-                <div class="flex items-center gap-3 mb-3">
-                  <span style="font-size:15px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
-                  <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить</button>
+                <div class="flex items-center gap-2 mb-3">
+                  @if (renamingPackId === pack.id) {
+                    <input #renameInput type="text" [(ngModel)]="stickerRenameDraft"
+                      (keydown.enter)="commitRename(pack)" (keydown.escape)="cancelRename()"
+                      placeholder="Название..."
+                      style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border-default);background:var(--bg-surface);color:var(--text-primary);font-family:inherit;font-size:14px;">
+                    <button (click)="commitRename(pack)" [disabled]="!stickerRenameDraft.trim()"
+                      style="padding:6px 10px;border-radius:8px;border:none;background:var(--accent-gradient);color:#fff;cursor:pointer;font-size:12px;font-weight:600;">ОК</button>
+                    <button (click)="cancelRename()"
+                      style="padding:6px 10px;border-radius:8px;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;">Отмена</button>
+                  } @else {
+                    <span style="font-size:15px;font-weight:600;color:var(--text-primary);">{{ pack.name }}</span>
+                    <button (click)="startRename(pack)" title="Переименовать"
+                      style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-default);background:transparent;cursor:pointer;font-size:12px;color:var(--text-secondary);">Имя</button>
+                    <button (click)="deleteStickerPack(pack)" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid #e74c3c;background:transparent;cursor:pointer;font-size:12px;color:#e74c3c;">Удалить</button>
+                  }
                 </div>
                 <div class="flex flex-wrap gap-2 mb-3">
                   @for (sticker of pack.stickers; track sticker.id) {
@@ -982,12 +1031,32 @@ interface BackupEntry {
                     </div>
                   }
                 </div>
-                <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm cursor-pointer"
-                  style="border:2px dashed var(--border-default);color:var(--text-secondary);">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  Добавить стикер
-                  <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
-                </label>
+                <div class="inline-flex flex-col items-start gap-1">
+                  <div class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
+                    [style.border]="'2px dashed ' + (stickerDragOver === pack.id ? 'var(--accent)' : 'var(--border-default)')"
+                    style="color:var(--text-secondary);"
+                    [attr.tabindex]="0"
+                    [attr.aria-label]="'Добавить стикер в пак ' + pack.name + ' — можно перетащить файл или вставить из буфера'"
+                    (focus)="onStickerZoneArmed(pack.id)"
+                    (click)="onStickerZoneArmed(pack.id)"
+                    (keydown.enter)="onStickerZoneArmed(pack.id)"
+                    (dragover)="onStickerDragOver(pack.id, $event)"
+                    (dragleave)="onStickerDragLeave(pack.id)"
+                    (drop)="onStickerDropped(pack, $event)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <label class="cursor-pointer" style="display:inline-flex;align-items:center;gap:8px;">
+                      Добавить стикер
+                      <input type="file" accept="image/*" (change)="uploadSticker(pack, $event)" class="hidden">
+                    </label>
+                  </div>
+                  <span style="font-size:12px;color:var(--text-tertiary);">
+                    @if (stickerPasteTarget === pack.id) {
+                      Вставьте стикер: два пальца
+                    } @else {
+                      Стикеры iPhone: скопируйте стикер и вставьте
+                    }
+                  </span>
+                </div>
               </div>
             }
           }
@@ -1063,6 +1132,26 @@ export class AdminComponent implements OnInit, OnDestroy {
   newStickerPackName = '';
   stickerMsg = '';
   stickerMsgOk = false;
+  /** Id пака, который сейчас переименовывается, либо null. */
+  renamingPackId: number | null = null;
+  stickerRenameDraft = '';
+  /**
+   * The desktop one. Both layouts have a `#renameInput`, but only one of them is
+   * in the DOM at a time (the other is behind `sm:hidden`), so the first match
+   * is the visible one. Focusing it is what makes the rename feel immediate -
+   * without it the user clicks «Переименовать» and has to find the caret.
+   */
+  @ViewChild('renameInput') renameInputRef?: ElementRef<HTMLInputElement>;
+  /** Pack whose drop zone currently shows the hover state. */
+  stickerDragOver: number | null = null;
+  /**
+   * Pack that a pasted image will go to.
+   *
+   * A paste event carries no target, so the zone has to be armed first - by
+   * clicking it or tabbing to it. That is also the only gesture available on an
+   * iPhone: the file chooser cannot see a sticker, but a two-finger paste can.
+   */
+  stickerPasteTarget: number | null = null;
 
   currentVersion = '—';
   latestVersion = '';
@@ -1088,27 +1177,35 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   openPushTab() {
-    this.activeTab = 'push';
-    this.loadPush();
-    this.startPushRefresh();
+    this.selectTab('push');
   }
 
   openDecryptTab() {
-    this.activeTab = 'decrypt';
-    this.loadDecrypt();
+    this.selectTab('decrypt');
   }
 
-  onTabChange(tab: string) {
-    this.activeTab = tab as AdminComponent['activeTab'];
-    if (tab === 'push') {
-      this.loadPush();
-      this.startPushRefresh();
-    } else {
-      this.stopPushRefresh();
+  /**
+   * The one place a tab is opened from, whatever opened it.
+   *
+   * Loading used to be spelled out in each button's (click), and the mobile
+   * <select> went through onTabChange() instead - which only knew about push
+   * and decrypt. So the stickers tab loaded on desktop and showed "Нет
+   * стикерпаков" on a phone, and again after any return to /admin: the array
+   * only ever lived in the component, and ngOnInit does not restore it. The
+   * tab decides what to fetch, so a new entry point cannot forget.
+   */
+  selectTab(tab: AdminComponent['activeTab']) {
+    this.activeTab = tab;
+    switch (tab) {
+      case 'chats': this.loadGroupChats(); break;
+      case 'backups': this.loadBackups(); break;
+      case 'federation': this.loadFederation(); break;
+      case 'stickers': this.loadStickers(); break;
+      case 'push': this.loadPush(); this.startPushRefresh(); break;
+      case 'decrypt': this.loadDecrypt(); break;
+      default: break;
     }
-    if (tab === 'decrypt') {
-      this.loadDecrypt();
-    }
+    if (tab !== 'push') this.stopPushRefresh();
   }
 
   private startPushRefresh() {
@@ -1206,9 +1303,63 @@ export class AdminComponent implements OnInit, OnDestroy {
   loadStickers() {
     this.stickerLoading = true;
     this.stickerMsg = '';
+    this.cancelRename();
     this.api.getStickerPacks().subscribe({
       next: (packs) => { this.stickerPacks = packs; this.stickerLoading = false; },
       error: () => { this.stickerMsg = 'Ошибка загрузки стикерпаков'; this.stickerMsgOk = false; this.stickerLoading = false; },
+    });
+  }
+
+  /**
+   * Renaming a pack. The endpoint and the API method already existed - the
+   * backend has had `PUT /admin/sticker-packs/:id` since the sticker feature
+   * landed, and nothing in the UI ever called it.
+   *
+   * The draft is discarded on every load: a rename that succeeds reloads the
+   * list, and a half-typed name left in `stickerRenameDraft` would reappear in
+   * the next pack the user starts renaming.
+   */
+  startRename(pack: StickerPack) {
+    this.renamingPackId = pack.id;
+    this.stickerRenameDraft = pack.name;
+    setTimeout(() => {
+      const el = this.renameInputRef?.nativeElement;
+      el?.focus();
+      el?.select();
+    }, 0);
+  }
+
+  cancelRename() {
+    this.renamingPackId = null;
+    this.stickerRenameDraft = '';
+  }
+
+  commitRename(pack: StickerPack) {
+    const name = this.stickerRenameDraft.trim();
+    if (!name) {
+      this.stickerMsg = 'Название не может быть пустым';
+      this.stickerMsgOk = false;
+      return;
+    }
+    if (name === pack.name) {
+      this.cancelRename();
+      return;
+    }
+    this.api.adminRenameStickerPack(pack.id, name).subscribe({
+      next: () => {
+        this.cancelRename();
+        // Reload first: loadStickers() clears stickerMsg, so setting the
+        // confirmation before it would wipe the message it just set.
+        this.loadStickers();
+        this.stickerMsg = 'Пак переименован';
+        this.stickerMsgOk = true;
+        setTimeout(() => this.stickerMsg = '', 3000);
+      },
+      error: (err: unknown) => {
+        console.error('commitRename error', err);
+        this.stickerMsg = 'Ошибка переименования';
+        this.stickerMsgOk = false;
+      },
     });
   }
 
@@ -1246,20 +1397,97 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
 
-  async uploadSticker(pack: StickerPack, event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files?.length) return;
-    const file = await toMemoryFile(input.files[0]);
-    input.value = '';
-    this.api.adminUploadSticker(pack.id, file).subscribe({
+  /**
+   * Uploads a sticker from a File, or from a paste/drop payload.
+   *
+   * The iPhone path matters here. iOS stickers are not a format of their own -
+   * they are APNG/GIF/PNG, and the only way one leaves the sticker keyboard is by
+   * dragging it out or copying it, never by picking it from a file chooser. Both
+   * arrive through the clipboard or a drop, which is what `accept="image/*"`
+   * cannot offer, hence the two extra entry points below.
+   */
+  private async uploadStickerFile(pack: StickerPack, file: File) {
+    const mem = await toMemoryFile(file);
+    this.api.adminUploadSticker(pack.id, mem).subscribe({
       next: () => {
         this.loadStickers();
         this.stickerMsg = 'Стикер добавлен';
         this.stickerMsgOk = true;
         setTimeout(() => this.stickerMsg = '', 3000);
       },
-      error: () => { this.stickerMsg = 'Ошибка загрузки стикера'; this.stickerMsgOk = false; },
+      error: (err: unknown) => {
+        console.error('uploadSticker error', err);
+        this.stickerMsg = 'Ошибка загрузки стикера';
+        this.stickerMsgOk = false;
+      },
     });
+  }
+
+  async uploadSticker(pack: StickerPack, event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    const file = input.files[0];
+    input.value = '';
+    await this.uploadStickerFile(pack, file);
+  }
+
+  /** A file dropped onto a pack's drop zone. */
+  async onStickerDropped(pack: StickerPack, event: DragEvent) {
+    event.preventDefault();
+    this.stickerDragOver = null;
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    await this.uploadStickerFile(pack, file);
+  }
+
+  onStickerDragOver(packId: number, event: DragEvent) {
+    event.preventDefault();
+    // Only visual feedback here; the drop itself is handled above.
+    if (this.stickerDragOver !== packId) {
+      this.stickerDragOver = packId;
+    }
+  }
+
+  onStickerDragLeave(packId: number) {
+    if (this.stickerDragOver === packId) this.stickerDragOver = null;
+  }
+
+  onStickerZoneArmed(packId: number) {
+    this.stickerPasteTarget = packId;
+  }
+
+  /**
+   * A pasted image, on the document rather than on the zone.
+   *
+   * The zone is not focused when the paste happens on an iPhone - the two
+   * fingers land on the page, not on a div - so the handler sits on the host
+   * element and looks at which zone was armed.
+   */
+  @HostListener('document:paste', ['$event'])
+  async onDocumentPaste(event: ClipboardEvent) {
+    const packId = this.stickerPasteTarget;
+    if (packId === null || this.activeTab !== 'stickers') return;
+    const pack = this.stickerPacks.find(p => p.id === packId);
+    if (!pack) return;
+    await this.onStickerPaste(pack, event);
+  }
+
+  /**
+   * Paste anywhere in the stickers tab while a pack's zone is armed.
+   *
+   * A paste event carries no pack, so the target pack is the one armed by the
+   * last click on its zone (`stickerPasteTarget`). Clicking the zone and then
+   * pasting with two fingers is the iPhone gesture that works there; on a
+   * desktop the same handler serves drag-and-drop's habit of using the
+   * clipboard.
+   */
+  async onStickerPaste(pack: StickerPack, event: ClipboardEvent) {
+    const item = Array.from(event.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'));
+    if (!item) return;
+    const file = item.getAsFile();
+    if (!file) return;
+    event.preventDefault();
+    await this.uploadStickerFile(pack, file);
   }
 
   deleteSticker(pack: StickerPack, sticker: { id: number }) {

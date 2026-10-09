@@ -151,6 +151,8 @@ export interface Message {
   pending?: boolean;
   is_read?: boolean;
   poll?: Poll;
+  /** Resolved image for msg_type 'sticker'. `content` holds the sticker id. */
+  sticker_url?: string;
 }
 
 export interface GroupChat {

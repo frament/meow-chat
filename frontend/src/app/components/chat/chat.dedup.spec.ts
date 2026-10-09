@@ -146,9 +146,12 @@ describe('ChatComponent duplicate suppression', () => {
     wsMessages$.next(frame(777));
     wsMessages$.next(frame(777));
     wsMessages$.next(frame(777));
+    tick();
 
     // All three reached decryption before any of them settled. If the old check
     // were still in place, this is exactly where it would let all three through.
+    // The tick above is what the frames need now that decryption first awaits
+    // cryptoReady() - it is one more await on the way, not one fewer.
     expect(decryptStarted).toBe(3);
 
     // Let every one of them settle - not just the last.
@@ -164,11 +167,13 @@ describe('ChatComponent duplicate suppression', () => {
 
   it('keeps distinct messages that share a payload', fakeAsync(() => {
     wsMessages$.next(frame(1));
+    tick();
     decryptResolvers.forEach((r) => r('одно'));
     decryptResolvers = [];
     tick();
 
     wsMessages$.next(frame(2));
+    tick();
     decryptResolvers.forEach((r) => r('два'));
     decryptResolvers = [];
     tick();
@@ -252,6 +257,7 @@ describe('ChatComponent duplicate suppression', () => {
 
     wsMessages$.next(groupFrame());
     wsMessages$.next(groupFrame());
+    tick();
     tick();
 
     const messages = (component as unknown as { messages: any[] }).messages;
