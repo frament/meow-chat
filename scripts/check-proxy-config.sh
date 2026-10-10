@@ -299,5 +299,29 @@ if size > limit:
 print(f'  ✓ фавиконка {size} байт')
 PY
 
+echo "▸ иконка в push уведомлении указывает на существующий файл"
+python3 - <<'PY' || exit 1
+import os, re, sys
+
+# Путь к иконке зашит в backend/handlers/push.go, а файл лежит во frontend/public
+# и отдаётся nginx'ом. Юнит-тест этого не видит: он проверяет отправку, а не то,
+# что адрес в теле уведомления куда-то ведёт. Расхождение молча давало 404 на
+# каждом уведомлении - на iOS незаметно (там своя иконка приложения), на
+# Android и в браузере битая картинка.
+src = open('backend/handlers/push.go').read()
+m = re.search(r'"icon":\s*"([^"]+)"', src)
+if not m:
+    print('✗ не нашёл поле icon в push.go - проверь вручную')
+    sys.exit(1)
+
+icon = m.group(1)
+path = os.path.join('frontend/public', icon.lstrip('/'))
+if not os.path.exists(path):
+    print(f'✗ push отдаёт иконку {icon}, но файла frontend/public/{icon.lstrip("/")} нет')
+    print('  Каждый пуш получит 404 на иконку.')
+    sys.exit(1)
+print(f'  ✓ иконка пуша {icon} существует')
+PY
+
 echo
 echo "✓ конфиги прокси в порядке"

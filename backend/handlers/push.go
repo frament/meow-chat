@@ -265,7 +265,11 @@ func (h *Handler) sendPushNotificationFrom(toUserID int64, source, title, body s
 		payload, _ := json.Marshal(map[string]interface{}{
 			"title": title,
 			"body":  body,
-			"icon":  "/favicon.ico",
+			// "/favicon.ico" was served by nothing: the file is favicon.png (the
+			// build even inlines it as a data URI, so no .ico is ever produced).
+			// Every notification pointed at a 404. Invisible on iOS, which uses the
+			// app icon regardless, but a broken image on Android and in the browser.
+			"icon":  "/favicon.png",
 			"data":  data,
 		})
 
