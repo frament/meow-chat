@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.6.0-blue" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">

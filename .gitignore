@@ -1,6 +1,17 @@
 data/
 uploads/
 
+# Артефакты go test внутри дерева исходников. saveImage присоединяет каталог
+# к рабочему каталогу, а у `go test` это каталог пакета — загрузка стикера
+# писала файл в backend/handlers/stickers/ и он попадал в коммит. Причина
+# исправлена в stickers.go, но тест снова напишет сюда при любой новой
+# загрузке, поэтому игнорируем и жёстко: если каталог появится, значит путь
+# снова стал неполным и проверка в sticker_pack_ui_test.go должна падать.
+backend/handlers/stickers/
+backend/handlers/uploads/
+backend/database/uploads/
+backend/cache/uploads/
+
 # Бэкапы БД, которые docker compose пишет на сервере
 backups/
 _ref/

@@ -222,14 +222,23 @@ func TestAdminUploadSticker_CompressesAndSniffsExtension(t *testing.T) {
 		t.Errorf("image_url = %q, want a .jpg extension sniffed from the bytes", url)
 	}
 
-	// saveImage writes relative to the working directory, which for `go test` is the
-	// package directory: the file lands in handlers/stickers/, not uploads/.
-	stored, err := os.ReadFile(filepath.Base(filepath.Dir(url)) + "/" + filepath.Base(url))
+	// The URL is the promise the static handler keeps, so the bytes have to be
+	// where it says. Reading the bare filename would have passed while the file
+	// sat outside uploads/ - which is exactly what happened: the path used to be
+	// the bare "stickers", writing to ./stickers/ and serving 404s, and this
+	// test still went green because it looked the file up by name.
+	stored, err := os.ReadFile("." + filepath.FromSlash(url))
 	if err != nil {
-		t.Fatalf("stored file: %v", err)
+		t.Fatalf("stored file at %s: %v", url, err)
 	}
 	if len(stored) >= original {
 		t.Errorf("stored %d bytes, original %d: not compressed", len(stored), original)
+	}
+
+	// Nothing may land outside uploads/: that tree is a bind mount and a static
+	// route, and a file elsewhere is unreachable no matter what the URL says.
+	if _, err := os.Stat("stickers"); err == nil {
+		t.Error("upload wrote a ./stickers/ directory in the working tree")
 	}
 }
 

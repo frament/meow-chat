@@ -168,7 +168,13 @@ func (h *Handler) AdminUploadSticker(c *fiber.Ctx) error {
 	// for the same reason. APNG therefore never needs the .apng allowlist entry
 	// the client may send: the extension comes from the bytes now.
 	base := fmt.Sprintf("sticker_%d_%d", packID, maxOrder+1)
-	imageURL, err := saveImage(file, "stickers", base)
+	// "./uploads/stickers", not "stickers": saveImage joins dir onto the working
+	// directory, while the URL it returns is "/uploads/" + base(dir). Passing the
+	// bare name wrote the file to ./stickers/ - outside the uploads bind mount and
+	// outside the static route - while still advertising /uploads/stickers/... , so
+	// every sticker uploaded through the API would have been a 404 that looked
+	// correct in the database. Every other saveImage caller passes the full path.
+	imageURL, err := saveImage(file, "./uploads/stickers", base)
 	if err != nil {
 		if errors.Is(err, imageproc.ErrNotAnImage) {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid image format (jpg, png, gif, webp allowed)"})
