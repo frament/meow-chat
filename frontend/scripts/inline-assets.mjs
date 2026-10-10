@@ -156,6 +156,24 @@ const stamp = computeStamp();
 await writeFile(indexPath, injectStamp(html, stamp));
 console.log(`  метка сборки: ${stamp.value}${stamp.dirty ? ' (грязное дерево!)' : ''}`);
 
+// Unknown must never be silent. It ships, it serves, and the settings page then
+// says "неизвестно" - while the one command that would explain it
+// (`curl | grep build-stamp`) shows nothing to compare. This happened on the
+// first 1.6.0 deploy: `docker compose build frontend` bypassed the Makefile,
+// which is the only thing exporting BUILD_COMMIT, and the deployed bundle was
+// stamped "unknown" - on a feature whose whole purpose is being stampable.
+if (stamp.value === 'unknown') {
+  console.warn([
+    '',
+    '  ⚠ МЕТКА СБОРКИ НЕ ОПРЕДЕЛЕНА.',
+    '    Сборка будет отдавать "неизвестно", и сверить её с сервером нечем.',
+    '    Причина: внутри образа нет .git (исключён из контекста), а BUILD_COMMIT',
+    '    не передан. Он задаётся в Makefile, поэтому собирайте через `make build`,',
+    '    а не `docker compose build` напрямую.',
+    '',
+  ].join('\n'));
+}
+
 const { gzipSync } = await import('node:zlib');
 console.log(`✓ index.html: ${(html.length / 1024).toFixed(1)} КБ, ${(gzipSync(Buffer.from(html)).length / 1024).toFixed(1)} КБ gzip`);
 console.log(`  ссылок на стили убрано: ${linksFound}, zone.js встроен, манифест — после старта`);

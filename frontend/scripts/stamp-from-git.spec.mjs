@@ -94,4 +94,15 @@ describe('computeStamp', () => {
     // asserted, since asserting the clock would fail by design after midnight.
     assert.match(computeStamp({ env: {} }).builtAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
+
+  it('is unknown exactly when there is nothing to go on', () => {
+    // The single value the build has to shout about. Anything else - a build
+    // that carries an empty stamp into production is the failure this exists
+    // to catch, and it is silent by nature: the bundle builds fine, the
+    // settings page shows "неизвестно", and nothing complains.
+    assert.strictEqual(
+      computeStamp({ cwd: '/nonexistent-directory-for-test', env: {} }).value,
+      'unknown',
+    );
+  });
 });
