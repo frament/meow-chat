@@ -11,6 +11,7 @@ import { DeviceAuthComponent } from './components/device-auth/device-auth';
 import { DeviceLinkService } from './services/device-link.service';
 import { NoticeComponent } from './components/notice/notice';
 import { ConnectivityService } from './services/connectivity.service';
+import { UpdateAvailableService } from './services/update-available.service';
 
 @Component({
   selector: 'app-root',
@@ -293,6 +294,13 @@ export class App implements OnInit, OnDestroy {
   protected readonly conn = inject(ConnectivityService);
   readonly #sw = inject(SwUpdate);
   readonly #swPush = inject(SwPush);
+  readonly #updates = inject(UpdateAvailableService);
+  /**
+   * Read from the shared service rather than kept here: settings.ts needs the
+   * same answer, and when only this component knew it the "Проверить обновление
+   * PWA" button reported a different thing entirely and contradicted the banner.
+   */
+  readonly updateAvailable = this.#updates.isUpdateAvailable;
   readonly #api = inject(ApiService);
   readonly #notif = inject(NotificationService);
   readonly #router = inject(Router);
@@ -300,7 +308,6 @@ export class App implements OnInit, OnDestroy {
   readonly #crypto = inject(CryptoService);
   readonly #pwa = inject(PwaInstallService);
   readonly #deviceLink = inject(DeviceLinkService);
-  readonly updateAvailable = signal(false);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
   readonly #sub = new Subscription();
   readonly maintenanceMode = signal(false);
@@ -332,7 +339,7 @@ export class App implements OnInit, OnDestroy {
     if (this.#sw.isEnabled) {
       this.#sw.versionUpdates
         .pipe(filter(evt => evt.type === 'VERSION_READY'))
-        .subscribe(() => this.updateAvailable.set(true));
+        .subscribe(() => this.#updates.setUpdateAvailable(true));
 
       this.#sub.add(
         interval(30 * 60 * 1000)

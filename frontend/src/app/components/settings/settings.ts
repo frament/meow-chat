@@ -11,6 +11,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 import { PwaInstallService } from '../../services/pwa-install.service';
 import { DeviceLinkService } from '../../services/device-link.service';
 import { NoticeService } from '../../services/notice.service';
+import { UpdateAvailableService } from '../../services/update-available.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -409,6 +410,13 @@ import * as QRCode from 'qrcode';
             </button>
           }
 
+          @if (updateAvailable()) {
+            <button type="button" (click)="applyUpdate()"
+              class="btn-primary" style="width:100%;padding:12px 20px;margin-top:8px;">
+              Обновить и перезагрузить
+            </button>
+          }
+
           <button type="button" (click)="checkForUpdates()" [disabled]="updateChecking"
             class="btn-secondary" style="width:100%;padding:12px 20px;">
             {{ updateChecking ? 'Проверка...' : 'Проверить обновление PWA' }}
@@ -469,6 +477,14 @@ import * as QRCode from 'qrcode';
 })
 export class SettingsComponent implements OnInit {
   readonly #sw = inject(SwUpdate);
+  readonly #updates = inject(UpdateAvailableService);
+  /**
+   * The same signal the update banner uses. Reading the app component's own
+   * field was impossible from here, and duplicating the versionUpdates
+   * subscription would have produced a second answer to the same question -
+   * which is how the two came to contradict each other.
+   */
+  readonly updateAvailable = this.#updates.isUpdateAvailable;
   readonly notice = inject(NoticeService);
 
   username = '';
@@ -627,30 +643,73 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  async checkForUpdates() {
-    if (!this.#sw.isEnabled) {
-      this.updateStatus = 'Service worker неактивен';
-      this.updateStatusColor = '#e74c3c';
-      return;
-    }
-    this.updateChecking = true;
-    this.updateStatus = '';
+  /**
+   * Activates the waiting version and reloads.
+   *
+   * A reload on its own does not pick up a waiting update: the tab is still
+   * controlled by the old worker, so it keeps serving the old bundle. This is
+   * what actually switches, and the app shell has its own button for the same
+   * thing - this one is here because the check button now points at it.
+   */
+  async applyUpdate() {
     try {
-      const hasUpdate = await this.#sw.checkForUpdate();
-      if (hasUpdate) {
-        this.updateStatus = 'Доступно обновление — перезагрузите страницу';
-        this.updateStatusColor = '#e67e22';
+      const activated = await this.#sw.activateUpdate();
+      if (activated) {
+        document.location.reload();
       } else {
-        this.updateStatus = 'Версия актуальна';
-        this.updateStatusColor = '#27ae60';
+        this.updateStatus = 'Обновление не активировалось — закройте и откройте приложение заново';
+        this.updateStatusColor = '#e67e22';
       }
     } catch {
-      this.updateStatus = 'Ошибка проверки обновлений';
+      this.updateStatus = 'Не удалось активировать обновление';
       this.updateStatusColor = '#e74c3c';
-    } finally {
-      this.updateChecking = false;
-      setTimeout(() => (this.updateStatus = ''), 5000);
     }
+  }
+
+  /**
+   * The two questions this button used to conflate into one answer.
+   *
+   * `checkForUpdate()` only answers "is there something *new* to download". Once
+   * the new bundle has been downloaded and sits in the waiting state, a second
+   * call returns false - there is nothing newer to fetch - so the button said
+   * "Версия актуальна" while the tab was still running the old bundle. That is
+   * exactly what it reported on 2026-10-10, right after a deploy, with the update
+   * banner showing above it and the two contradicting each other.
+   *
+   * The app component already listens to `versionUpdates` and shows a banner
+   * when a download finishes; that signal is the honest answer to "is one
+   * waiting", and it is read here so the button cannot contradict the banner.
+   */
+  async checkForUpdates() {
+  	if (!this.#sw.isEnabled) {
+  		this.updateStatus = 'Service worker неактивен — откройте приложение в отдельном окне';
+  		this.updateStatusColor = '#e74c3c';
+  		return;
+  	}
+  	this.updateChecking = true;
+  	this.updateStatus = '';
+  	try {
+  		if (this.updateAvailable()) {
+  			this.updateStatus = 'Обновление уже загружено — нажмите «Обновить»';
+  			this.updateStatusColor = '#e67e22';
+  			return;
+  		}
+
+  		const hasUpdate = await this.#sw.checkForUpdate();
+  		if (hasUpdate) {
+  			this.updateStatus = 'Обновление загружено — нажмите «Обновить»';
+  			this.updateStatusColor = '#e67e22';
+  		} else {
+  			this.updateStatus = 'Версия актуальна';
+  			this.updateStatusColor = '#27ae60';
+  		}
+  	} catch {
+  		this.updateStatus = 'Ошибка проверки обновлений';
+  		this.updateStatusColor = '#e74c3c';
+  	} finally {
+  		this.updateChecking = false;
+  		setTimeout(() => this.updateStatus = '', 5000);
+  	}
   }
 
   get webauthnSupported() {

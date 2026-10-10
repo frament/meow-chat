@@ -5,6 +5,7 @@ import { ThemeService } from '../../services/theme.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
+import { UpdateAvailableService } from '../../services/update-available.service';
 import { DeviceLinkService } from '../../services/device-link.service';
 import { signal, computed } from '@angular/core';
 import { of, throwError } from 'rxjs';
@@ -55,10 +56,15 @@ describe('SettingsComponent', () => {
   const mockSwUpdate = {
     isEnabled: false,
     checkForUpdate: jasmine.createSpy().and.returnValue(Promise.resolve(false)),
+    activateUpdate: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
     versionUpdates: of(null),
   };
 
   const mockRouter = { navigate: jasmine.createSpy() };
+
+  // The real service: the component injects it, and the tests need to set the
+  // state that checkForUpdates() now reads before deciding what to say.
+  let updates: UpdateAvailableService;
 
   beforeEach(async () => {
     mockRouter.navigate.calls.reset();
@@ -80,6 +86,8 @@ describe('SettingsComponent', () => {
     mockApi.removeFriend.and.returnValue(of({}));
     mockApi.webauthnRemoveCredential.and.returnValue(of({}));
 
+    updates = new UpdateAvailableService();
+
     await TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
@@ -87,6 +95,7 @@ describe('SettingsComponent', () => {
         { provide: ThemeService, useValue: mockTheme },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: SwUpdate, useValue: mockSwUpdate },
+        { provide: UpdateAvailableService, useValue: updates },
         { provide: Router, useValue: mockRouter },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} } } },
       ],
@@ -203,6 +212,62 @@ describe('SettingsComponent', () => {
   it('renders version info', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('1.1.0');
+  });
+
+  // 2026-10-10: after a deploy the button said "Версия актуальна" while the
+  // update banner above it showed a pending update. checkForUpdate() asks
+  // whether there is anything *newer* to download, and a downloaded update
+  // sitting in the waiting state answers false - so the button reported the
+  // absence of a download, not the presence of a pending update.
+  describe('update check', () => {
+    beforeEach(() => {
+      mockSwUpdate.isEnabled = true;
+      updates.setUpdateAvailable(false);
+    });
+
+    it('says an update is waiting instead of claiming the version is current', async () => {
+      updates.setUpdateAvailable(true);
+      // The waiting version is already downloaded, so this resolves false.
+      mockSwUpdate.checkForUpdate.and.returnValue(Promise.resolve(false));
+
+      await component.checkForUpdates();
+
+      expect(component.updateStatus).toContain('Обновление уже загружено');
+      expect(component.updateStatus).not.toContain('актуальна');
+    });
+
+    it('does not re-check when one is already waiting - the answer is known', async () => {
+      updates.setUpdateAvailable(true);
+      mockSwUpdate.checkForUpdate.calls.reset();
+
+      await component.checkForUpdates();
+
+      expect(mockSwUpdate.checkForUpdate).not.toHaveBeenCalled();
+    });
+
+    it('says the version is current only when nothing is waiting and nothing is new', async () => {
+      updates.setUpdateAvailable(false);
+      mockSwUpdate.checkForUpdate.and.returnValue(Promise.resolve(false));
+
+      await component.checkForUpdates();
+
+      expect(component.updateStatus).toBe('Версия актуальна');
+    });
+
+    it('offers an update button once one is waiting', async () => {
+      updates.setUpdateAvailable(true);
+      fixture.detectChanges();
+
+      const text = (fixture.nativeElement as HTMLElement).textContent || '';
+      expect(text).toContain('Обновить и перезагрузить');
+    });
+
+    it('explains that the service worker is off instead of blaming the version', async () => {
+      mockSwUpdate.isEnabled = false;
+      await component.checkForUpdates();
+
+      expect(component.updateStatus).toContain('Service worker неактивен');
+    });
   });
 
   it('starts device linking from settings', () => {
