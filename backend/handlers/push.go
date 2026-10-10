@@ -267,8 +267,11 @@ func (h *Handler) sendPushNotificationFrom(toUserID int64, source, title, body s
 			"body":  body,
 			// "/favicon.ico" was served by nothing: the file is favicon.png (the
 			// build even inlines it as a data URI, so no .ico is ever produced).
-			// Every notification pointed at a 404. Invisible on iOS, which uses the
-			// app icon regardless, but a broken image on Android and in the browser.
+			// Note it was not a 404 - nginx's `try_files ... /index.html` answers a
+			// missing static file with the app document and status 200, so every
+			// notification pointed at an HTML page served as text/html. The client
+			// cannot decode that as an image and shows a broken icon. Invisible on
+			// iOS, which uses the app icon regardless.
 			"icon":  "/favicon.png",
 			"data":  data,
 		})
