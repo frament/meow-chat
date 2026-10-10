@@ -1,2 +1,24 @@
-*.md
+# Never in a build context.
+#
+# uploads/ was the one that mattered: 2.9 MB of real photos and stickers, and it
+# was not ignored, so every file anybody uploaded changed the checksum of
+# `COPY . .` and threw away the Go build cache. A single photo upload could cost
+# a full dependency rebuild. It is a bind mount at runtime - the image does not
+# need it - and no user data has any business in a build context.
+uploads/
+backups/
+
 data/
+bin/
+*.db
+*.db-wal
+*.db-shm
+
+# Local editor and VCS noise.
+.git/
+.idea/
+.DS_Store
+
+# Docs are not compiled. *.md also covers them, kept explicit because the rule
+# above is about directories and this one is the habit worth naming.
+*.md

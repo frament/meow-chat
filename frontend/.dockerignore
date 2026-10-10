@@ -1,0 +1,17 @@
+# node_modules is 282 MB and `COPY . .` runs *after* `npm ci`, so without this
+# a developer's host node_modules is copied straight over the one the image just
+# installed - built for the wrong OS in the macOS case. The server happens to
+# have no node_modules, which is why this went unnoticed.
+node_modules/
+
+# The build output. `npm run build:prod` writes dist/ itself; copying a stale
+# one in first only wastes a layer and risks shipping the previous build.
+dist/
+.angular/
+coverage/
+
+.git/
+.idea/
+.DS_Store
+
+*.md
