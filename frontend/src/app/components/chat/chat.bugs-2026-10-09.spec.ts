@@ -360,6 +360,8 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
   let component: ChatComponent;
   let fixture: any;
   let mockApi: any;
+  let mockCrypto: any;
+  const wsMessages$ = new Subject<any>();
 
   beforeEach(async () => {
     localStorage.clear();
@@ -374,7 +376,10 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
       groupUnreadBoundaries: signal<Record<number, string>>({}),
       totalUnread: computed(() => 0),
       wsConnected: signal(false),
-      wsMessages$: new Subject<any>().asObservable(),
+      // The describe's own subject: an event pushed into a different one never
+      // reaches the component, and the test fails for a reason unrelated to
+      // the code under test.
+      wsMessages$: wsMessages$.asObservable(),
       wsOnlineEvent: new Subject<any>().asObservable(),
       groupInfoRequest$: new Subject<any>().asObservable(),
       getFriendRequests: jasmine.createSpy().and.returnValue(of([])),
@@ -414,9 +419,15 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
       uploadGroupDeviceKeyShare: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
       getMyGroupDeviceKeyShare: jasmine.createSpy().and.returnValue(of({ encrypted_key: '', iv: '', epoch: 0 })),
       requestGroupKey: jasmine.createSpy().and.returnValue(of({ message: 'ok' })),
+      sendGroupMessageWithProgress: jasmine.createSpy().and.returnValue(
+        of({ type: 4, body: { id: 77 } }),
+      ),
+      sendMessageWithProgress: jasmine.createSpy().and.returnValue(
+        of({ type: 4, body: { id: 78 } }),
+      ),
     };
 
-    const mockCrypto = {
+    mockCrypto = {
       init: jasmine.createSpy().and.returnValue(Promise.resolve()),
       fetchPeerPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
       getGroupKey: jasmine.createSpy().and.returnValue(Promise.resolve(null)),
@@ -503,6 +514,95 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
 
     expect(component.messages.some(m => m.id === 502)).toBe(true);
   }));
+
+  // ── Reading a group whose key we do not have ────────────────────
+  //
+  // Reported from a fresh browser on Windows: a new device, a new identity
+  // key, and the group thread showed [Зашифрованное сообщение] through reloads
+  // and re-logins. The request for the key was only ever sent when *sending*
+  // failed to encrypt - so a member who only ever read never got one. The
+  // server log confirmed it: five consecutive decrypt_failures with
+  // detail=no_group_key right after that login.
+
+  it('asks for the group key when opening a group we cannot decrypt', async () => {
+    (mockCrypto as any).getGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    (mockCrypto as any).getRawGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+
+    expect(mockApi.requestGroupKey).toHaveBeenCalledWith(5);
+  });
+
+  it('does not ask again on every reopen once the key has arrived', async () => {
+    (mockCrypto as any).getGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    (mockCrypto as any).getRawGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+    mockApi.requestGroupKey.calls.reset();
+
+    // Reopening the same group must not re-ask: the request goes out over the
+    // websocket to every member, and each of them re-wraps the key on receipt.
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+
+    expect(mockApi.requestGroupKey).not.toHaveBeenCalled();
+  });
+
+  it('asks again after group_key_ready, so a later loss is recoverable', async () => {
+    (mockCrypto as any).getGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+    (mockCrypto as any).getRawGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(null));
+
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+    expect((component as any).keyRequestedForRead.has(5)).toBe(true);
+
+    wsMessages$.next({ type: 'group_key_ready', group_chat_id: 5 });
+    // The subscription does not await the async handler, so give it its own turn.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect((component as any).keyRequestedForRead.has(5)).toBe(false);
+  });
+
+  it('does not ask when the key is already available', async () => {
+    (mockCrypto as any).getGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve({} as any));
+    (mockCrypto as any).getRawGroupKey = jasmine.createSpy().and.returnValue(Promise.resolve(new Uint8Array(32)));
+
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+
+    expect(mockApi.requestGroupKey).not.toHaveBeenCalled();
+  });
+
+  // ── #4: the optimistic image bubble ─────────────────────────────
+  //
+  // "Images do not always appear for the sender right away." The composer
+  // preview is read with a FileReader and reader.onload fires *after* the
+  // current turn, so picking a file and sending in the same turn copied an
+  // empty `previews` into the bubble, which then went out blank.
+
+  it('has the image in the bubble when send follows the pick immediately', async () => {
+    const blob = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4])], { type: 'image/png' });
+    const file = new File([blob], 'photo.png', { type: 'image/png' });
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    await component.onFileSelected({ target: input } as unknown as Event);
+
+    component.selectedGroup = { id: 5, name: 'G' } as any;
+    component.messageType = 'image';
+    component.messageContent = '';
+    await component.sendMessage();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const bubble = component.messages.find(m => m.msg_type === 'image');
+    expect(bubble).toBeTruthy();
+    expect(bubble!.images?.length).toBeGreaterThan(0);
+    expect(bubble!.images![0].image_url.startsWith('data:image/')).toBe(true);
+  });
 
   it('keeps an in-flight optimistic message instead of replacing the thread', fakeAsync(async () => {
     component.selectedGroup = { id: 5, name: 'G' } as any;

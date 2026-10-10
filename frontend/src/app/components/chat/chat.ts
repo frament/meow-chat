@@ -2160,7 +2160,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         if (!file) continue;
         const mem = await toMemoryFile(file);
         this.selectedFiles.push(mem);
-        this.addPreview(mem);
+        await this.addPreview(mem);
         added++;
       }
     }
@@ -2180,15 +2180,31 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const file of chosen) {
       const mem = await toMemoryFile(file);
       this.selectedFiles.push(mem);
-      this.addPreview(mem);
+      await this.addPreview(mem);
     }
     input.value = '';
   }
 
-  private addPreview(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => this.previews.push(e.target!.result as string);
-    reader.readAsDataURL(file);
+  /**
+   * Reads the file for the composer preview.
+   *
+   * Returns the data URL rather than pushing it: `reader.onload` fires after
+   * the current turn, and sending in the same turn used to copy `previews`
+   * before any of them existed - so the optimistic bubble went out with no
+   * images and stayed blank until a reload. Awaited by the picker before it
+   * returns, which is what puts the images in the bubble.
+   */
+  private addPreview(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const url = e.target!.result as string;
+        this.previews.push(url);
+        resolve(url);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }
 
   removeFile(index: number) {
@@ -2302,6 +2318,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       if (groupKey) {
         this.distributeGroupKeyToMembers(group.id);
         this.refreshOwnGroupKeyShare(group.id);
+      } else {
+        // No key and nobody asked for it. The request used to be sent only when
+        // *sending* failed to encrypt - so a member who only ever read the chat
+        // never got one, and the thread stayed "[Зашифрованное сообщение]"
+        // forever, across reloads and re-logins. Observed on a fresh browser:
+        // new device, new identity key, and no path to ask for the group's.
+        this.requestGroupKeyForRead(group.id);
       }
     }
 
@@ -2344,6 +2367,28 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
     });
   }
+
+  /**
+   * Asks the other members for the group key when we are only reading.
+   *
+   * Once per group per session: the request goes out over the websocket to every
+   * member with an open socket, and re-sending it on every reload or every chat
+   * switch would have each of them re-wrap the key for us all over again.
+   * `group_key_ready` clears the flag when the key actually lands.
+   */
+  private requestGroupKeyForRead(groupId: number) {
+    if (this.keyRequestedForRead.has(groupId)) return;
+    this.keyRequestedForRead.add(groupId);
+    this.api.requestGroupKey(groupId).subscribe({
+      error: () => {
+        // Allow a retry: a failed request leaves us exactly where we were.
+        this.keyRequestedForRead.delete(groupId);
+      },
+    });
+  }
+
+  /** Groups we have already asked for a key on, so reloads do not re-ask. */
+  private keyRequestedForRead = new Set<number>();
 
   private async distributeGroupKeyToMembers(groupId: number) {
     try {
@@ -2458,6 +2503,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * as encrypted.
    */
   private async onGroupKeyReady(groupId: number) {
+    // The key we asked for is here, so a later loss must be able to ask again.
+    this.keyRequestedForRead.delete(groupId);
     this.retryPendingGroupSend();
     // Pick up a possibly newer epoch.
     try {

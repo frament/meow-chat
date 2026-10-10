@@ -3,8 +3,13 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -161,6 +166,70 @@ func TestAdminUploadSticker_AcceptsAPNG(t *testing.T) {
 	// costs nothing: APNG is a valid PNG and browsers animate the extra chunks.
 	if !bytes.HasSuffix([]byte(url), []byte(".png")) {
 		t.Errorf("image_url = %q, want a .png extension so app.Static serves image/png", url)
+	}
+}
+
+// A sticker was stored at full size: uploads used c.SaveFile, so a 3.1 MB phone
+// photo stayed 3.1 MB. imageproc.Store is what compresses every other upload,
+// and Sniff takes the extension from the bytes.
+func TestAdminUploadSticker_CompressesAndSniffsExtension(t *testing.T) {
+	app, _, adminID := setupTestApp(t)
+	packID := seedPack(t, "Пак")
+
+	// A real JPEG, big enough that leaving it alone is visible: 1200x1200 of
+	// gradient, which compresses well but not to nothing.
+	img := image.NewRGBA(image.Rect(0, 0, 1200, 1200))
+	for y := 0; y < 1200; y++ {
+		for x := 0; x < 1200; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), 128, 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 98}); err != nil {
+		t.Fatal(err)
+	}
+	original := buf.Len()
+
+	// Named .png on purpose: the name must not decide the stored extension.
+	body := buf.Bytes()
+	var form bytes.Buffer
+	w := multipart.NewWriter(&form)
+	part, err := w.CreateFormFile("sticker", "sticker.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part.Write(body)
+	w.Close()
+
+	req, _ := http.NewRequest("POST", "/admin/sticker-packs/"+itoa(packID)+"/stickers", &form)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", bearerToken(t, adminID, true))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 201 {
+		out := new(bytes.Buffer)
+		out.ReadFrom(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, out.String())
+	}
+
+	var url string
+	database.DB.QueryRow("SELECT image_url FROM stickers WHERE pack_id = ?", packID).Scan(&url)
+
+	// Sniffed from the bytes: it is a JPEG, so it must not be stored as .png.
+	if !bytes.HasSuffix([]byte(url), []byte(".jpg")) {
+		t.Errorf("image_url = %q, want a .jpg extension sniffed from the bytes", url)
+	}
+
+	// saveImage writes relative to the working directory, which for `go test` is the
+	// package directory: the file lands in handlers/stickers/, not uploads/.
+	stored, err := os.ReadFile(filepath.Base(filepath.Dir(url)) + "/" + filepath.Base(url))
+	if err != nil {
+		t.Fatalf("stored file: %v", err)
+	}
+	if len(stored) >= original {
+		t.Errorf("stored %d bytes, original %d: not compressed", len(stored), original)
 	}
 }
 

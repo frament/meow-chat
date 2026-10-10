@@ -161,7 +161,7 @@ pending-промис, как настоящий сервис) откат лов�
 
 > Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались. Это единственное место, где живут числа: бейдж в `README.md` и упоминания в `ROADMAP.md` ссылаются сюда и не дублируют значения.
 
-### Backend — 339 тестов в 41 файлах (Go)
+### Backend — 340 тестов в 41 файлах (Go)
 | Файл | Тестов |
 |------|--------|
 | `backend/auth/jwt_secret_test.go` | 3 |
@@ -196,7 +196,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `backend/handlers/posts_test.go` | 10 |
 | `backend/handlers/push_logs_test.go` | 11 |
 | `backend/handlers/push_test.go` | 8 |
-| `backend/handlers/sticker_pack_ui_test.go` | 4 |
+| `backend/handlers/sticker_pack_ui_test.go` | 5 |
 | `backend/handlers/unread_test.go` | 3 |
 | `backend/handlers/update_test.go` | 7 |
 | `backend/handlers/version_test.go` | 1 |
@@ -205,9 +205,9 @@ pending-промис, как настоящий сервис) откат лов�
 | `backend/imageproc/imageproc_test.go` | 7 |
 | `backend/imageproc/orientation_test.go` | 7 |
 | `backend/imageproc/store_test.go` | 13 |
-| **Backend total** | **339** |
+| **Backend total** | **340** |
 
-### Frontend — 381 тестов в 35 файлах (Jasmine/Karma)
+### Frontend — 386 тестов в 35 файлах (Jasmine/Karma)
 | Файл | Тестов |
 |------|--------|
 | `frontend/src/app/app.component.spec.ts` | 29 |
@@ -215,7 +215,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `frontend/src/app/components/admin-federation/admin-federation.component.spec.ts` | 3 |
 | `frontend/src/app/components/admin/admin.bugs-2026-10-09.spec.ts` | 20 |
 | `frontend/src/app/components/admin/admin.component.spec.ts` | 9 |
-| `frontend/src/app/components/chat/chat.bugs-2026-10-09.spec.ts` | 12 |
+| `frontend/src/app/components/chat/chat.bugs-2026-10-09.spec.ts` | 17 |
 | `frontend/src/app/components/chat/chat.component.spec.ts` | 26 |
 | `frontend/src/app/components/chat/chat.composer.spec.ts` | 11 |
 | `frontend/src/app/components/chat/chat.dedup.spec.ts` | 7 |
@@ -245,13 +245,13 @@ pending-промис, как настоящий сервис) откат лов�
 | `frontend/src/app/services/notification.service.spec.ts` | 8 |
 | `frontend/src/app/services/theme.service.spec.ts` | 8 |
 | `frontend/src/app/services/timeout.interceptor.spec.ts` | 11 |
-| **Frontend total** | **381** |
+| **Frontend total** | **386** |
 
-**Итого: 720 тестов в 76 файлах.**
+**Итого: 726 тестов в 76 файлах.**
 
 > Таблицы пересобраны из исходников 2026-10-09: до этого они перечисляли 35 из 40 Go-файлов и 27 из 35 frontend-файлов, а заголовки и итоги не сходились с суммой строк.
 >
-> Frontend: объявлено 381, выполняется 380 — один тест помечен Jasmine как skipped. Это было и до правок 2026-10-09 (проверено на чистом дереве через `git stash`: 345 объявлено, 344 выполняется), то есть расхождение не принесено этой работой. Кто именно пропускается — не установлено, `xit`/`fdescribe` в `src` нет.
+> Frontend: объявлено 386, выполняется 385 — один тест помечен Jasmine как skipped. Это было и до правок 2026-10-09 (проверено на чистом дереве через `git stash`: 345 объявлено, 344 выполняется), то есть расхождение не принесено этой работой. Кто именно пропускается — не установлено, `xit`/`fdescribe` в `src` нет.
 
 ## Отменённые отметки
 - ~~Chat list virtualization with `@angular/cdk`~~ — **не сделано, задача снята.** Зависимость `@angular/cdk ^20.2.14` есть в `frontend/package.json`, но в `frontend/src` нет ни одного её использования: ни `cdk-virtual-scroll-viewport`, ни `*cdkVirtualFor`. Отметка была ошибочной. Задача снята как оптимизация несуществующей проблемы: лента сообщений ограничена `LIMIT 100` на сервере, список друзей упирается в потолок инстанса (~100 пользователей). Обоснование и реальное предусловие (серверная пагинация) — в `ROADMAP.md`, веха v1.5.0, и `BACKLOG.md`. Зависимость оставлена в `package.json`.
