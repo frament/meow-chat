@@ -1301,6 +1301,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             from_user: data.from_name || this.selectedUser.username,
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
             poll: data.poll || undefined,
+            // The fields above are copied one by one, and sticker_url was not in
+            // the list: a sticker arriving over the socket became a bubble with an
+            // <img> pointing at undefined - invisible until the thread was
+            // reloaded from GET /api/messages, which does return it.
+            sticker_url: data.sticker_url,
           };
           this.messages.push(msg);
           this.messages = [...this.messages];
@@ -1338,6 +1343,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             from_user: data.from_name || '',
             images: data.images ? data.images.map((url: string) => ({ id: 0, image_url: url })) : undefined,
             poll: data.poll || undefined,
+            // Same omission as in the direct-chat branch above.
+            sticker_url: data.sticker_url,
           };
           this.messages.push(msg);
           this.messages = [...this.messages];

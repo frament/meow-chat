@@ -515,6 +515,49 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
     expect(component.messages.some(m => m.id === 502)).toBe(true);
   }));
 
+  // ── #2: a sticker arriving over the socket was invisible ─────────
+  //
+  // Reported as "Екатерина sent stickers and I did not see them". They went to a
+  // direct chat, not the group - and they *did* reach the server: two rows in
+  // `messages` with msg_type='sticker'. They appeared only after reopening the
+  // app, because GET /api/messages returns sticker_url and the websocket handler
+  // did not: both branches copy the frame's fields one by one, and that one was
+  // missing from the list. The bubble rendered an <img> with no src.
+
+  it('keeps sticker_url from a websocket frame in a direct chat', async () => {
+    component.selectedUser = { id: 2, username: 'ekaterina' } as any;
+    component.selectedGroup = null;
+    component.messages = [];
+
+    wsMessages$.next({
+      type: 'message', id: 555, from: 2, to: 1, from_name: 'ekaterina',
+      content: '7', msg_type: 'sticker', created_at: new Date().toISOString(),
+      sticker_url: '/uploads/stickers/sticker_4_0.png',
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const msg = component.messages.find(m => m.id === 555);
+    expect(msg).toBeTruthy();
+    expect(msg!.sticker_url).toBe('/uploads/stickers/sticker_4_0.png');
+  });
+
+  it('keeps sticker_url from a websocket frame in a group', async () => {
+    component.selectedGroup = { id: 5, name: 'G' } as any;
+    component.selectedUser = null;
+    component.messages = [];
+
+    wsMessages$.next({
+      type: 'group_message', group_id: 5, id: 556, from: 2, from_name: 'ekaterina',
+      content: '7', msg_type: 'sticker', created_at: new Date().toISOString(),
+      sticker_url: '/uploads/stickers/sticker_4_0.png',
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const msg = component.messages.find(m => m.id === 556);
+    expect(msg).toBeTruthy();
+    expect(msg!.sticker_url).toBe('/uploads/stickers/sticker_4_0.png');
+  });
+
   // ── Reading a group whose key we do not have ────────────────────
   //
   // Reported from a fresh browser on Windows: a new device, a new identity

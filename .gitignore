@@ -16,6 +16,9 @@ Thumbs.db
 
 # Built binaries
 my-chat-backend.exe
+
+# Бинарь cmd/recompress-stickers, если собрать его не в ./bin
+backend/recompress-stickers
 meow-chat-server.exe
 
 # Generated keys (contains private key)
