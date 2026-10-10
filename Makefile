@@ -5,6 +5,13 @@
 # to forget and no way to ship a binary that reports a stale number.
 VERSION ?= $(shell cat backend/version/VERSION 2>/dev/null || echo unknown)
 
+# Метка сборки фронтенда. `.git` исключён из контекста сборки, поэтому коммит
+# идёт аргументом; без него бандл на сервере помечается "unknown". Пустые
+# значения не выставляем - тогда скрипт сам спросит git.
+BUILD_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+BUILD_DIRTY ?= $(shell test -n "$$(git status --porcelain)" && echo true || echo false)
+export BUILD_COMMIT BUILD_DIRTY
+
 update:
 	git pull
 	docker compose build
