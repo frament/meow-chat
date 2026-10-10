@@ -176,6 +176,49 @@ if (stamp.value === 'unknown') {
 
 const { gzipSync } = await import('node:zlib');
 console.log(`✓ index.html: ${(html.length / 1024).toFixed(1)} КБ, ${(gzipSync(Buffer.from(html)).length / 1024).toFixed(1)} КБ gzip`);
+
+// --- ngsw.json: hash of index.html must match what we just wrote -------------
+//
+// This is not cosmetic. `ng build` hashes index.html and writes the digest into
+// ngsw.json; everything above rewrites the document *after* that, so from the
+// worker's point of view the file it fetches is never the one it was promised.
+//
+// What the worker does with that (ngsw-worker.js, cacheBustedFetchFromNetwork):
+// it fetches /index.html, hashes the response, compares against the manifest,
+// sees a mismatch, retries with `?ngsw-cache-bust=`, hashes again, sees the
+// same mismatch, and throws SwCriticalError. That error propagates out of
+// PrefetchAssetGroup.initializeFully into AppVersion.initializeFully, which sets
+// `_okay = false` and rethrows - so the new version never becomes ready and
+// `notifyClientsAboutVersionReady` is never called. No VERSION_READY, no
+// "Доступна новая версия" banner, and the settings button reports "актуальна"
+// while a downloaded update sits right there.
+//
+// The recovery is what made it look intermittent: the *next* page load serves the
+// fresh index.html from the network, outside the versioned cache, so the new
+// bundle appears on its own - after a restart, and without the banner ever
+// showing. Introduced 2026-10-07 together with the inlining above, which is why
+// it broke after 05.10 and not before.
+//
+// Rewriting the digest is the only correct fix: the worker insists on a
+// byte-exact match and there is no way to make it stop asking. Recomputed from
+// the final bytes, so it stays right whatever else above changes.
+const { createHash } = await import('node:crypto');
+const finalBytes = await readFile(indexPath);
+const finalHash = createHash('sha1').update(finalBytes).digest('hex');
+
+const ngswPath = join(BROWSER_DIR, 'ngsw.json');
+if (!existsSync(ngswPath)) {
+  die('нет ngsw.json — service worker не сможет проверить обновление');
+}
+const ngsw = JSON.parse(await readFile(ngswPath, 'utf8'));
+const recorded = ngsw.hashTable?.['/index.html'];
+if (!recorded) {
+  die('в ngsw.json нет /index.html в hashTable — сверять нечего, проверь ngsw-config.json');
+}
+ngsw.hashTable['/index.html'] = finalHash;
+await writeFile(ngswPath, JSON.stringify(ngsw));
+console.log(`  ngsw.json: хэш /index.html обновлён, ${recorded.slice(0, 8)}… → ${finalHash.slice(0, 8)}…`);
+
 console.log(`  ссылок на стили убрано: ${linksFound}, zone.js встроен, манифест — после старта`);
 console.log('  соединений на холодной загрузке: 5 → 2');
 console.log('    /index.html (стили, иконка, zone.js внутри) и /main-*.js');
