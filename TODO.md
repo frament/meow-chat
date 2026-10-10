@@ -207,7 +207,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `backend/imageproc/store_test.go` | 13 |
 | **Backend total** | **340** |
 
-### Frontend — 393 тестов в 35 файлах (Jasmine/Karma)
+### Frontend — 403 тестов в 36 файлах (Jasmine/Karma)
 | Файл | Тестов |
 |------|--------|
 | `frontend/src/app/app.component.spec.ts` | 29 |
@@ -235,6 +235,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `frontend/src/app/pipes/md.pipe.spec.ts` | 17 |
 | `frontend/src/app/services/api.service.spec.ts` | 33 |
 | `frontend/src/app/services/auth.interceptor.spec.ts` | 9 |
+| `frontend/src/app/services/build-stamp.service.spec.ts` | 10 |
 | `frontend/src/app/services/clock.service.spec.ts` | 4 |
 | `frontend/src/app/services/concurrency.interceptor.spec.ts` | 12 |
 | `frontend/src/app/services/connectivity.interceptor.spec.ts` | 7 |
@@ -245,13 +246,20 @@ pending-промис, как настоящий сервис) откат лов�
 | `frontend/src/app/services/notification.service.spec.ts` | 8 |
 | `frontend/src/app/services/theme.service.spec.ts` | 8 |
 | `frontend/src/app/services/timeout.interceptor.spec.ts` | 11 |
-| **Frontend total** | **393** |
+| **Frontend total** | **403** |
 
-**Итого: 733 тестов в 76 файлах.**
+### Скрипты сборки — 12 тестов в 2 файлах (`node:test`)
+| Файл | Тестов |
+|------|--------|
+| `frontend/scripts/build-stamp.spec.mjs` | 9 |
+| `frontend/scripts/stamp-from-git.spec.mjs` | 3 |
+| **Scripts total** | **12** |
 
-> Таблицы пересобраны из исходников 2026-10-09: до этого они перечисляли 35 из 40 Go-файлов и 27 из 35 frontend-файлов, а заголовки и итоги не сходились с суммой строк.
->
-> Frontend: объявлено 393, выполняется 392 — один тест помечен Jasmine как skipped. Это было и до правок 2026-10-09 (проверено на чистом дереве через `git stash`: 345 объявлено, 344 выполняется), то есть расхождение не принесено этой работой. Кто именно пропускается — не установлено, `xit`/`fdescribe` в `src` нет.
+**Итого: 755 тестов в 79 файлах.**
+
+> `frontend/scripts/*.spec.mjs` — не Jasmine. Это скрипты post-build, которые выполняются под node и не имеют браузерного контекста; их тесты идут через `node --test "frontend/scripts/*.spec.mjs"`, отдельно от `ng test`. Каталог аргументом не запускается — node 24 пытается загрузить его как модуль.
+
+> Frontend: объявлено 403, выполняется 402 — один тест помечен Jasmine как skipped. Расхождение не принесено этой работой (проверено на чистом дереве через `git stash` в 2026-10-09: 345 объявлено, 344 выполняется). Кто именно пропускается — не установлено, `xit`/`fdescribe` в `src` нет.
 
 ## Отменённые отметки
 - ~~Chat list virtualization with `@angular/cdk`~~ — **не сделано, задача снята.** Зависимость `@angular/cdk ^20.2.14` есть в `frontend/package.json`, но в `frontend/src` нет ни одного её использования: ни `cdk-virtual-scroll-viewport`, ни `*cdkVirtualFor`. Отметка была ошибочной. Задача снята как оптимизация несуществующей проблемы: лента сообщений ограничена `LIMIT 100` на сервере, список друзей упирается в потолок инстанса (~100 пользователей). Обоснование и реальное предусловие (серверная пагинация) — в `ROADMAP.md`, веха v1.5.0, и `BACKLOG.md`. Зависимость оставлена в `package.json`.

@@ -111,3 +111,8 @@ jobs:
       # finds it; --watch=false is what makes Karma exit.
       - name: Unit tests (headless Chrome)
         run: make test-frontend
+
+      # The post-build scripts (build stamp). ng test does not reach them, so
+      # without this the writer and the reader could drift with a green run.
+      - name: Build script tests (node:test)
+        run: make test-scripts

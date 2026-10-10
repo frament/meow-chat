@@ -1,4 +1,4 @@
-.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend push-test
+.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend test-scripts push-test
 
 # Release number, read from the single source of truth. Nothing injects it into
 # the build: the backend embeds backend/version/VERSION, so there is no build arg
@@ -32,6 +32,12 @@ test-backend:
 
 test-frontend:
 	cd frontend && npm test -- --watch=false --browsers=ChromeHeadless
+
+# Post-build scripts. No browser involved, so this is cheap - but it needs its
+# own target: node --test does not pick the specs up from ng test, and passing
+# the directory instead of the glob fails (node loads it as a module).
+test-scripts:
+	cd frontend && node --test "scripts/*.spec.mjs"
 
 dev-backend:
 	cd backend && DB_PATH=./data/chat.db go run .

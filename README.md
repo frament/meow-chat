@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8" alt="go">
   <img src="https://img.shields.io/badge/Angular-20-red" alt="angular">
-  <img src="https://img.shields.io/badge/tests-733-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-755-brightgreen" alt="tests">
   <a href="https://github.com/frament/meow-chat/actions/workflows/ci.yml">
     <img src="https://github.com/frament/meow-chat/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
@@ -145,7 +145,9 @@ make test-frontend   # cd frontend && ng test (headless Chrome)
 
 > ⚠️ **Никогда не запускайте оба набора одновременно.** CGO-компиляция плюс Karma с Chrome выедают память, и macOS начинает прибивать приложения (Finder, редактор). По одному, в foreground. Подробности — в `AGENTS.md`.
 
-733 тестов: 340 Go в 41 файлах + 393 Jasmine в 35 файлах.
+755 тестов: 340 Go в 41 файлах + 403 Jasmine в 36 файлах + 12 `node:test` в 2 файлах.
+
+> Скрипты post-build (`frontend/scripts/`) тестируются отдельно: `node --test "frontend/scripts/*.spec.mjs"`. Каталог аргументом не запускается.
 
 ## CLI (администрирование)
 

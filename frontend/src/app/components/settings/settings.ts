@@ -12,6 +12,7 @@ import { PwaInstallService } from '../../services/pwa-install.service';
 import { DeviceLinkService } from '../../services/device-link.service';
 import { NoticeService } from '../../services/notice.service';
 import { UpdateAvailableService } from '../../services/update-available.service';
+import { BuildStampService } from '../../services/build-stamp.service';
 import * as QRCode from 'qrcode';
 
 @Component({
@@ -387,7 +388,22 @@ import * as QRCode from 'qrcode';
                 <span style="color:var(--text-primary);font-weight:600;">{{ latestVersion || '—' }}</span>
               </div>
             }
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+              <span style="color:var(--text-secondary);">Сборка клиента</span>
+              <span style="color:var(--text-primary);font-weight:600;font-family:monospace;">{{ buildStamp.displayStamp }}</span>
+            </div>
+            @if (buildStamp.builtAt) {
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <span style="color:var(--text-secondary);">Собрано</span>
+                <span style="color:var(--text-tertiary);font-size:12px;">{{ buildStamp.builtAt }}</span>
+              </div>
+            }
           </div>
+          <p style="font-size:12px;margin:0 0 12px;color:var(--text-tertiary);">
+            «Версия» — это версия сервера, она у всех клиентов одинаковая. Сборка — это то,
+            что реально загружено в браузер. Сверить с сервером:
+            <code style="font-size:11px;">curl -s http://localhost:3000 | grep build-stamp</code>
+          </p>
 
           @if (gitHubUpdateAvailable) {
             <div style="padding:10px;border-radius:8px;border:1px solid #e67e22;background:rgba(230,126,34,0.08);margin-bottom:12px;">
@@ -478,6 +494,7 @@ import * as QRCode from 'qrcode';
 export class SettingsComponent implements OnInit {
   readonly #sw = inject(SwUpdate);
   readonly #updates = inject(UpdateAvailableService);
+  readonly buildStamp = inject(BuildStampService);
   /**
    * The same signal the update banner uses. Reading the app component's own
    * field was impossible from here, and duplicating the versionUpdates

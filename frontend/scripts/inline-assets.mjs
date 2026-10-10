@@ -30,6 +30,8 @@
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
+import { injectStamp } from './build-stamp.mjs';
+import { computeStamp } from './stamp-from-git.mjs';
 
 const BROWSER_DIR = process.argv[2] || 'dist/frontend/browser';
 const indexPath = join(BROWSER_DIR, 'index.html');
@@ -146,7 +148,13 @@ const boot = [
 ].join('\n');
 html = html.replace('</body>', `${boot}\n</body>`);
 
-await writeFile(indexPath, html);
+// Метка сборки: см. build-stamp.mjs. Ставится последним, уже после всех правок
+// документа. Если вписать её раньше, любой die() ниже по файлу (нет манифеста,
+// нет main.js) завершит скрипт до writeFile - и метка молча пропадёт, а клиент
+// покажет «неизвестно» и не отличит это от настоящей сборки без метки.
+const stamp = computeStamp();
+await writeFile(indexPath, injectStamp(html, stamp));
+console.log(`  метка сборки: ${stamp.value}${stamp.dirty ? ' (грязное дерево!)' : ''}`);
 
 const { gzipSync } = await import('node:zlib');
 console.log(`✓ index.html: ${(html.length / 1024).toFixed(1)} КБ, ${(gzipSync(Buffer.from(html)).length / 1024).toFixed(1)} КБ gzip`);
