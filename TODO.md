@@ -161,7 +161,7 @@ pending-промис, как настоящий сервис) откат лов�
 
 > Счётчики — число **объявленных** тестов (`func Test*` в Go, `it(...)` в Jasmine), посчитано по исходникам. После правки счётчиков прогоны не запускались. Это единственное место, где живут числа: бейдж в `README.md` и упоминания в `ROADMAP.md` ссылаются сюда и не дублируют значения.
 
-### Backend — 340 тестов в 41 файлах (Go)
+### Backend — 342 тестов в 42 файлах (Go)
 | Файл | Тестов |
 |------|--------|
 | `backend/auth/jwt_secret_test.go` | 3 |
@@ -196,6 +196,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `backend/handlers/posts_test.go` | 10 |
 | `backend/handlers/push_logs_test.go` | 11 |
 | `backend/handlers/push_test.go` | 8 |
+| `backend/handlers/push_timezone_test.go` | 2 |
 | `backend/handlers/sticker_pack_ui_test.go` | 5 |
 | `backend/handlers/unread_test.go` | 3 |
 | `backend/handlers/update_test.go` | 7 |
@@ -205,7 +206,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `backend/imageproc/imageproc_test.go` | 7 |
 | `backend/imageproc/orientation_test.go` | 7 |
 | `backend/imageproc/store_test.go` | 13 |
-| **Backend total** | **340** |
+| **Backend total** | **342** |
 
 ### Frontend — 403 тестов в 36 файлах (Jasmine/Karma)
 | Файл | Тестов |
@@ -255,7 +256,7 @@ pending-промис, как настоящий сервис) откат лов�
 | `frontend/scripts/stamp-from-git.spec.mjs` | 3 |
 | **Scripts total** | **12** |
 
-**Итого: 755 тестов в 79 файлах.**
+**Итого: 757 тестов в 80 файлах.**
 
 > `frontend/scripts/*.spec.mjs` — не Jasmine. Это скрипты post-build, которые выполняются под node и не имеют браузерного контекста; их тесты идут через `node --test "frontend/scripts/*.spec.mjs"`, отдельно от `ng test`. Каталог аргументом не запускается — node 24 пытается загрузить его как модуль.
 
