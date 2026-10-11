@@ -310,7 +310,7 @@ pending-промис, как настоящий сервис) откат лов�
 - [x] **#21** Мобильная версия: лишний отступ input при клавиатуре — переведён с `dvh` на `window.visualViewport` для точного отслеживания высоты.
 - [x] **#22** iOS: двойное нажатие отправки стикера — добавлен guard `sending` + `(touchstart)` на кнопку отправки для срабатывания до скрытия клавы.
 - [x] **#23** Мобильная версия: панель "новый пост" перекрыта навигацией — добавлены `padding-bottom: calc(3.5rem + env(safe-area-inset-bottom))` в bottom sheet.
-- [x] **#24** Каскадное удаление данных пользователя — добавлены `friend_invites`, `push_copies`, `poll_votes`, `post_reactions WHERE user_id` + удаление файлов (post/message images).
+- [x] **#24** Каскадное удаление данных пользователя — добавлены `friend_invites`, `push_copies`, `poll_votes`, `post_reactions WHERE user_id` + удаление файлов (post/message images). *Поправка 2026-10-11: `push_copies` удалена целиком в 1.6.1 как ненужная — писатель и читатель её были удалены ещё в `186d751`, а вернул таблицу рефакторинг схемы `5f4d301`.*
 - [x] **#25** Мобильная версия: кнопка удаления поста — заменён `text-xs px-2 pb-2` на `text-sm p-2` для mobile.
 
 ## Chat UI improvements
