@@ -430,9 +430,6 @@ func (h *Handler) runHub() {
 						h.closeConn(conn, uid)
 					} else if uid == msg.to {
 						delivered = true
-						if msg.messageID > 0 {
-							database.DB.Exec("DELETE FROM push_copies WHERE message_id = ?", msg.messageID)
-						}
 					}
 				}
 			}
@@ -866,7 +863,7 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 				for i, img := range savedImages {
 					fwdImages[i] = c.BaseURL() + img
 				}
-				fedTransport.Send(federation.FederationRequest{
+				federation.SendOrQueue(fedTransport, fedQueue, federation.FederationRequest{
 					ServerID: serverID,
 					Endpoint: "/api/federation/v1/forward-post",
 					Method:   "POST",
@@ -881,7 +878,6 @@ func (h *Handler) CreatePost(c *fiber.Ctx) error {
 			}
 		}
 	}
-
 	return c.Status(201).JSON(fiber.Map{"id": postID, "message": "Post created"})
 }
 
@@ -1366,7 +1362,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 			for i, img := range images {
 				fwdImages[i] = c.BaseURL() + img
 			}
-			fedTransport.Send(federation.FederationRequest{
+			federation.SendOrQueue(fedTransport, fedQueue, federation.FederationRequest{
 				ServerID: serverID,
 				Endpoint: "/api/federation/v1/send-message",
 				Method:   "POST",
@@ -2428,7 +2424,6 @@ func (h *Handler) AdminDeleteUser(c *fiber.Ctx) error {
 		{"DELETE FROM group_key_shares WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM group_key_shares WHERE key_creator_id = ?", []int64{targetID}},
 		{"DELETE FROM push_subscriptions WHERE user_id = ?", []int64{targetID}},
-		{"DELETE FROM push_copies WHERE for_user_id = ?", []int64{targetID}},
 		{"DELETE FROM user_devices WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM device_auth_requests WHERE user_id = ?", []int64{targetID}},
 		{"DELETE FROM invite_tokens WHERE created_by = ?", []int64{targetID}},

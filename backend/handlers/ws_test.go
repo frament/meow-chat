@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -442,8 +443,30 @@ func waitForLastSeen(t *testing.T, userID int64) {
 	t.Fatal("last_seen was not written within 5s of going offline")
 }
 
-// T5b: No push copy when recipient is online and receives delivery
-func TestWS_PushCopy_NoCopyWhenOnline(t *testing.T) {
+// countPushAttempts counts the push notifications actually emitted for a user.
+//
+// These three tests used to assert COUNT(*) over `push_copies`, a table that
+// was created by migration and never written to: the writer and its reader
+// were removed in 186d751. Every assertion was therefore 0 == 0 and stayed
+// green no matter what the hub did - they could not have caught a push being
+// sent. `push_logs` is written on every actual attempt (send, error,
+// no_subscription), so a count here can be wrong, which is the property a test
+// needs.
+func countPushAttempts(t *testing.T, userID int64) int {
+	t.Helper()
+	var n int
+	err := database.DB.QueryRow(
+		"SELECT COUNT(*) FROM push_logs WHERE user_id = ? AND kind IN ('send','error','no_subscription')",
+		userID,
+	).Scan(&n)
+	if err != nil {
+		t.Fatalf("count push attempts: %v", err)
+	}
+	return n
+}
+
+// T5b: No push when recipient is online and receives delivery
+func TestWS_NoPushWhenRecipientOnline(t *testing.T) {
 	_, userID, baseURL := setupWSTest(t)
 	_ = userID
 
@@ -459,8 +482,7 @@ func TestWS_PushCopy_NoCopyWhenOnline(t *testing.T) {
 	wsWrite(t, sender, msg)
 
 	echo := wsRead(t, sender)
-	msgID, ok := echo["id"].(float64)
-	if !ok {
+	if _, ok := echo["id"].(float64); !ok {
 		t.Fatalf("echo has no id, got: %+v", echo)
 	}
 
@@ -471,10 +493,8 @@ func TestWS_PushCopy_NoCopyWhenOnline(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	var copyCount int
-	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
-	if copyCount != 0 {
-		t.Errorf("expected 0 push_copies when recipient is online, got %d", copyCount)
+	if n := countPushAttempts(t, 3); n != 0 {
+		t.Errorf("recipient is online and got the message over WS, but %d push notifications were sent", n)
 	}
 }
 
@@ -769,8 +789,8 @@ func TestWS_RateLimit_Exceeded(t *testing.T) {
 	}
 }
 
-// T5c: No push copy when recipient reconnects within grace period (reconnect <30s)
-func TestWS_PushCopy_ReconnectWithinGrace(t *testing.T) {
+// T5c: No push when recipient reconnects within grace period (reconnect <30s)
+func TestWS_NoPushWhenReconnectWithinGrace(t *testing.T) {
 	_, userID, baseURL := setupWSTest(t)
 	_ = userID
 
@@ -794,8 +814,7 @@ func TestWS_PushCopy_ReconnectWithinGrace(t *testing.T) {
 	wsWrite(t, sender, msg)
 
 	// Sender gets echo
-	echo := wsRead(t, sender)
-	msgID := int64(echo["id"].(float64))
+	wsRead(t, sender)
 
 	// Reconnected recipient gets the message (WS delivery)
 	delivered := wsRead(t, recipient2)
@@ -805,15 +824,19 @@ func TestWS_PushCopy_ReconnectWithinGrace(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	var copyCount int
-	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
-	if copyCount != 0 {
-		t.Errorf("expected 0 push_copies when recipient reconnected within grace, got %d", copyCount)
+	if n := countPushAttempts(t, 3); n != 0 {
+		t.Errorf("recipient reconnected within grace and got the message, but %d push notifications were sent", n)
 	}
 }
 
-// T5e: No push copy for E2EE message without push_preview (empty content, no images)
-func TestWS_PushCopy_NoPreviewNoCopy(t *testing.T) {
+// T5e: a message with no preview must not have one invented for it.
+//
+// Note this is not "no push at all". An encrypted message legitimately gets a
+// notification - the recipient needs to know something arrived - but with an
+// empty body, because there is nothing they are allowed to see yet. The old
+// test asserted nothing at all here, so anything this code did with the preview
+// was invisible to the suite.
+func TestWS_NoPushForEmptyPreviewMessage(t *testing.T) {
 	_, userID, baseURL := setupWSTest(t)
 	_ = userID
 
@@ -829,15 +852,22 @@ func TestWS_PushCopy_NoPreviewNoCopy(t *testing.T) {
 	}
 	wsWrite(t, conn, msg)
 
-	echo := wsRead(t, conn)
-	msgID := int64(echo["id"].(float64))
+	wsRead(t, conn)
 
 	time.Sleep(200 * time.Millisecond)
 
-	var copyCount int
-	database.DB.QueryRow("SELECT COUNT(*) FROM push_copies WHERE message_id = ?", msgID).Scan(&copyCount)
-	if copyCount != 0 {
-		t.Errorf("expected 0 push_copies for empty-preview E2EE message, got %d", copyCount)
+	var body string
+	err := database.DB.QueryRow(
+		"SELECT body FROM push_logs WHERE user_id = 3 AND kind IN ('send','error','no_subscription') ORDER BY id DESC LIMIT 1",
+	).Scan(&body)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			t.Fatal("expected a notification for a message the recipient missed, got none")
+		}
+		t.Fatalf("read push log: %v", err)
+	}
+	if strings.TrimSpace(body) != "" {
+		t.Errorf("an encrypted message must not be previewed, but the notification says %q", body)
 	}
 }
 

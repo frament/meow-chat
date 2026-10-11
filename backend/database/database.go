@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -302,14 +303,6 @@ func ApplySchema(db *sql.DB) error {
 			user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
 			public_key TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS push_copies (
-			id                       INTEGER PRIMARY KEY AUTOINCREMENT,
-			message_id               INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-			for_user_id              INTEGER NOT NULL REFERENCES users(id),
-			server_encrypted_content TEXT NOT NULL,
-			created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at               DATETIME NOT NULL
 		)`,
 		`CREATE TABLE IF NOT EXISTS push_logs (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -624,6 +617,27 @@ func ApplySchema(db *sql.DB) error {
 
 	if err := initSchemaVersion(db); err != nil {
 		return err
+	}
+
+	// Tables that used to exist and do not any more.
+	//
+	// push_copies was meant to hold a server-side encrypted copy of a message
+	// for push delivery. Its writer and its reader were removed in 186d751 -
+	// nothing ever read the copies back, and the push path builds its preview
+	// from the message row it already has. What was left was a CREATE TABLE
+	// re-introduced by the single-schema refactor (5f4d301) plus three DELETE
+	// statements cleaning up rows that were never written.
+	//
+	// The removals are DROP rather than "just stop creating it", because a
+	// production database keeps the table otherwise, and the next reader would
+	// take it for a working feature. Verified empty on production before
+	// dropping: 0 rows.
+	for _, drop := range []string{
+		`DROP TABLE IF EXISTS push_copies`,
+	} {
+		if _, err := db.Exec(drop); err != nil {
+			return fmt.Errorf("drop %s: %w", drop, err)
+		}
 	}
 
 	return nil

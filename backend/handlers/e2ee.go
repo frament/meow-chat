@@ -37,7 +37,7 @@ func (h *Handler) PutKey(c *fiber.Ctx) error {
 			for rows.Next() {
 				var serverID int64
 				rows.Scan(&serverID)
-				fedTransport.Send(federation.FederationRequest{
+				federation.SendOrQueue(fedTransport, fedQueue, federation.FederationRequest{
 					ServerID: serverID,
 					Endpoint: "/api/federation/v1/forward-key",
 					Method:   "POST",
@@ -71,16 +71,6 @@ func (h *Handler) GetKey(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"public_key": publicKey})
-}
-
-func (h *Handler) DeletePushCopy(c *fiber.Ctx) error {
-	messageID, err := strconv.ParseInt(c.Params("messageId"), 10, 64)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid message ID"})
-	}
-
-	database.DB.Exec("DELETE FROM push_copies WHERE message_id = ?", messageID)
-	return c.JSON(fiber.Map{"message": "Push copy deleted"})
 }
 
 func (h *Handler) UploadGroupKeyShare(c *fiber.Ctx) error {

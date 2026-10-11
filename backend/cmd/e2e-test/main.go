@@ -90,11 +90,15 @@ func run() error {
 	}
 	log.Println("✓ Cross-server image downloaded as a local file, with thumbnails")
 
+	// The offline queue is the one step that proves a message to an unreachable
+	// peer is not lost. It used to be best-effort, and it failed - so the run
+	// printed a warning and carried on, which is the same as not testing it.
+	// A queue that silently stops delivering is exactly what this step exists
+	// to catch, so it is now a hard failure.
 	if err := testOfflineQueue(); err != nil {
-		log.Printf("⚠ Offline queue test skipped/best-effort: %v", err)
-	} else {
-		log.Println("✓ Offline queue works")
+		return fmt.Errorf("offline queue: %w", err)
 	}
+	log.Println("✓ Offline queue works")
 
 	return nil
 }
@@ -746,6 +750,7 @@ func testOfflineQueue() error {
 	if !isOK(r) {
 		return fmt.Errorf("send offline message: %s", logResp(r))
 	}
+	sentAt := time.Now()
 	log.Printf("  message sent while server A was offline")
 
 	// Restart server A
@@ -757,9 +762,6 @@ func testOfflineQueue() error {
 		return fmt.Errorf("server A did not come back: %w", err)
 	}
 	log.Printf("  server A restarted")
-
-	// Wait for federation queue to drain
-	time.Sleep(10 * time.Second)
 
 	// Re-login as alice
 	r, err = doJSON("POST", serverAURL+"/api/login", "", map[string]string{
@@ -778,27 +780,40 @@ func testOfflineQueue() error {
 	json.Unmarshal(r.Body, &loginA)
 	tokenA = loginA.AccessToken
 
-	// Check messages
-	r, err = doJSON("GET", serverAURL+fmt.Sprintf("/api/messages?user1=%d&user2=%d", userAID, userBID), tokenA, nil)
-	if err != nil {
-		return fmt.Errorf("get messages after restart: %w", err)
-	}
-	if !isOK(r) {
-		return fmt.Errorf("get messages after restart: %s", logResp(r))
-	}
-	var msgs []struct {
-		Content string `json:"content"`
-	}
-	json.Unmarshal(r.Body, &msgs)
-	for _, m := range msgs {
-		if strings.Contains(m.Content, "Queued message for offline server!") {
-			return nil
+	// Wait for the queue to drain.
+	//
+	// Recovery is no longer tied to a fixed schedule: B notices A is back and
+	// flushes on a health ping, which runs on the fast cadence while there is
+	// undelivered work - 30s. So this polls rather than sleeping, and allows
+	// for a couple of cycles instead of assuming one.
+	const marker = "Queued message for offline server!"
+	deadline := time.Now().Add(2 * time.Minute)
+	var lastBody string
+	for time.Now().Before(deadline) {
+		r, err = doJSON("GET", serverAURL+fmt.Sprintf("/api/messages?user1=%d&user2=%d", userAID, userBID), tokenA, nil)
+		if err != nil {
+			return fmt.Errorf("get messages after restart: %w", err)
 		}
+		if !isOK(r) {
+			return fmt.Errorf("get messages after restart: %s", logResp(r))
+		}
+		lastBody = string(r.Body)
+		var msgs []struct {
+			Content string `json:"content"`
+		}
+		json.Unmarshal(r.Body, &msgs)
+		for _, m := range msgs {
+			if strings.Contains(m.Content, marker) {
+				log.Printf("  queued message delivered %s after server A came back", time.Since(sentAt).Round(time.Second))
+				return nil
+			}
+		}
+		time.Sleep(2 * time.Second)
 	}
-	bodyStr := string(r.Body)
-	preview := bodyStr
+
+	preview := lastBody
 	if len(preview) > 500 {
 		preview = preview[:500]
 	}
-	return fmt.Errorf("queued message not delivered (got %d messages). preview: %s", len(msgs), preview)
+	return fmt.Errorf("queued message was not delivered within 2m. last body: %s", preview)
 }

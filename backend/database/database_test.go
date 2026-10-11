@@ -41,6 +41,64 @@ func TestInitDBCreatesTables(t *testing.T) {
 	}
 }
 
+// push_copies is gone on purpose, so it must stay gone.
+//
+// It is listed here rather than only being deleted because of how it went
+// missing once already: the writer and reader were removed in 186d751, but the
+// CREATE TABLE was re-introduced by the single-schema refactor (5f4d301), and
+// for weeks the code cleaned up rows in a table nothing had ever written. A
+// table that exists without a writer looks like a feature to the next person
+// reading the schema.
+func TestPushCopiesTableIsGone(t *testing.T) {
+	setupTestDB(t)
+
+	var exists int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='push_copies'").Scan(&exists); err != nil {
+		t.Fatalf("checking for push_copies: %v", err)
+	}
+	if exists != 0 {
+		t.Error("push_copies exists again - it is a table with no writer and no reader")
+	}
+}
+
+// The removals run as DROP, so a database that was created before this change
+// loses the table on startup rather than keeping it around.
+func TestApplySchemaDropsRemovedTablesOnExistingDatabase(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	// Stand in for a database created back when push_copies was still in the
+	// schema list, complete with rows nobody can account for.
+	if _, err := db.Exec(`CREATE TABLE push_copies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		message_id INTEGER NOT NULL,
+		for_user_id INTEGER NOT NULL,
+		server_encrypted_content TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at DATETIME NOT NULL)`); err != nil {
+		t.Fatalf("create legacy table: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (1, 1, 'x', '2026-01-01')",
+	); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	if err := ApplySchema(db); err != nil {
+		t.Fatalf("apply schema over an existing database: %v", err)
+	}
+
+	var exists int
+	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='push_copies'").Scan(&exists)
+	if exists != 0 {
+		t.Error("ApplySchema left push_copies behind on a pre-existing database")
+	}
+}
+
 func TestSeedAdmin(t *testing.T) {
 	setupTestDB(t)
 	SeedAdmin()
