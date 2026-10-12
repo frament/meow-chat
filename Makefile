@@ -1,4 +1,4 @@
-.PHONY: build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend test-scripts push-test
+.PHONY: audit-tests build up down logs restart-backend dev-backend dev-backend-win dev-frontend update install install-backend install-frontend install-systemd install-nginx uninstall admin admin-remove admin-list reset-password test-backend test-frontend test-scripts push-test
 
 # Release number, read from the single source of truth. Nothing injects it into
 # the build: the backend embeds backend/version/VERSION, so there is no build arg
@@ -45,6 +45,17 @@ test-frontend:
 # the directory instead of the glob fails (node loads it as a module).
 test-scripts:
 	cd frontend && node --test "scripts/*.spec.mjs"
+
+# Reports tests that are green for reasons unrelated to the code. Exits non-zero
+# when it finds any, so it can gate CI; today it is informational, because the
+# findings are a list to work through, not a regression alarm.
+#
+# The list it produces is a starting point for reading, never a verdict: three
+# of its first four rules turned out to be wrong on contact with the code, and
+# every one of those corrections is recorded in the rule's comment. Expect it to
+# be wrong about new things too.
+audit-tests:
+	node scripts/audit-fake-tests.mjs --go
 
 dev-backend:
 	cd backend && DB_PATH=./data/chat.db go run .
