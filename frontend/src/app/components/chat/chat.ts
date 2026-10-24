@@ -17,6 +17,7 @@ import { ChatMessagesComponent } from './chat-messages.component';
 import { ChatComposerComponent } from './chat-composer.component';
 import { ChatStorageService } from '../../services/chat-storage.service';
 import { ChatPollService } from '../../services/chat-poll.service';
+import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
 import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
@@ -29,6 +30,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly notice = inject(NoticeService);
   private readonly storage = inject(ChatStorageService);
   private readonly polls = inject(ChatPollService);
+  private readonly thread = inject(ChatThreadService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -178,40 +180,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('threadInnerDesktop', { read: ElementRef }) threadInnerDesktop?: ElementRef<HTMLElement>;
   @ViewChild('threadInnerMobile', { read: ElementRef }) threadInnerMobile?: ElementRef<HTMLElement>;
 
-  get displayMessages(): (Message | { _divider: true } | { _dateSep: true; label: string })[] {
-    const items: (Message | { _divider: true } | { _dateSep: true; label: string })[] = [];
-    let lastDay = '';
-    for (let i = 0; i < this.messages.length; i++) {
-      const m = this.messages[i];
-      const day = this.dayKey(m.created_at);
-      if (day !== lastDay) {
-        items.push({ _dateSep: true, label: this.dayLabel(m.created_at) });
-        lastDay = day;
-      }
-      if (i === this.unreadDividerIdx) {
-        items.push({ _divider: true });
-      }
-      items.push(m);
-    }
-    return items;
-  }
-
-  private dayKey(iso: string): string {
-    const d = new Date(iso);
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  }
-
-  private dayLabel(iso: string): string {
-    const d = new Date(iso);
-    const now = new Date();
-    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
-    if (diffDays === 0) return 'Сегодня';
-    if (diffDays === 1) return 'Вчера';
-    const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear()
-      ? { day: 'numeric', month: 'long' }
-      : { day: 'numeric', month: 'long', year: 'numeric' };
-    return d.toLocaleDateString('ru-RU', opts);
+  get displayMessages(): DisplayItem[] {
+    return this.thread.buildDisplayItems(this.messages, this.unreadDividerIdx);
   }
 
   /**
