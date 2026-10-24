@@ -137,7 +137,14 @@ function report(file, spec, rule, detail) {
 
 function auditSpec(file, spec) {
   const b = spec.body;
-  const hasExpect = /\bexpect\s*\(/.test(b);
+  // A spec may keep its assertions in a helper defined in the same file: six
+  // failure tests calling one expectServerError() are honest, and the first
+  // version of this rule called all six empty. A helper only counts if its own
+  // body contains an expect, so "calls something" is not a way to hide an empty
+  // spec.
+  const callsHelper = [...(spec.helperNames || [])].some((name) =>
+    new RegExp(`\\b${name}\\s*\\(`).test(b));
+  const hasExpect = /\bexpect\s*\(/.test(b) || callsHelper;
   const hasAsyncAssert = /\bawait\s+expectAsync\b|\.and\.beResolved|\.and\.beRejected|\bflushMicrotasks\b|\btick\s*\(|\bdiscardPeriodicTasks\b/.test(b);
 
   // 1. A spec that never asserts anything.
@@ -208,6 +215,28 @@ function auditSpec(file, spec) {
 
 function auditFile(file, source) {
   const specs = splitSpecs(source);
+
+  // A regex cannot find these: a helper signature may span lines and contain
+  // parentheses of its own (`send: () => { subscribe: (o: ...) => unknown }`),
+  // so the first cut matched nothing. Walk the parentheses, then the braces.
+  const helperNames = new Set();
+  for (const m of source.matchAll(/function\s+(\w+)\s*\(/g)) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0;
+    for (; i < source.length; i++) {
+      if (source[i] === '(') depth++;
+      else if (source[i] === ')') { depth--; if (depth === 0) { i++; break; } }
+    }
+    while (i < source.length && source[i] !== '{') i++;
+    depth = 0;
+    const bodyStart = i;
+    for (; i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') { depth--; if (depth === 0) break; }
+    }
+    if (/\bexpect\s*\(/.test(source.slice(bodyStart, i))) helperNames.add(m[1]);
+  }
+  for (const s of specs) s.helperNames = helperNames;
 
   // 6. A test that only asserts on its own fixture: it reads rows back and
   //    checks the count, without the handler ever having run. The push_copies
@@ -310,32 +339,14 @@ function auditGo() {
     }
   }
 
-  // Route coverage needs main.go and the harness. Absent either, there is
-  // nothing to compare and the pass says so rather than reporting a clean bill.
-  const mainSrc = readIfExists(join(root, 'main.go'));
-  const setupSrc = readIfExists(join(root, 'handlers', 'handlers_test_setup.go'));
-  if (!mainSrc || !setupSrc) return 0;
-
-  const main = goRoutes(join(root, 'main.go'), '(?:h|fedHandler)\\.\\w+');
-  const setup = goRoutes(join(root, 'handlers', 'handlers_test_setup.go'), 'h\\.\\w+');
-
-  const appHandlers = new Map();   // h.* - should be reachable from handler tests
-  const fedHandlers = new Map();   // fedHandler.* - federation package has its own harness
-  for (const r of main) {
-    const bag = r.handler.startsWith('Handle') ? fedHandlers : appHandlers;
-    if (!bag.has(r.handler)) bag.set(r.handler, []);
-    bag.get(r.handler).push(`${r.meth} ${r.path}`);
-  }
-  const inSetup = new Set(setup.map((r) => r.handler));
-
-  const missing = [...appHandlers.entries()].filter(([h]) => !inSetup.has(h));
-  if (missing.length) {
-    report(join(root, 'handlers', 'handlers_test_setup.go'), null, 'обработчик вне тестовой обвязки',
-      `${missing.length} маршрутов зарегистрированы в main.go и отсутствуют в обвязке. ` +
-      `Два списка правят руками и расходятся молча: обработчик может существовать в проде и просто не быть в тестах.\n` +
-      missing.map(([h, paths]) => `        ${h}: ${paths.join(', ')}`).join('\n'));
-  }
-
+  // Route coverage is deliberately NOT checked here.
+  //
+  // It was, and it drifted. The Go guard (TestHarnessCoversEveryRoute) was
+  // widened to read every test file and to compare method and path; this copy
+  // kept comparing handler names against handlers_test_setup.go alone, and then
+  // reported seven routes as gaps that were covered elsewhere. Two
+  // implementations of one rule drifting apart is the thing this audit exists
+  // to find, so the duplicate is gone and `go test` owns that check.
   return 0;
 }
 

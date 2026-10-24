@@ -659,4 +659,54 @@ describe('ApiService', () => {
 
     expect(wsSpy.calls.count()).toBe(before);
   }));
+
+  /**
+   * Asserts that a server rejection reaches the subscriber intact.
+   *
+   * Every one of these methods is a thin wrapper, so the only thing it can get
+   * wrong is the wiring: a catchError that swallowed the failure, a map that
+   * dropped the status, a subscribe that replaced the error with a value. The
+   * screens read `err.error.error` to decide what to tell the user, so both the
+   * status and the server's message are part of the contract.
+   */
+  function expectServerError(
+    send: () => { subscribe: (o: { error: (e: any) => void }) => unknown },
+    url: string,
+    status = 401,
+  ): void {
+    let received: any;
+    send().subscribe({ error: (e: any) => (received = e) });
+
+    const req = httpMock.expectOne(url);
+    req.flush({ error: 'server said no' }, { status, statusText: 'Error' });
+
+    expect(received).withContext('the failure must reach the caller').toBeTruthy();
+    expect(received.status).toBe(status);
+    expect(received.error.error).toBe('server said no');
+    httpMock.verify();
+  }
+
+  it('login() surfaces the server error', () => {
+    expectServerError(() => service.login('u', 'p'), '/api/login');
+  });
+
+  it('register() surfaces the server error', () => {
+    expectServerError(() => service.register('u', 'e@m.c', 'secret123', 'inv'), '/api/register');
+  });
+
+  it('searchUsers() surfaces the server error', () => {
+    expectServerError(() => service.searchUsers('cat'), '/api/users/search?q=cat', 500);
+  });
+
+  it('sendFriendRequest() surfaces the server error', () => {
+    expectServerError(() => service.sendFriendRequest(7), '/api/friend-requests/7', 409);
+  });
+
+  it('getFriendRequests() surfaces the server error', () => {
+    expectServerError(() => service.getFriendRequests(), '/api/friend-requests', 500);
+  });
+
+  it('acceptFriendRequest() surfaces the server error', () => {
+    expectServerError(() => service.acceptFriendRequest(3), '/api/friend-requests/3/accept', 404);
+  });
 });
