@@ -444,18 +444,6 @@ func ApplySchema(db *sql.DB) error {
 			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at        DATETIME DEFAULT (datetime('now', '+15 minutes'))
 		)`,
-		`CREATE TABLE IF NOT EXISTS group_device_key_shares (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
-			user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			device_id     TEXT NOT NULL,
-			epoch         INTEGER DEFAULT 0,
-			encrypted_key TEXT NOT NULL,
-			iv            TEXT NOT NULL,
-			creator_id    INTEGER DEFAULT NULL,
-			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(group_chat_id, device_id)
-		)`,
 		`CREATE TABLE IF NOT EXISTS group_epoch_key_shares (
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			group_chat_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
@@ -634,6 +622,12 @@ func ApplySchema(db *sql.DB) error {
 	// dropping: 0 rows.
 	for _, drop := range []string{
 		`DROP TABLE IF EXISTS push_copies`,
+		// group_device_key_shares was the same shape of leftover: created here,
+		// deleted on device revoke in handlers/devices.go, and never inserted
+		// into anywhere in the backend. Real group key shares live in
+		// group_epoch_key_shares, which is written and is what the encryption
+		// actually reads. Verified on production before dropping: 0 rows.
+		`DROP TABLE IF EXISTS group_device_key_shares`,
 	} {
 		if _, err := db.Exec(drop); err != nil {
 			return fmt.Errorf("drop %s: %w", drop, err)

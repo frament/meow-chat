@@ -161,9 +161,14 @@ func TestRemoveDevice_RevokesKeyMaterial(t *testing.T) {
 	mustExec(t, database.DB, `INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, 'Phone', 'key123', 'dev1')`, userID)
 	mustExec(t, database.DB, `INSERT INTO user_devices (user_id, device_name, device_public_key, device_id) VALUES (?, 'Laptop', 'key456', 'dev2')`, userID)
 
-	// Two devices hold the group key at epoch 0; only dev1 is being revoked.
-	mustExec(t, database.DB, `INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev1', 0, 'wrapped', 'iv')`, userID)
-	mustExec(t, database.DB, `INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev2', 0, 'wrapped', 'iv')`, userID)
+	// Two devices hold the group key at epoch 1; only dev1 is being revoked.
+	//
+	// There used to be a second pair of rows here, in group_device_key_shares,
+	// with matching assertions below. That table was never written by any
+	// handler - it was created by the schema and deleted from on revoke, and
+	// nothing else - so the fixture was the only thing that ever put rows in it,
+	// and the "surviving device keeps its share" assertion was checking the
+	// fixture against itself. Removed with the table in the same change.
 	mustExec(t, database.DB, `INSERT INTO group_epoch_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev1', 1, 'wrapped', 'iv')`, userID)
 	mustExec(t, database.DB, `INSERT INTO group_epoch_key_shares (group_chat_id, user_id, device_id, epoch, encrypted_key, iv) VALUES (1, ?, 'dev2', 1, 'wrapped', 'iv')`, userID)
 	mustExec(t, database.DB, `INSERT INTO device_auth_requests (user_id, device_id, device_name, device_public_key, status) VALUES (?, 'dev1', 'Phone', 'key123', 'pending')`, userID)
@@ -187,7 +192,6 @@ func TestRemoveDevice_RevokesKeyMaterial(t *testing.T) {
 	// The part that is revocation: the revoked device can no longer be handed the
 	// group key, at any epoch.
 	for _, q := range []string{
-		`SELECT COUNT(*) FROM group_device_key_shares WHERE device_id='dev1'`,
 		`SELECT COUNT(*) FROM group_epoch_key_shares WHERE device_id='dev1'`,
 		`SELECT COUNT(*) FROM device_auth_requests WHERE device_id='dev1'`,
 	} {
@@ -199,7 +203,7 @@ func TestRemoveDevice_RevokesKeyMaterial(t *testing.T) {
 
 	// And the other device keeps its material, or revoking one device would break
 	// the account's remaining ones.
-	database.DB.QueryRow(`SELECT COUNT(*) FROM group_device_key_shares WHERE device_id='dev2'`).Scan(&count)
+	database.DB.QueryRow(`SELECT COUNT(*) FROM group_epoch_key_shares WHERE device_id='dev2'`).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected the surviving device to keep its group key share, got %d", count)
 	}

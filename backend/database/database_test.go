@@ -71,31 +71,88 @@ func TestApplySchemaDropsRemovedTablesOnExistingDatabase(t *testing.T) {
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 
-	// Stand in for a database created back when push_copies was still in the
-	// schema list, complete with rows nobody can account for.
-	if _, err := db.Exec(`CREATE TABLE push_copies (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		message_id INTEGER NOT NULL,
-		for_user_id INTEGER NOT NULL,
-		server_encrypted_content TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL)`); err != nil {
-		t.Fatalf("create legacy table: %v", err)
+	// Stand in for a database created back when these tables were still in the
+	// schema list, complete with rows nobody can account for. Each is created
+	// with its old shape rather than with today's, so the test cannot quietly
+	// start passing because a fresh CREATE happened to include it.
+	legacy := []struct {
+		name string
+		ddl  string
+		row  string
+	}{
+		{
+			name: "push_copies",
+			ddl: `CREATE TABLE push_copies (id INTEGER PRIMARY KEY AUTOINCREMENT,
+				message_id INTEGER NOT NULL, for_user_id INTEGER NOT NULL,
+				server_encrypted_content TEXT NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				expires_at DATETIME NOT NULL)`,
+			row: "INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (1, 1, 'x', '2026-01-01')",
+		},
+		{
+			name: "group_device_key_shares",
+			ddl: `CREATE TABLE group_device_key_shares (id INTEGER PRIMARY KEY AUTOINCREMENT,
+				group_chat_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+				device_id TEXT NOT NULL, epoch INTEGER DEFAULT 0,
+				encrypted_key TEXT NOT NULL, iv TEXT NOT NULL,
+				creator_id INTEGER DEFAULT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(group_chat_id, device_id))`,
+			row: "INSERT INTO group_device_key_shares (group_chat_id, user_id, device_id, encrypted_key, iv) VALUES (1, 1, 'dev1', 'k', 'iv')",
+		},
 	}
-	if _, err := db.Exec(
-		"INSERT INTO push_copies (message_id, for_user_id, server_encrypted_content, expires_at) VALUES (1, 1, 'x', '2026-01-01')",
-	); err != nil {
-		t.Fatalf("insert legacy row: %v", err)
+
+	for _, l := range legacy {
+		if _, err := db.Exec(l.ddl); err != nil {
+			t.Fatalf("create legacy table %s: %v", l.name, err)
+		}
+		if _, err := db.Exec(l.row); err != nil {
+			t.Fatalf("insert legacy row into %s: %v", l.name, err)
+		}
 	}
 
 	if err := ApplySchema(db); err != nil {
 		t.Fatalf("apply schema over an existing database: %v", err)
 	}
 
-	var exists int
-	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='push_copies'").Scan(&exists)
-	if exists != 0 {
-		t.Error("ApplySchema left push_copies behind on a pre-existing database")
+	for _, l := range legacy {
+		var exists int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", l.name).Scan(&exists)
+		if exists != 0 {
+			t.Errorf("ApplySchema left %s behind on a pre-existing database", l.name)
+		}
+	}
+}
+
+// The other half of the push_copies story: group_device_key_shares was created
+// by the schema, deleted from on device revoke, and never inserted into by any
+// handler. The real shares live in group_epoch_key_shares.
+//
+// Its removal also took two assertions out of TestRemoveDevice_RevokesKeyMaterial.
+// That test looked stronger than it was: one of its three checks was against a
+// table only the fixture ever wrote, so it compared the fixture with itself and
+// could never fail.
+func TestGroupDeviceKeySharesTableIsGone(t *testing.T) {
+	setupTestDB(t)
+
+	for _, table := range []string{"group_device_key_shares", "push_copies"} {
+		var exists int
+		if err := DB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&exists); err != nil {
+			t.Fatalf("checking for %s: %v", table, err)
+		}
+		if exists != 0 {
+			t.Errorf("%s exists again - it is a table with no writer", table)
+		}
+	}
+
+	// The one that is real must still be there, or removing the ghost took the
+	// working table with it.
+	var real int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='group_epoch_key_shares'").Scan(&real); err != nil {
+		t.Fatalf("checking for group_epoch_key_shares: %v", err)
+	}
+	if real == 0 {
+		t.Error("group_epoch_key_shares is missing - that is the table the encryption actually uses")
 	}
 }
 
