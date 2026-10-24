@@ -14,13 +14,14 @@ import { ClockService } from '../../services/clock.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { ChatListComponent } from './chat-list.component';
+import { ChatMessagesComponent } from './chat-messages.component';
 import { MdPipe } from '../../pipes/md.pipe';
 import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [ DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe, ChatListComponent],
+  imports: [ DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe, ChatListComponent, ChatMessagesComponent],
   templateUrl: './chat.html',
 })
 export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {

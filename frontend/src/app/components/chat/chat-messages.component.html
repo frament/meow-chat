@@ -1,0 +1,82 @@
+              @for (item of items; track $index) {
+                @if ($any(item)._divider) {
+                  <div class="unread-divider"><span>Новые сообщения</span></div>
+                } @else if ($any(item)._dateSep) {
+                  <div class="date-separator"><span>{{ $any(item).label }}</span></div>
+                } @else {
+                  <div class="flex" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                    <div [class.chat-message-outgoing]="$any(item).from_user_id === currentUserId"
+                      [class.chat-message-incoming]="$any(item).from_user_id !== currentUserId">
+                      @if (selectedGroup && $any(item).from_user_id !== currentUserId) {
+                        <p class="text-xs font-medium mb-1" style="color:var(--accent);">{{ $any(item).from_user }}</p>
+                      }
+                      @if (($any(item).msg_type || 'text') === 'sticker') {
+                        <div class="px-2 py-1">
+                          <img [src]="$any(item).sticker_url" class="w-24 h-24 object-contain rounded-lg">
+                        </div>
+                       } @else if (($any(item).msg_type || 'text') === 'gif') {
+                        <img [src]="$any(item).content" class="max-w-[200px] max-h-[200px] rounded-lg object-cover">
+                       } @else if (($any(item).msg_type || 'text') === 'poll') {
+                        @let poll = $any(item).poll;
+                        <div class="flex flex-col gap-2 px-3 py-2 min-w-[220px]">
+                          <span class="text-sm font-medium">{{ $any(item).content || 'Poll' }}</span>
+                          @if (poll && poll.options) {
+                          <div class="flex flex-col gap-1.5 mt-1">
+                            @for (opt of poll.options; track opt.id) {
+                            <button (click)="castVote(poll.id, opt.id)"
+                              [style.borderColor]="opt.voted ? 'var(--accent)' : 'var(--divider)'"
+                              [style.background]="opt.voted ? 'var(--accent-light)' : 'transparent'"
+                              class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs w-full text-left transition-all"
+                              style="border:1px solid;cursor:pointer;">
+                              <span class="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[10px]"
+                                [style.background]="opt.voted ? 'var(--accent)' : 'var(--bg-overlay)'"
+                                [style.color]="opt.voted ? 'white' : 'var(--text-tertiary)'">
+                                {{ opt.vote_count }}
+                              </span>
+                              <span class="flex-1" style="color:var(--text-primary);">{{ opt.text }}</span>
+                              @if (opt.voted) {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                              }
+                            </button>
+                            }
+                          </div>
+                          <span class="text-xs opacity-50">
+                            @let tv = computeTotalVotes(poll);
+                            {{ tv }} голос{{ tv === 1 ? '' : (tv >= 2 && tv <= 4 ? 'а' : 'ов') }}
+                          </span>
+                          }
+                        </div>
+                      } @else {
+                        @if ($any(item).content) { <p class="md" [innerHTML]="$any(item).content | md"></p> }
+                        @if ($any(item).images && $any(item).images.length > 0) {
+                        <div class="flex flex-wrap gap-1 mt-1">
+                          @for (img of $any(item).images; track img.id || $index) {
+                          <img [src]="img.thumb_url || img.image_url" class="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                          (click)="openImage(img.image_url)">
+                          }
+                        </div>
+                      }
+                      }
+                      @if ($any(item).pending && uploading) {
+                      <div style="height:3px;background:var(--divider);border-radius:2px;margin-top:6px;overflow:hidden;">
+                        <div style="height:100%;width:{{uploadProgress}}%;background:var(--accent-gradient);transition:width 0.2s;"></div>
+                      </div>
+                      }
+                      <div class="flex items-center gap-0.5 text-[10px] mt-1 opacity-70" [class.justify-end]="$any(item).from_user_id === currentUserId">
+                        <span>{{ $any(item).created_at | date:'HH:mm' }}</span>
+                        @if ($any(item).pending) {
+                          <span style="display:inline-flex;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                        } @else if ($any(item).from_user_id === currentUserId) {
+                          <span style="display:inline-flex;">
+                            @if ($any(item).is_read) {
+                              <svg width="14" height="12" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 8 6 12 14 4"/><polyline points="9 8 12 12 20 4"/></svg>
+                            } @else {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            }
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              }
