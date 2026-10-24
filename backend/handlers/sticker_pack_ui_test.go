@@ -120,8 +120,8 @@ func minimalAPNG() []byte {
 
 	ihdr := make([]byte, 13)
 	ihdr[0], ihdr[1], ihdr[2], ihdr[3] = 0, 0, 1, 0 // 256x256
-	ihdr[8] = 8                                        // bit depth
-	ihdr[9] = 6                                        // RGBA
+	ihdr[8] = 8                                     // bit depth
+	ihdr[9] = 6                                     // RGBA
 	chunk("IHDR", ihdr)
 	chunk("acTL", []byte{0, 0, 0, 2, 0, 0, 0, 0}) // num_frames=2, num_plays=0
 	chunk("IDAT", []byte{0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01})

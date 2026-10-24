@@ -336,7 +336,7 @@ func TestApproveDenyAuthRequest(t *testing.T) {
 
 	t.Run("approve", func(t *testing.T) {
 		body := `{"encrypted_key":"encrypted123","iv":"iv123"}`
-		req, _ := http.NewRequest("POST", "/devices/auth-requests/1/approve", strings.NewReader(body))
+		req, _ := http.NewRequest("POST", "/devices/auth/1/approve", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)
@@ -351,7 +351,7 @@ func TestApproveDenyAuthRequest(t *testing.T) {
 	t.Run("deny", func(t *testing.T) {
 		database.DB.Exec(`INSERT INTO device_auth_requests (user_id, device_name, device_public_key, device_id, status)
 			VALUES (?, ?, ?, ?, 'pending')`, userID, "OtherPhone", "key789", "dev3")
-		req, _ := http.NewRequest("POST", "/devices/auth-requests/2/deny", nil)
+		req, _ := http.NewRequest("DELETE", "/devices/auth/2", nil)
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)
 		if err != nil {
@@ -363,7 +363,7 @@ func TestApproveDenyAuthRequest(t *testing.T) {
 	})
 
 	t.Run("get approved", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/devices/auth-requests/1", nil)
+		req, _ := http.NewRequest("GET", "/devices/auth/1", nil)
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)
 		if err != nil {
@@ -379,7 +379,7 @@ func TestApproveDenyAuthRequest(t *testing.T) {
 	})
 
 	t.Run("get not found", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/devices/auth-requests/999", nil)
+		req, _ := http.NewRequest("GET", "/devices/auth/999", nil)
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)
 		if err != nil {
@@ -395,7 +395,7 @@ func TestUploadKeyBackup_Success(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
 	body := `{"encrypted_key":"ek123","iv":"iv123","salt":"salt123"}`
-	req, _ := http.NewRequest("POST", "/devices/keys/backup", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", "/devices/backup-keys", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
 	resp, err := app.Test(req)
@@ -411,7 +411,7 @@ func TestUploadKeyBackup_MissingFields(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
 	body := `{"encrypted_key":"ek123"}`
-	req, _ := http.NewRequest("POST", "/devices/keys/backup", strings.NewReader(body))
+	req, _ := http.NewRequest("POST", "/devices/backup-keys", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
 	resp, err := app.Test(req)
@@ -426,7 +426,7 @@ func TestUploadKeyBackup_MissingFields(t *testing.T) {
 func TestGenerateRecoveryPhrase(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
-	req, _ := http.NewRequest("POST", "/devices/recovery/generate", nil)
+	req, _ := http.NewRequest("POST", "/devices/recovery-phrase", nil)
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
 	resp, err := app.Test(req)
 	if err != nil {
@@ -449,7 +449,7 @@ func TestRecoveryPhraseStatus(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
 	t.Run("no phrase", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/devices/recovery/status", nil)
+		req, _ := http.NewRequest("GET", "/devices/recovery-phrase", nil)
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)
 		if err != nil {
@@ -466,7 +466,7 @@ func TestRecoveryPhraseStatus(t *testing.T) {
 
 	t.Run("set phrase backup", func(t *testing.T) {
 		body := `{"encrypted_key":"ek","iv":"iv","salt":"salt"}`
-		req, _ := http.NewRequest("POST", "/devices/recovery/set", strings.NewReader(body))
+		req, _ := http.NewRequest("POST", "/devices/recovery-phrase/set", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", bearerToken(t, userID, false))
 		resp, err := app.Test(req)

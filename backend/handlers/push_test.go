@@ -75,7 +75,7 @@ func TestUnsubscribePush(t *testing.T) {
 		userID, "https://example.com/push", "abc", "def")
 
 	body := `{"endpoint":"https://example.com/push"}`
-	req, _ := http.NewRequest("POST", "/push/unsubscribe", strings.NewReader(body))
+	req, _ := http.NewRequest("DELETE", "/push/subscribe", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
 	resp, err := app.Test(req)
@@ -97,7 +97,7 @@ func TestUnsubscribePush_NoEndpoint(t *testing.T) {
 	app, _, userID := setupTestApp(t)
 
 	body := `{}`
-	req, _ := http.NewRequest("POST", "/push/unsubscribe", strings.NewReader(body))
+	req, _ := http.NewRequest("DELETE", "/push/subscribe", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", bearerToken(t, userID, false))
 	resp, err := app.Test(req)

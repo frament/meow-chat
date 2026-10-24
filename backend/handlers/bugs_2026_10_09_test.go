@@ -187,13 +187,13 @@ func TestGroupBroadcastGroup_NoPushToAuthor(t *testing.T) {
 	// the moment the hub processes this, which is the case that used to notify
 	// both.
 	h.broadcastGroup <- wsMessage{
-		messageID:  1,
-		groupID:    1,
-		from:       userID,
-		fromName:   "author",
-		content:    "привет всем",
-		msgType:    "text",
-		createdAt:  time.Now().Format(time.RFC3339),
+		messageID:   1,
+		groupID:     1,
+		from:        userID,
+		fromName:    "author",
+		content:     "привет всем",
+		msgType:     "text",
+		createdAt:   time.Now().Format(time.RFC3339),
 		pushPreview: "привет всем",
 	}
 

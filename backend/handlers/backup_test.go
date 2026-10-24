@@ -59,7 +59,7 @@ func TestAdminListBackups_Empty(t *testing.T) {
 	defer os.Remove(dbPath)
 	defer os.Remove(filepath.Join(os.TempDir(), "backup-config.json"))
 
-	req, _ := http.NewRequest("GET", "/admin/backups", nil)
+	req, _ := http.NewRequest("GET", "/admin/backup/backups", nil)
 	req.Header.Set("Authorization", token)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestAdminDeleteBackup_NotFound(t *testing.T) {
 	defer os.Remove(dbPath)
 	defer os.Remove(filepath.Join(os.TempDir(), "backup-config.json"))
 
-	req, _ := http.NewRequest("DELETE", "/admin/backups/nonexistent.zip", nil)
+	req, _ := http.NewRequest("DELETE", "/admin/backup/backups/nonexistent.zip", nil)
 	req.Header.Set("Authorization", token)
 	resp, err := app.Test(req)
 	if err != nil {

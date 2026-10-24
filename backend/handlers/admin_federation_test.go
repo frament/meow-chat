@@ -140,7 +140,7 @@ func TestAdminFederationCRUD(t *testing.T) {
 
 	t.Run("create invite", func(t *testing.T) {
 		body := `{}`
-		req, _ := http.NewRequest("POST", "/admin/federation/servers", strings.NewReader(body))
+		req, _ := http.NewRequest("POST", "/admin/federation/invites", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", token)
 		resp, err := app.Test(req)
