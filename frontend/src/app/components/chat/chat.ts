@@ -305,6 +305,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             }
             @if (messageType === 'poll') {
             <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              @if (sendError()) {
+                <div style="padding:5px 10px;border-radius:8px;background:#e74c3c;color:#fff;font-size:12px;text-align:center;">{{ sendError() }}</div>
+              }
               <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
                 style="height:36px;box-sizing:border-box;">
               @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
@@ -662,6 +665,9 @@ import { toMemoryFile } from '../../services/upload-utils';
             }
             @if (messageType === 'poll') {
             <div class="flex flex-col gap-2 px-4 py-2" style="border-top:1px solid var(--divider);">
+              @if (sendError()) {
+                <div style="padding:5px 10px;border-radius:8px;background:#e74c3c;color:#fff;font-size:12px;text-align:center;">{{ sendError() }}</div>
+              }
               <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
                 style="height:36px;box-sizing:border-box;">
               @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
@@ -1949,6 +1955,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       const validOptions = this.pollOptions.filter(o => o.trim());
       if (validOptions.length < 2) {
         this.sending = false;
+        // Silently returning left the user pressing send and seeing nothing.
+        // The banner lives in the poll branch too, because the normal one is in
+        // the @else and is not rendered while composing a poll.
+        this.sendError.set('В опросе нужно минимум два варианта');
         return;
       }
     }

@@ -11,8 +11,16 @@ import (
 	"my-chat-backend/database"
 )
 
+// quickTimeout bounds a fire-and-forget delivery. A peer that is down but still
+// marked active used to hold the sender for the full 30 seconds, which the user
+// experiences as the app freezing mid-send. Messages are stored locally before
+// forwarding and the queue is the fallback, so giving up sooner costs nothing:
+// the message still arrives, just later.
+const quickTimeout = 5 * time.Second
+
 type Transport struct {
-	client *http.Client
+	client      *http.Client
+	quickClient *http.Client
 }
 
 type FederationRequest struct {
@@ -33,6 +41,13 @@ func NewTransport() *Transport {
 	return &Transport{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:    10,
+				IdleConnTimeout: 60 * time.Second,
+			},
+		},
+		quickClient: &http.Client{
+			Timeout: quickTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:    10,
 				IdleConnTimeout: 60 * time.Second,
@@ -59,7 +74,18 @@ func (t *Transport) Send(req FederationRequest) (*FederationResponse, error) {
 		return &FederationResponse{Error: err.Error()}, err
 	}
 
-	return t.sendRaw(baseURL+req.Endpoint, req.Method, token, req.Body, req.Headers)
+	return t.sendRawWith(t.client, baseURL+req.Endpoint, req.Method, token, req.Body, req.Headers)
+}
+
+// SendQuick is Send bounded by quickTimeout, for deliveries that have a queue
+// behind them. Nothing that a person is waiting on should use it.
+func (t *Transport) SendQuick(req FederationRequest) (*FederationResponse, error) {
+	token, baseURL, err := t.getServerToken(req.ServerID)
+	if err != nil {
+		return &FederationResponse{Error: err.Error()}, err
+	}
+
+	return t.sendRawWith(t.quickClient, baseURL+req.Endpoint, req.Method, token, req.Body, req.Headers)
 }
 
 func (t *Transport) SendDirect(fullURL string, method string, token string, body interface{}, headers map[string]string) (*FederationResponse, error) {
@@ -79,6 +105,10 @@ func (t *Transport) DownloadFile(url string) ([]byte, error) {
 }
 
 func (t *Transport) sendRaw(url string, method string, token string, body interface{}, headers map[string]string) (*FederationResponse, error) {
+	return t.sendRawWith(t.client, url, method, token, body, headers)
+}
+
+func (t *Transport) sendRawWith(client *http.Client, url string, method string, token string, body interface{}, headers map[string]string) (*FederationResponse, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonData, err := json.Marshal(body)
@@ -103,7 +133,7 @@ func (t *Transport) sendRaw(url string, method string, token string, body interf
 		httpReq.Header.Set(k, v)
 	}
 
-	resp, err := t.client.Do(httpReq)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return &FederationResponse{Error: err.Error()}, err
 	}

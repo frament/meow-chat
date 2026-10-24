@@ -340,3 +340,49 @@ func TestHealthInterval_FastWhenPeerDownOrQueueStuck(t *testing.T) {
 		t.Errorf("stuck queue items should keep the fast cadence, got %v", got)
 	}
 }
+
+// A peer that is down but still marked active - the state between the peer dying
+// and the health checker noticing - used to hold the sender for the full 30
+// second request timeout. The message is stored locally first and the queue is
+// the fallback, so waiting that long buys nothing: it only looks like the app
+// froze mid-send.
+func TestSendOrQueue_DoesNotBlockForFullRequestTimeout(t *testing.T) {
+	db := setupQueueDB(t)
+	defer db.Close()
+
+	// Reachable address, no answer: the shape of a peer whose host is gone but
+	// whose route still swallows packets, which is the slow case. It hangs for
+	// longer than the quick timeout on purpose.
+	release := make(chan struct{})
+	peer(t, db, 1, "active", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	t.Cleanup(func() { close(release) })
+
+	q := NewQueue(NewTransport())
+	start := time.Now()
+	err := SendOrQueue(NewTransport(), q, FederationRequest{
+		ServerID: 1, Endpoint: "/api/federation/v1/send-message", Method: "POST",
+		Body: map[string]string{"content": "late but not lost"},
+	})
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("a slow peer must not fail the caller, got %v", err)
+	}
+	// The bound is a literal on purpose. Comparing against quickTimeout made the
+	// test agree with whatever that constant said: raising it back to 30s kept
+	// the test green, because both sides moved together. What matters is that
+	// the wait is well under the 30 second request timeout, not that it equals
+	// some constant the test can see.
+	const mustBeUnder = 10 * time.Second
+	if elapsed > mustBeUnder {
+		t.Errorf("waited %v for a peer that never answered; a queued delivery must not hold the sender near the request timeout", elapsed)
+	}
+	if n := queueCount(t, db, 1); n != 1 {
+		t.Errorf("expected the message to be queued after the timeout, got %d", n)
+	}
+}

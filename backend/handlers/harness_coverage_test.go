@@ -215,10 +215,11 @@ func TestFederationHarnessCoversHandlers(t *testing.T) {
 	production := handlerNames(t, "../main.go", `fedHandler\.(\w+)`)
 	harness := handlerNames(t, "../federation/handler_test.go", `(?:fh|h)\.(\w+)`)
 
-	known := map[string]string{
-		"HandleBulkStickerPacks":    "нет теста; путь задевается только тем, что e2e при подключении пира импортирует 0 паков",
-		"HandleReceiveStickerPacks": "нет теста; то же",
-	}
+	// Empty since 2026-10-12: the two sticker handlers were the last uncovered
+	// ones, and they now have tests in federation/handler_test.go that check what
+	// the sync actually carries, not just that it runs. Kept as a map because
+	// the stale-entry check needs something to list from.
+	known := map[string]string{}
 
 	inHarness := make(map[string]bool, len(harness))
 	for _, h := range harness {

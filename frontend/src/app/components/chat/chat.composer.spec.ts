@@ -279,7 +279,7 @@ describe('ChatComponent composer', () => {
     expect(args[7]).withContext('options').toEqual(['Парк', 'Кино']);
   });
 
-  it('refuses to send a poll with fewer than two options', async () => {
+  it('refuses a poll with fewer than two options and says why', async () => {
     sendMessage.and.callThrough();
     apiSendMessage.calls.reset();
 
@@ -289,5 +289,11 @@ describe('ChatComponent composer', () => {
     await component.sendMessage();
 
     expect(apiSendMessage).not.toHaveBeenCalled();
+    // Returning silently left the user pressing a button that did nothing.
+    expect(component.sendError()).toContain('минимум два варианта');
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent)
+      .withContext('the reason must be visible while composing a poll')
+      .toContain('минимум два варианта');
   });
 });

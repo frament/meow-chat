@@ -68,7 +68,9 @@ func SendOrQueue(t *Transport, q *Queue, req FederationRequest) error {
 		return nil
 	}
 
-	resp, err := t.Send(req)
+	// SendQuick, not Send: this call has a queue behind it, so it must not hold
+	// the sender for the full request timeout when the peer has silently gone.
+	resp, err := t.SendQuick(req)
 	if err == nil && resp != nil && resp.StatusCode < 500 {
 		return nil
 	}

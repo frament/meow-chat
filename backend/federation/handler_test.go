@@ -56,6 +56,8 @@ func setupFiberApp(db *sql.DB, fh *FederationHandler) *fiber.App {
 	fed.Get("/bulk/users", fh.HandleBulkUsers)
 	fed.Get("/bulk/messages", fh.HandleBulkMessages)
 	fed.Get("/bulk/posts", fh.HandleBulkPosts)
+	fed.Get("/bulk/sticker-packs", fh.HandleBulkStickerPacks)
+	fed.Post("/sticker-packs", fh.HandleReceiveStickerPacks)
 	fed.Post("/introduce", fh.HandleIntroduce)
 	fed.Post("/gossip/new-peer", fh.HandleGossipNewPeer)
 	fed.Post("/recover-server", fh.HandleRecoverServer)
@@ -707,3 +709,92 @@ func federationTestJPEG(t *testing.T, w, h int) []byte {
 }
 
 // Test unused import silence
+
+// Sticker federation had no test at all, at either level: no unit test here and
+// nothing in cmd/e2e-test either - the only trace was "imported 0 sticker packs"
+// printed when a peer connects, which proves the call happens and nothing about
+// what it carries. These two handlers are the whole path.
+func TestHandleBulkStickerPacks_ServesLocalPacks(t *testing.T) {
+	db := setupHandlerDB(t)
+	defer db.Close()
+	database.DB = db
+
+	db.Exec("INSERT INTO federation_servers (id, name, base_url, server_token, status) VALUES (1, 'test', 'https://example.com', 'test-token', 'active')")
+	// A local pack (server_id NULL) is ours to share; an imported one is not,
+	// or two peers would bounce each other's packs back and forth forever.
+	res, err := db.Exec("INSERT INTO sticker_packs (name, server_id) VALUES ('Наши', NULL)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	localID, _ := res.LastInsertId()
+	if _, err := db.Exec("INSERT INTO stickers (pack_id, image_url, sort_order) VALUES (?, '/uploads/stickers/a.png', 1)", localID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO sticker_packs (name, server_id) VALUES ('Чужие', 1)"); err != nil {
+		t.Fatal(err)
+	}
+
+	fh := NewFederationHandler(nil, nil, nil)
+	app := setupFiberApp(db, fh)
+
+	resp := testRequest(t, app, "GET", "/api/federation/v1/bulk/sticker-packs", "", "test-token")
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+
+	var packs []struct {
+		Name     string `json:"name"`
+		Stickers []struct {
+			ImageURL  string `json:"image_url"`
+			SortOrder int    `json:"sort_order"`
+		} `json:"stickers"`
+	}
+	if err := json.Unmarshal([]byte(readBody(t, resp)), &packs); err != nil {
+		t.Fatalf("parse packs: %v", err)
+	}
+	if len(packs) != 1 {
+		t.Fatalf("expected only the local pack to be shared, got %d: %+v", len(packs), packs)
+	}
+	if packs[0].Name != "Наши" || len(packs[0].Stickers) != 1 {
+		t.Errorf("expected one sticker in the local pack, got %+v", packs[0])
+	}
+	if packs[0].Stickers[0].ImageURL != "/uploads/stickers/a.png" {
+		t.Errorf("expected the sticker URL to be carried, got %q", packs[0].Stickers[0].ImageURL)
+	}
+}
+
+func TestHandleReceiveStickerPacks_StoresPacks(t *testing.T) {
+	db := setupHandlerDB(t)
+	defer db.Close()
+	database.DB = db
+
+	db.Exec("INSERT INTO federation_servers (id, name, base_url, server_token, status) VALUES (1, 'test', 'https://example.com', 'test-token', 'active')")
+
+	fh := NewFederationHandler(nil, nil, nil)
+	app := setupFiberApp(db, fh)
+
+	body := `[{"name":"От соседа","stickers":[
+		{"image_url":"/uploads/stickers/x.png","sort_order":1},
+		{"image_url":"/uploads/stickers/y.png","sort_order":2}]}]`
+	resp := testRequest(t, app, "POST", "/api/federation/v1/sticker-packs", body, "test-token")
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+
+	// The pack is stored against the peer that sent it, so a later sync knows
+	// where it came from and does not re-share it.
+	var packID, serverID int64
+	var name string
+	if err := db.QueryRow("SELECT id, name, server_id FROM sticker_packs ORDER BY id DESC LIMIT 1").Scan(&packID, &name, &serverID); err != nil {
+		t.Fatalf("no pack imported: %v", err)
+	}
+	if name != "От соседа" || serverID != 1 {
+		t.Errorf("unexpected pack: name=%q server=%d", name, serverID)
+	}
+
+	var stickers int
+	db.QueryRow("SELECT COUNT(*) FROM stickers WHERE pack_id = ?", packID).Scan(&stickers)
+	if stickers != 2 {
+		t.Errorf("expected both stickers imported, got %d", stickers)
+	}
+}
