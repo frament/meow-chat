@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -51,8 +52,6 @@ var applicationGaps = map[string]string{
 	"PUT /keys":                               "нет теста",
 	"POST /logout":                            "нет теста",
 	"POST /offline":                           "нет теста",
-	"GET /version":                            "нет теста; version_test.go проверяет пакет version, а не маршрут",
-	"GET /check-update":                       "нет теста",
 	"GET /ws-health":                          "нет теста",
 	"POST /upload-avatar":                     "нет теста; saveImage проверяется в images_test.go, маршрут - нет",
 	"GET /giphy/search":                       "нет теста",
@@ -62,13 +61,8 @@ var applicationGaps = map[string]string{
 	"POST /admin/federation/connect":          "нет теста; handshake проверяется в admin_federation_test.go через SendDirect, минуя маршрут",
 	"POST /admin/federation/servers/:id/ping": "нет теста",
 	"POST /admin/federation/restore":          "нет теста",
-	"POST /webauthn/begin-login":              "нет теста",
 	"POST /webauthn/finish-login":             "нет теста",
-	"POST /webauthn/has-credentials":          "нет теста",
-	"POST /webauthn/begin-registration":       "нет теста",
 	"POST /webauthn/finish-registration":      "нет теста",
-	"GET /webauthn/credentials":               "нет теста",
-	"DELETE /webauthn/credentials/:id":        "нет теста",
 }
 
 func checkCoverage(t *testing.T, surface string, production, harness map[string]string, gaps map[string]string) {
@@ -140,34 +134,59 @@ func productionRoutes(t *testing.T) map[string]string {
 	})
 }
 
-// harnessRoutes reads the handler test harness, which registers on a bare
-// Fiber app and therefore needs the /api prefix stripped from nothing.
+// harnessRoutes collects every route registered by any test file in this
+// package.
+//
+// Reading only handlers_test_setup.go was too narrow, and wrong in a way that
+// sent the work in the wrong direction: /check-update, /version and the WebAuthn
+// routes are registered correctly inside their own test files, so they were
+// listed as gaps that did not exist. The question this guard asks is "does some
+// test exercise this route", not "is it in that one file".
 func harnessRoutes(t *testing.T) map[string]string {
 	t.Helper()
 
-	src := readFile(t, "handlers_test_setup.go")
-	prefix := map[string]string{"app": ""}
-	for pass := 0; pass < 4; pass++ {
-		changed := false
-		for _, m := range regexp.MustCompile(`(\w+)\s*:=\s*(\w+)\.Group\("([^"]*)"[^)]*\)`).FindAllStringSubmatch(src, -1) {
-			want := prefix[m[2]] + m[3]
-			if prefix[m[1]] != want {
-				prefix[m[1]] = want
-				changed = true
+	files, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatalf("list test files: %v", err)
+	}
+	// handlers_test_setup.go is not named *_test.go, so the glob misses it - and
+	// it is the file that registers most of these routes. Without it every route
+	// in the harness would be reported as a gap.
+	files = append(files, "handlers_test_setup.go")
+	// Deterministic order so a failure message does not shuffle between runs.
+	sort.Strings(files)
+
+	out := make(map[string]string)
+	for _, f := range files {
+		src := readFile(t, f)
+		prefix := map[string]string{"app": ""}
+		for pass := 0; pass < 4; pass++ {
+			changed := false
+			for _, m := range regexp.MustCompile(`(\w+)\s*:=\s*(\w+)\.Group\("([^"]*)"[^)]*\)`).FindAllStringSubmatch(src, -1) {
+				want := prefix[m[2]] + m[3]
+				if prefix[m[1]] != want {
+					prefix[m[1]] = want
+					changed = true
+				}
+			}
+			if !changed {
+				break
 			}
 		}
-		if !changed {
-			break
+		for k, v := range parseRoutes(t, f, prefix, func(p string) string {
+			// Test-only scaffolding, not a production route.
+			if strings.HasPrefix(p, "/test-") {
+				return ""
+			}
+			return p
+		}) {
+			out[k] = v
 		}
 	}
-
-	return parseRoutes(t, "handlers_test_setup.go", prefix, func(p string) string {
-		// Test-only scaffolding, not a production route.
-		if strings.HasPrefix(p, "/test-") {
-			return ""
-		}
-		return p
-	})
+	if len(out) == 0 {
+		t.Fatal("no routes found in any test file - this guard would pass over nothing")
+	}
+	return out
 }
 
 func parseRoutes(t *testing.T, path string, prefix map[string]string, normalize func(string) string) map[string]string {
@@ -186,9 +205,9 @@ func parseRoutes(t *testing.T, path string, prefix map[string]string, normalize 
 		}
 		out[strings.ToUpper(m[2])+" "+full] = m[0]
 	}
-	if len(out) == 0 {
-		t.Fatalf("no routes found in %s - the pattern stopped matching, which would make this guard pass over nothing", path)
-	}
+	// An empty result is normal here: most test files register no routes at all.
+	// Only the aggregate being empty is a failure, and that is checked by the
+	// callers - a per-file failure would abort on the first such file.
 	return out
 }
 
