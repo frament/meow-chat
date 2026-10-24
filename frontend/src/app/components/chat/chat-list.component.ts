@@ -44,7 +44,7 @@ export class ChatListComponent {
   @Input() incomingRequests: any[] = [];
   @Input() sendingFriendReq: number | null = null;
   @Input() searchResults: User[] | null = null;
-  @Input() mobileChatHeight = 0;
+  @Input() mobileChatHeight = '';
 
   /** Two-way: the markup still binds `[(ngModel)]="searchQuery"`. */
   @Input() searchQuery = '';
@@ -52,14 +52,108 @@ export class ChatListComponent {
 
   @Output() openChatRequested = new EventEmitter<User>();
   @Output() selectGroupRequested = new EventEmitter<GroupChat>();
-  @Output() togglePinRequested = new EventEmitter<{ id: number; event: Event }>();
-  @Output() sendFriendRequestRequested = new EventEmitter<{ id: number; event: Event }>();
-  @Output() acceptFriendRequestRequested = new EventEmitter<{ id: number; event: Event }>();
-  @Output() rejectFriendRequestRequested = new EventEmitter<{ id: number; event: Event }>();
+  @Output() togglePinRequested = new EventEmitter<{ id: number; event: MouseEvent }>();
+  @Output() sendFriendRequestRequested = new EventEmitter<{ id: number; event: MouseEvent }>();
+  @Output() acceptFriendRequestRequested = new EventEmitter<{ id: number; event: MouseEvent }>();
+  @Output() rejectFriendRequestRequested = new EventEmitter<{ id: number; event: MouseEvent }>();
   @Output() searchInput = new EventEmitter<void>();
   @Output() searchCleared = new EventEmitter<void>();
   @Output() loadGroupInfoRequested = new EventEmitter<void>();
   @Output() createGroupRequested = new EventEmitter<void>();
+
+  // One template, two looks. Each getter returns exactly the string the old
+  // branch used, so the merge is provable by diff rather than by guessing at
+  // md: utilities. Step B removed the second copy of the markup; these are what
+  // remains of the differences.
+  get searchInputStyle(): string {
+    return this.mobile
+      ? 'width:100%;box-sizing:border-box;height:38px;padding-left:34px;font-size:14px;border-radius:12px;'
+      : 'width:100%;box-sizing:border-box;height:34px;padding-left:30px;font-size:13px;';
+  }
+
+  get searchIconStyle(): string {
+    return this.mobile
+      ? 'position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-tertiary);'
+      : 'position:absolute;left:8px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-tertiary);';
+  }
+
+  get clearButtonStyle(): string {
+    return this.mobile
+      ? 'position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:14px;padding:2px;'
+      : 'position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;font-size:12px;padding:2px;';
+  }
+
+  get searchResultsBoxStyle(): string {
+    return this.mobile ? '' : 'margin-bottom:8px;';
+  }
+
+  get notFoundStyle(): string {
+    return this.mobile
+      ? 'color:var(--text-tertiary);padding:8px 4px;'
+      : 'color:var(--text-tertiary);padding:4px 0;';
+  }
+
+  /** A plain row: search results, friend requests. */
+  get rowClass(): string {
+    return this.mobile
+      ? 'card flex items-center gap-3 p-3 rounded-lg'
+      : 'flex items-center gap-2 p-2 rounded-lg';
+  }
+
+  /** A row that can be clicked: groups and users. */
+  get clickableRowClass(): string {
+    return this.rowClass + ' cursor-pointer transition-colors';
+  }
+
+  get rowGap(): string {
+    return this.mobile ? '6px' : '4px';
+  }
+
+  get avatarClass(): string {
+    return this.mobile ? 'w-10 h-10' : 'w-8 h-8';
+  }
+
+  get avatarPlaceholderClass(): string {
+    return this.mobile
+      ? 'flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold'
+      : 'post-avatar';
+  }
+
+  get avatarPlaceholderStyle(): string {
+    return this.mobile
+      ? 'background:var(--avatar-bg);color:var(--avatar-text);'
+      : 'width:32px;height:32px;font-size:13px;';
+  }
+
+  get nameClass(): string {
+    return this.mobile ? 'flex-1 text-sm font-medium' : 'flex-1 text-sm truncate';
+  }
+
+  get sectionGap(): string {
+    return this.mobile ? '6px' : '8px';
+  }
+
+  get addFriendButtonStyle(): string {
+    return this.mobile
+      ? 'padding:6px 14px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-weight:500;'
+      : 'padding:4px 10px;border-radius:var(--radius-sm);border:none;background:var(--accent-gradient);color:white;cursor:pointer;font-weight:500;';
+  }
+
+  get requestButtonStyle(): string {
+    return this.mobile
+      ? 'padding:6px 12px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;'
+      : 'padding:4px 8px;border-radius:var(--radius-sm);border:none;background:#27ae60;color:white;cursor:pointer;font-weight:500;';
+  }
+
+  get rejectButtonStyle(): string {
+    return this.mobile
+      ? 'padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;'
+      : 'padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:transparent;color:var(--text-tertiary);cursor:pointer;';
+  }
+
+  get dividerStyle(): string {
+    return this.mobile ? '' : 'margin:8px 0;';
+  }
 
   // The markup calls these by name; they forward and do nothing else.
   openChat(user: User): void {
@@ -70,19 +164,19 @@ export class ChatListComponent {
     this.selectGroupRequested.emit(group);
   }
 
-  togglePin(id: number, event: Event): void {
+  togglePin(id: number, event: MouseEvent): void {
     this.togglePinRequested.emit({ id, event });
   }
 
-  sendFriendReq(id: number, event: Event): void {
+  sendFriendReq(id: number, event: MouseEvent): void {
     this.sendFriendRequestRequested.emit({ id, event });
   }
 
-  acceptFriendReq(id: number, event: Event): void {
+  acceptFriendReq(id: number, event: MouseEvent): void {
     this.acceptFriendRequestRequested.emit({ id, event });
   }
 
-  rejectFriendReq(id: number, event: Event): void {
+  rejectFriendReq(id: number, event: MouseEvent): void {
     this.rejectFriendRequestRequested.emit({ id, event });
   }
 

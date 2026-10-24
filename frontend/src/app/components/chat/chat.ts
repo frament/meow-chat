@@ -10,7 +10,6 @@ import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult
 import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { NoticeService } from '../../services/notice.service';
-import { LastSeenPipe } from '../../pipes/last-seen.pipe';
 import { ClockService } from '../../services/clock.service';
 import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
@@ -21,7 +20,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [ LastSeenPipe,DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe, ChatListComponent],
+  imports: [ DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe, ChatListComponent],
   templateUrl: './chat.html',
 })
 export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
