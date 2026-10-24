@@ -18,6 +18,10 @@ describe('ChatComponent composer', () => {
   let fixture: ComponentFixture<ChatComponent>;
   let component: ChatComponent;
   let sendMessage: jasmine.Spy;
+  // The proxy below answers every property read, so `() => jasmine.createSpy()`
+  // would hand out a fresh spy each time and an assertion would inspect a
+  // different object from the one the component called. It is created once.
+  let apiSendMessage: jasmine.Spy;
   let mockApi: Record<string, unknown>;
 
   function composers(): HTMLTextAreaElement[] {
@@ -33,6 +37,7 @@ describe('ChatComponent composer', () => {
   }
 
   beforeEach(async () => {
+    apiSendMessage = jasmine.createSpy('api.sendMessage').and.returnValue(of({ id: 99 }));
     const wsMessages$ = new Subject<any>();
     mockApi = new Proxy({} as Record<string, unknown>, {
       get: (_t, prop) => {
@@ -51,6 +56,7 @@ describe('ChatComponent composer', () => {
         if (prop === 'getMessages') return () => of([]);
         if (prop === 'getUsers') return () => of([]);
         if (prop === 'getPinned') return () => of({ pinned_user_ids: [] });
+        if (prop === 'sendMessage') return apiSendMessage;
         return () => of();
       },
     });
@@ -220,5 +226,68 @@ describe('ChatComponent composer', () => {
     expect(component.messagesLoadFailed()).toBe(true);
     (component as any).noteLoadSuccess();
     expect(component.messagesLoadFailed()).toBe(false);
+  });
+
+  function sendButtons(): HTMLButtonElement[] {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button[title="Отправить"]'),
+    );
+  }
+
+  /**
+   * The poll composer had no send button at all: the template renders the poll
+   * fields in the @if branch and the send button only in the @else, so choosing
+   * "poll" left the user with inputs and no way to send them. Reported as "the
+   * button is hidden behind the bottom nav on mobile"; it was not hidden, it was
+   * not rendered, on either layout.
+   */
+  it('renders a send button while composing a poll', () => {
+    component.messageType = 'poll';
+    fixture.detectChanges();
+
+    const buttons = sendButtons();
+    expect(buttons.length)
+      .withContext('a poll composer with no send button cannot be used')
+      .toBeGreaterThan(0);
+
+    buttons[0].click();
+    expect(sendMessage).toHaveBeenCalled();
+  });
+
+  it('renders the poll send button in the phone layout too', () => {
+    (component as unknown as { showMobileChat: boolean }).showMobileChat = true;
+    component.messageType = 'poll';
+    fixture.detectChanges();
+
+    // Both panes render here, and both had to be fixed: the markup exists twice,
+    // and a fix applied to one copy has silently missed the other before.
+    expect(sendButtons().length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('sends a poll with its question and options', async () => {
+    sendMessage.and.callThrough();
+
+    component.messageType = 'poll';
+    component.messageContent = 'Куда идём?';
+    component.pollOptions = ['Парк', 'Кино'];
+    await component.sendMessage();
+
+    expect(apiSendMessage).toHaveBeenCalled();
+    const args = apiSendMessage.calls.mostRecent().args;
+    expect(args[3]).withContext('message type').toBe('poll');
+    expect(args[1]).withContext('question travels as content').toBe('Куда идём?');
+    expect(args[7]).withContext('options').toEqual(['Парк', 'Кино']);
+  });
+
+  it('refuses to send a poll with fewer than two options', async () => {
+    sendMessage.and.callThrough();
+    apiSendMessage.calls.reset();
+
+    component.messageType = 'poll';
+    component.messageContent = 'Вопрос';
+    component.pollOptions = ['один', '   '];
+    await component.sendMessage();
+
+    expect(apiSendMessage).not.toHaveBeenCalled();
   });
 });

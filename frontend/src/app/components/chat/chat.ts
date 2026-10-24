@@ -324,6 +324,12 @@ import { toMemoryFile } from '../../services/upload-utils';
                   <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
                   Несколько вариантов
                 </label>
+                <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
+                  style="margin-left:auto;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;">
+                  <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
             } @else {
@@ -675,6 +681,12 @@ import { toMemoryFile } from '../../services/upload-utils';
                   <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
                   Несколько вариантов
                 </label>
+                <button (touchstart)="sendMessage()" (click)="sendMessage()" title="Отправить"
+                  style="margin-left:auto;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:none;border-radius:var(--radius-sm);background:var(--accent-gradient);color:white;cursor:pointer;">
+                  <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
             } @else {
