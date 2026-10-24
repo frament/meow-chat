@@ -94,6 +94,11 @@ func setupWSTest(t *testing.T) (*Handler, int64, string) {
 
 	app := fiber.New()
 	h := NewHandler()
+	// GoOffline is exercised here because its effect - closing the user's
+	// sockets - is only observable with a live connection. The route itself is
+	// covered by TestHarnessCoversEveryRoute.
+	app.Post("/offline", AuthRequired, h.GoOffline)
+	app.Get("/ws-health", h.WSHealth)
 	app.Get("/ws", func(c *fiber.Ctx) error {
 		token := c.Query("token")
 		if token == "" {

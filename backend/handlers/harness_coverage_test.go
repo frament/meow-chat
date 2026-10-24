@@ -38,21 +38,6 @@ func TestHarnessCoversEveryRoute(t *testing.T) {
 // to it" and "the route cannot be exercised this way" are different debts, and
 // only one of them is repaid by writing a test.
 var applicationGaps = map[string]string{
-	"GET /invite/:token":                      "нет теста",
-	"GET /friend-invite/:token":               "нет теста",
-	"POST /friend-invite/:token/accept":       "нет теста",
-	"POST /invites":                           "нет теста",
-	"DELETE /invites/:id":                     "нет теста",
-	"POST /friend-invites":                    "нет теста",
-	"GET /pinned":                             "нет теста",
-	"POST /pin/:id":                           "нет теста",
-	"DELETE /pin/:id":                         "нет теста",
-	"DELETE /friends/:id":                     "нет теста",
-	"GET /keys/:userId":                       "нет теста",
-	"PUT /keys":                               "нет теста",
-	"POST /logout":                            "нет теста",
-	"POST /offline":                           "нет теста",
-	"GET /ws-health":                          "нет теста",
 	"POST /upload-avatar":                     "нет теста; saveImage проверяется в images_test.go, маршрут - нет",
 	"GET /giphy/search":                       "нет теста",
 	"GET /giphy/trending":                     "нет теста",

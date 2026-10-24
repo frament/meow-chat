@@ -246,6 +246,27 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/push/welcome", AuthRequired, h.SendWelcomePush)
 	app.Get("/invites", AuthRequired, h.GetMyInvites)
 
+	// Batch added while closing the route-coverage gaps. Paths are the ones
+	// main.go serves, not convenient ones: the point of the harness is to
+	// exercise the contract a client depends on.
+	app.Post("/logout", AuthRequired, h.Logout)
+	app.Post("/offline", AuthRequired, h.GoOffline)
+	app.Get("/version", h.GetVersion)
+	app.Put("/keys", AuthRequired, h.PutKey)
+	app.Get("/keys/:userId", AuthRequired, h.GetKey)
+
+	app.Get("/invite/:token", h.CheckInvite)
+	app.Post("/invites", AuthRequired, h.CreateInvite)
+	app.Delete("/invites/:id", AuthRequired, h.DeleteInvite)
+	app.Post("/friend-invites", AuthRequired, h.CreateFriendInvite)
+	app.Get("/friend-invite/:token", h.CheckFriendInvite)
+	app.Post("/friend-invite/:token/accept", AuthRequired, h.AcceptFriendInvite)
+	app.Delete("/friends/:id", AuthRequired, h.RemoveFriend)
+
+	app.Get("/pinned", AuthRequired, h.GetPinned)
+	app.Post("/pin/:id", AuthRequired, h.PinUser)
+	app.Delete("/pin/:id", AuthRequired, h.UnpinUser)
+
 	// Device routes
 	devices := app.Group("/devices")
 	devices.Use(AuthRequired)
