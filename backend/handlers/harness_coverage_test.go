@@ -205,3 +205,67 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+// Federation handlers live behind their own harness in the federation package,
+// with its own prefixes, so they are checked by handler name rather than by
+// method and path. They were dropped from this guard once during a rewrite,
+// which left the two untested ones tracked by nothing at all - the same silent
+// gap the guard exists to prevent.
+func TestFederationHarnessCoversHandlers(t *testing.T) {
+	production := handlerNames(t, "../main.go", `fedHandler\.(\w+)`)
+	harness := handlerNames(t, "../federation/handler_test.go", `(?:fh|h)\.(\w+)`)
+
+	known := map[string]string{
+		"HandleBulkStickerPacks":    "нет теста; путь задевается только тем, что e2e при подключении пира импортирует 0 паков",
+		"HandleReceiveStickerPacks": "нет теста; то же",
+	}
+
+	inHarness := make(map[string]bool, len(harness))
+	for _, h := range harness {
+		inHarness[h] = true
+	}
+	inProduction := make(map[string]bool, len(production))
+	for _, h := range production {
+		inProduction[h] = true
+	}
+
+	seen := make(map[string]bool)
+	var missing []string
+	for _, h := range production {
+		if !inHarness[h] && known[h] == "" && !seen[h] {
+			seen[h] = true
+			missing = append(missing, h)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Errorf("федеративные обработчики есть в main.go и отсутствуют в federation/handler_test.go:\n  %s",
+			strings.Join(missing, "\n  "))
+	}
+
+	var stale []string
+	for h := range known {
+		if inHarness[h] || !inProduction[h] {
+			stale = append(stale, h)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		t.Errorf("список пробелов федерации протух:\n  %s", strings.Join(stale, "\n  "))
+	}
+}
+
+// handlerNames returns the handler method names a Go source file registers.
+func handlerNames(t *testing.T, path, re string) []string {
+	t.Helper()
+	src := readFile(t, path)
+	pat := regexp.MustCompile(`\.(?:Get|Post|Put|Delete|Patch|Head)\("[^"]*"\s*,\s*(?:(?:AuthRequired|AdminRequired)\s*,\s*)*` + re)
+	var out []string
+	for _, m := range pat.FindAllStringSubmatch(src, -1) {
+		out = append(out, m[1])
+	}
+	if len(out) == 0 {
+		t.Fatalf("no handler registrations found in %s", path)
+	}
+	return out
+}
