@@ -13,6 +13,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// giphyAPIBase is a variable so tests can point it at a local stub. Giphy is
+// the only external service this backend proxies, and a test that reached
+// api.giphy.com would be slow, flaky, and dependent on somebody else's uptime -
+// which is exactly the kind of test this round exists to remove.
+var giphyAPIBase = "https://api.giphy.com/v1/gifs"
+
 // GiphyStatus reports whether a Giphy API key is configured. Available to any
 // authenticated user (unlike the admin-only key endpoint).
 func (h *Handler) GiphyStatus(c *fiber.Ctx) error {
@@ -36,7 +42,7 @@ func (h *Handler) SearchGiphy(c *fiber.Ctx) error {
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 
-	u, _ := url.Parse("https://api.giphy.com/v1/gifs/search")
+	u, _ := url.Parse(giphyAPIBase + "/search")
 	q := u.Query()
 	q.Set("api_key", apiKey)
 	q.Set("q", query)
@@ -102,7 +108,7 @@ func (h *Handler) TrendingGiphy(c *fiber.Ctx) error {
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 
-	u, _ := url.Parse("https://api.giphy.com/v1/gifs/trending")
+	u, _ := url.Parse(giphyAPIBase + "/trending")
 	q := u.Query()
 	q.Set("api_key", apiKey)
 	q.Set("offset", strconv.Itoa(offset))

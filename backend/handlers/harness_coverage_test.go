@@ -37,18 +37,19 @@ func TestHarnessCoversEveryRoute(t *testing.T) {
 // is the point of the round-2 work. A reason is required because "we never got
 // to it" and "the route cannot be exercised this way" are different debts, and
 // only one of them is repaid by writing a test.
-var applicationGaps = map[string]string{
-	"POST /upload-avatar":                     "нет теста; saveImage проверяется в images_test.go, маршрут - нет",
-	"GET /giphy/search":                       "нет теста",
-	"GET /giphy/trending":                     "нет теста",
-	"GET /admin/settings/giphy-key":           "нет теста",
-	"PUT /admin/settings/giphy-key":           "нет теста",
-	"POST /admin/federation/connect":          "нет теста; handshake проверяется в admin_federation_test.go через SendDirect, минуя маршрут",
-	"POST /admin/federation/servers/:id/ping": "нет теста",
-	"POST /admin/federation/restore":          "нет теста",
-	"POST /webauthn/finish-login":             "нет теста",
-	"POST /webauthn/finish-registration":      "нет теста",
-}
+// applicationGaps is empty: every route main.go serves now has a route in the
+// harness.
+//
+// The list existed from 2026-10-11 to 2026-10-12 and held 32 routes, then 25
+// after the guard was widened to look at every test file rather than only the
+// harness. Each entry carried a reason, and the reasons were of two kinds: "no
+// test", which was repaid by writing one, and "tested another way", which was
+// repaid by registering the route the client actually calls.
+//
+// It stays as an empty map rather than being deleted, because the guard's job
+// includes reporting a stale entry when a route is covered and still listed -
+// and that mechanism needs somewhere to list from.
+var applicationGaps = map[string]string{}
 
 func checkCoverage(t *testing.T, surface string, production, harness map[string]string, gaps map[string]string) {
 	t.Helper()
