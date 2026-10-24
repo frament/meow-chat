@@ -36,6 +36,13 @@ Preferred shapes, in order:
 Avoid `md:`-only utility swaps when the two looks differ in structure rather than size:
 they cannot be reviewed by reading, only by looking.
 
+## Docs, not memory
+
+Angular and Tailwind move fast, and the training data lags: use the Context7 MCP
+(`resolve-library-id`, then `query-docs`) for `@if`/`@for`, Tailwind v4, Angular control
+flow and CSS features instead of recalling them. Context7 is configured for this project
+in `opencode.json`.
+
 ## Breakpoints
 
 | Utility | Min width | Used for |
