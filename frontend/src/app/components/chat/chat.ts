@@ -15,6 +15,7 @@ import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { ChatListComponent } from './chat-list.component';
 import { ChatMessagesComponent } from './chat-messages.component';
 import { ChatComposerComponent } from './chat-composer.component';
+import { ChatStorageService } from '../../services/chat-storage.service';
 import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
@@ -25,6 +26,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 })
 export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly notice = inject(NoticeService);
+  private readonly storage = inject(ChatStorageService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -699,14 +701,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadFromCache() {
-    const cached = localStorage.getItem('cachedUsers');
-    const cachedPins = localStorage.getItem('cachedPins');
-    if (cached) {
-      const users: User[] = JSON.parse(cached);
+    const users = this.storage.readUsers();
+    if (users.length > 0) {
       this.users = users.filter((u) => u.id !== this.currentUserId);
     }
-    if (cachedPins) {
-      this.pinnedIds = new Set<number>(JSON.parse(cachedPins));
+    const pins = this.storage.readPinnedIds();
+    if (pins.length > 0) {
+      this.pinnedIds = new Set<number>(pins);
     }
     // Opening a deep link such as /chat/2 must work offline. resolvePendingChat
     // used to be called only from the successful branch of getUsers, so with no
@@ -723,7 +724,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.api.getUsers().subscribe({
       next: (users: User[]) => {
         this.users = users.filter((u) => u.id !== this.currentUserId);
-        localStorage.setItem('cachedUsers', JSON.stringify(users));
+        this.storage.writeUsers(users);
         this.resolvePendingChat();
       },
       error: () => this.resolvePendingChat(),
@@ -731,7 +732,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.api.getPinned().subscribe({
       next: (res) => {
         this.pinnedIds = new Set(res.pinned_user_ids);
-        localStorage.setItem('cachedPins', JSON.stringify(res.pinned_user_ids));
+        this.storage.writePinnedIds(res.pinned_user_ids);
       },
       error: () => {},
     });
@@ -830,17 +831,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return msg;
   }
 
-  private messageCacheKey(otherUserId: number): string {
-    const ids = [this.currentUserId, otherUserId].sort((a, b) => a - b);
-    return `cached_messages_${ids[0]}_${ids[1]}`;
-  }
-
   private persistCache(peerId: number) {
-    const clean = this.messages.map(m => ({
-      ...m,
-      images: (m.images || []).filter(i => !i.image_url.startsWith('data:')),
-    }));
-    localStorage.setItem(this.messageCacheKey(peerId), JSON.stringify(clean));
+    this.storage.writeMessages(this.currentUserId, peerId, this.messages);
   }
 
   selectUser(user: User) {
@@ -851,8 +843,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const boundary = this.api.unreadBoundaries()[user.id] ?? null;
     this.api.clearUnread(user.id);
 
-    const cached = localStorage.getItem(this.messageCacheKey(user.id));
-    this.messages = cached ? JSON.parse(cached) : [];
+    this.messages = this.storage.readMessages(this.currentUserId, user.id);
     // Switching threads replaces the list wholesale, so the index of claimed ids
     // has to follow it - otherwise ids from the previous chat would suppress
     // messages in this one.
@@ -948,7 +939,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.api.pinUser(userId).subscribe({ error: () => this.pinnedIds.delete(userId) });
     }
     this.pinnedIds = new Set(this.pinnedIds);
-    localStorage.setItem('cachedPins', JSON.stringify([...this.pinnedIds]));
+    this.storage.writePinnedIds([...this.pinnedIds]);
   }
 
   getPinnedUsers(): User[] {
