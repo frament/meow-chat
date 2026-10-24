@@ -1,5 +1,4 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, signal, computed, effect, EffectRef, HostListener, inject, Injector, runInInjectionContext, afterNextRender } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom, fromEvent } from 'rxjs';
@@ -15,13 +14,13 @@ import { GifPickerComponent } from './gif-picker/gif-picker';
 import { StickerPickerComponent } from './sticker-picker/sticker-picker';
 import { ChatListComponent } from './chat-list.component';
 import { ChatMessagesComponent } from './chat-messages.component';
-import { MdPipe } from '../../pipes/md.pipe';
+import { ChatComposerComponent } from './chat-composer.component';
 import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [ DatePipe, FormsModule, GifPickerComponent, StickerPickerComponent, MdPipe, ChatListComponent, ChatMessagesComponent],
+  imports: [ FormsModule, GifPickerComponent, StickerPickerComponent, ChatListComponent, ChatMessagesComponent, ChatComposerComponent],
   templateUrl: './chat.html',
 })
 export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -36,7 +35,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   pollOptions: string[] = ['', ''];
   pollMultiple = false;
-  showTypeMenu = false;
   showGifPicker = false;
   showStickerPicker = false;
   mobileChatHeight = computed(() => {
@@ -48,12 +46,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   openGifPicker() {
     if (!this.giphyHasKey) return;
-    this.showTypeMenu = false;
     this.showGifPicker = true;
   }
 
   openStickerPicker() {
-    this.showTypeMenu = false;
     this.showStickerPicker = true;
   }
 
@@ -87,24 +83,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectType(id: MsgType) {
     this.messageType = id;
-    this.showTypeMenu = false;
     if (id === 'image') {
       this.triggerFileInput();
     }
   }
 
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent) {
-    const target = event.target as HTMLElement;
-    if (this.showTypeMenu && !target.closest('.type-menu-container')) {
-      this.showTypeMenu = false;
-    }
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscapePress() {
-    this.showTypeMenu = false;
-  }
+  // The type menu's open state, its outside-click and Escape handlers live in
+  // ChatComposerComponent: they are about the menu, and the menu renders there.
 
   get visibleMsgTypes(): { id: MsgType; icon: SafeHtml; label: string }[] {
     if (!this.selectedGroup) {

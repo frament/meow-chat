@@ -152,53 +152,61 @@ describe('ChatComponent', () => {
     expect(toggleBtn.textContent).toContain('Aa');
   }));
 
+  /** The type menu is open state inside app-chat-composer, so a test opens it the
+   *  way a user does: by clicking the toggle. Reaching into the component's
+   *  property would test the wiring, not the behaviour. */
+  function openTypeMenu(): HTMLElement {
+    // The composer only renders once a chat is selected, and the tests set
+    // selectedUser just before calling this - so the first render has to happen
+    // here, not in the caller.
+    fixture.detectChanges();
+    const container = (fixture.nativeElement as HTMLElement).querySelector('.type-menu-container') as HTMLElement;
+    (container.querySelector('button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    return container;
+  }
+
+  function menuTexts(container: HTMLElement): string[] {
+    return Array.from(container.querySelectorAll('button')).map(b => (b.textContent || '').trim());
+  }
+
   it('opens popup menu on toggle button click', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
     fixture.detectChanges();
-    expect(component.showTypeMenu).toBeFalse();
-    const compiled = fixture.nativeElement as HTMLElement;
-    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
-    const toggleBtn = container?.querySelector('button') as HTMLButtonElement;
-    toggleBtn.click();
-    fixture.detectChanges();
-    expect(component.showTypeMenu).toBeTrue();
+    const container = (fixture.nativeElement as HTMLElement).querySelector('.type-menu-container') as HTMLElement;
+    expect(menuTexts(container).some(t => t.includes('Фото')))
+      .withContext('the menu starts closed').toBeFalse();
+
+    openTypeMenu();
+    expect(menuTexts(container).some(t => t.includes('Фото')))
+      .withContext('clicking the toggle opens the menu').toBeTrue();
   }));
 
   it('selects type from popup menu', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
-    component.showTypeMenu = true;
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
-    const allButtons = container?.querySelectorAll('button') || [];
-    const fotoBtn = Array.from(allButtons).find(b => b.textContent?.includes('Фото'));
+    const container = openTypeMenu();
+    const fotoBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Фото'));
     expect(fotoBtn).toBeTruthy();
     expect(fotoBtn?.hasAttribute('disabled')).toBeFalse();
     fotoBtn?.click();
     fixture.detectChanges();
     expect(component.messageType).toBe('image');
-    expect(component.showTypeMenu).toBeFalse();
+    expect(menuTexts(container).some(t => t.includes('Фото')))
+      .withContext('choosing a type closes the menu').toBeFalse();
   }));
 
   it('shows disabled gif item in popup when giphy key missing', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
-    component.showTypeMenu = true;
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
-    const disabledBtns = container?.querySelectorAll('button[disabled]') || [];
+    const container = openTypeMenu();
+    const disabledBtns = container.querySelectorAll('button[disabled]');
     const disabledTexts = Array.from(disabledBtns).map(b => b.textContent?.trim());
     expect(disabledTexts.some(t => t?.includes('GIF'))).toBeTrue();
   }));
 
   it('shows sticker item in popup', fakeAsync(() => {
     component.selectedUser = { id: 2, username: 'friend', email: '', avatar_url: '', is_admin: false, is_banned: false, created_at: '', is_online: false };
-    component.showTypeMenu = true;
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    const container = compiled.querySelector('.type-menu-container') as HTMLElement;
-    const btns = container?.querySelectorAll('button') || [];
-    const texts = Array.from(btns).map(b => b.textContent?.trim());
+    const container = openTypeMenu();
+    const texts = menuTexts(container);
     expect(texts.some(t => t?.includes('Стикер'))).toBeTrue();
   }));
 
