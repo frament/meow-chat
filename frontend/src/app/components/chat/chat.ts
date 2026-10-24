@@ -5,7 +5,7 @@ import { Subscription, firstValueFrom, fromEvent } from 'rxjs';
 import { HttpEventType } from '@angular/common/http';
 import { filter } from 'rxjs/operators';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult, EnvelopePayload } from '../../services/api.service';
+import { ApiService, User, Message, MsgType, GroupChat, GroupMember, GiphyResult, EnvelopePayload, Poll } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { KeyboardService } from '../../services/keyboard.service';
 import { NoticeService } from '../../services/notice.service';
@@ -16,6 +16,7 @@ import { ChatListComponent } from './chat-list.component';
 import { ChatMessagesComponent } from './chat-messages.component';
 import { ChatComposerComponent } from './chat-composer.component';
 import { ChatStorageService } from '../../services/chat-storage.service';
+import { ChatPollService } from '../../services/chat-poll.service';
 import { toMemoryFile } from '../../services/upload-utils';
 
 @Component({
@@ -27,6 +28,7 @@ import { toMemoryFile } from '../../services/upload-utils';
 export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly notice = inject(NoticeService);
   private readonly storage = inject(ChatStorageService);
+  private readonly polls = inject(ChatPollService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -1390,35 +1392,18 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   castVote(pollId: number, optionId: number) {
-    this.api.castVote(pollId, optionId).subscribe({
-      next: (res) => {
-        this.updatePollData(pollId, res.options);
-      },
+    this.polls.castVote(pollId, optionId).subscribe({
+      next: (res) => this.polls.applyPollData(this.messages, pollId, res.options),
     });
   }
 
-  private updatePollData(pollId: number, options: { id: number; vote_count: number; voted: boolean }[]) {
-    for (const msg of this.messages) {
-      if (msg.poll?.id === pollId) {
-        for (const opt of options) {
-          const existing = msg.poll.options.find(o => o.id === opt.id);
-          if (existing) {
-            existing.vote_count = opt.vote_count;
-            existing.voted = opt.voted;
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  computeTotalVotes(poll: any): number {
-    return poll?.options?.reduce((acc: number, opt: any) => acc + (opt.vote_count || 0), 0) || 0;
+  computeTotalVotes(poll: Poll): number {
+    return this.polls.computeTotalVotes(poll);
   }
 
   private handlePollUpdate(data: any) {
     if (data.poll_id) {
-      this.updatePollData(data.poll_id, data.options);
+      this.polls.applyPollData(this.messages, data.poll_id, data.options);
     }
   }
 

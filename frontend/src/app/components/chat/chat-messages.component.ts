@@ -1,7 +1,8 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { GroupChat } from '../../services/api.service';
+import { GroupChat, Poll } from '../../services/api.service';
 import { MdPipe } from '../../pipes/md.pipe';
+import { ChatPollService } from '../../services/chat-poll.service';
 
 /**
  * The message list: unread divider, date separators, bubbles, polls, images,
@@ -26,6 +27,8 @@ import { MdPipe } from '../../pipes/md.pipe';
   templateUrl: './chat-messages.component.html',
 })
 export class ChatMessagesComponent {
+  private readonly polls = inject(ChatPollService);
+
   @Input() items: unknown[] = [];
   @Input() currentUserId = 0;
   @Input() selectedGroup: GroupChat | null = null;
@@ -45,7 +48,7 @@ export class ChatMessagesComponent {
   }
 
   /** Total votes across a poll's options, for the percentage bars. */
-  computeTotalVotes(poll: { options?: Array<{ vote_count?: number }> } | null): number {
-    return poll?.options?.reduce((acc, opt) => acc + (opt.vote_count || 0), 0) || 0;
+  computeTotalVotes(poll: Poll | null | undefined): number {
+    return this.polls.computeTotalVotes(poll);
   }
 }
