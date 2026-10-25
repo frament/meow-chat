@@ -34,6 +34,29 @@ import { ServerCryptoService } from '../../services/server-crypto.service';
             {{ biometricLoading ? 'Запрос биометрии...' : 'Войти по Face ID / Touch ID' }}
           </button>
         }
+        @if (keyPromptOpen) {
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-default);">
+            <p class="text-sm" style="color:var(--text-secondary);">
+              Вход выполнен. Чтобы сообщения можно было читать на этом устройстве, нужен пароль — он
+              нужен один раз, дальше устройство помнит ключ. Без него всё, написанное раньше, откроется,
+              а новое — нет.
+            </p>
+            <div style="margin-top:8px;">
+              <label class="block text-sm font-medium" style="color:var(--text-secondary);">Пароль</label>
+              <input type="password" [(ngModel)]="keyPassword" name="keyPassword" class="form-input mt-1"
+                (keyup.enter)="submitKeyPassword()">
+            </div>
+            @if (keyPromptError) {
+              <p class="mt-2 text-sm" style="color:#e74c3c;">{{ keyPromptError }}</p>
+            }
+            <button type="button" class="btn-primary" style="width:100%;padding:10px 20px;margin-top:8px;"
+              [disabled]="keySubmitting" (click)="submitKeyPassword()">
+              {{ keySubmitting ? 'Настраиваем ключ...' : 'Настроить ключ' }}
+            </button>
+            <button type="button" class="btn-secondary" style="width:100%;padding:8px 20px;margin-top:6px;"
+              (click)="skipKeySetup()">Позже</button>
+          </div>
+        }
         @if (error) {
           <p class="mt-2 text-sm text-center" style="color:#e74c3c;">{{ error }}</p>
         }
@@ -45,6 +68,11 @@ export class LoginComponent implements OnInit {
   username = '';
   password = '';
   error = '';
+  /** Key setup form, shown after a sign-in that could not supply the password. */
+  keyPromptOpen = false;
+  keyPassword = '';
+  keyPromptError = '';
+  keySubmitting = false;
   redirectUrl = '';
   hasBiometric = false;
   biometricLoading = false;
@@ -118,10 +146,20 @@ export class LoginComponent implements OnInit {
 
           const credJson = credential.toJSON();
           this.api.webauthnFinishLogin(challenge.session_id, credJson).subscribe({
-            next: (res) => {
+            next: async (res) => {
               localStorage.setItem('lastUsername', this.username);
               this.api.storeAuth(res);
-              this.router.navigateByUrl(this.redirectUrl);
+
+              // Face ID never yields the password, and the key is wrapped with it.
+              // Picking up a key this device already stored needs no password; if
+              // there is none, ask for it here instead of letting the user into a
+              // session that cannot read anything new.
+              if (await this.ensureKey('')) {
+                this.router.navigateByUrl(this.redirectUrl);
+              } else {
+                this.keyPromptOpen = true;
+                this.biometricLoading = false;
+              }
             },
             error: () => {
               this.error = 'Ошибка входа по биометрии';
@@ -138,6 +176,48 @@ export class LoginComponent implements OnInit {
         this.biometricLoading = false;
       },
     });
+  }
+
+  /**
+   * Carries out the key setup and reports whether a usable key exists afterwards.
+   *
+   * The error is logged rather than swallowed: an empty catch here once hid a
+   * device that could not create keys at all, and the only symptom was "cannot
+   * send" much later.
+   */
+  private async ensureKey(password: string): Promise<boolean> {
+    try {
+      await this.serverCrypto.ensureAccountKey(password);
+    } catch (err) {
+      console.error('Account key setup failed', err);
+    }
+    return this.serverCrypto.hasAccountKey();
+  }
+
+  async submitKeyPassword() {
+    if (!this.keyPassword || this.keySubmitting) return;
+    this.keySubmitting = true;
+    this.keyPromptError = '';
+
+    const ok = await this.ensureKey(this.keyPassword);
+    this.keySubmitting = false;
+
+    if (ok) {
+      this.keyPromptOpen = false;
+      this.keyPassword = '';
+      this.router.navigateByUrl(this.redirectUrl);
+      return;
+    }
+    // Wrong password and "the device cannot create keys" look the same from here,
+    // so the message says both rather than blaming the user for the second.
+    this.keyPromptError = 'Не удалось: пароль не подошёл или устройство не может создать ключ. Попробуйте ещё раз.';
+  }
+
+  /** Signing in is not conditional on the key; old messages must stay reachable. */
+  skipKeySetup() {
+    this.keyPromptOpen = false;
+    this.keyPassword = '';
+    this.router.navigateByUrl(this.redirectUrl);
   }
 
   onSubmit() {

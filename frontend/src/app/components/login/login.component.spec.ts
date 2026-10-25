@@ -210,4 +210,89 @@ describe('LoginComponent', () => {
       expect(mockApi.login).toHaveBeenCalledTimes(1);
     }));
   });
+
+  describe('key setup after Face ID', () => {
+    // Face ID hands over no password, and the account key is wrapped with it.
+    // Without this form a biometric user gets a session that cannot read anything
+    // new, and nothing on screen says why.
+
+    function makeKeyMock(validPassword: string | null) {
+      const state = { hasKey: false };
+      return {
+        state,
+        ensureAccountKey: jasmine.createSpy('ensureAccountKey').and.callFake(async (pw?: string) => {
+          if (pw && pw === validPassword) state.hasKey = true;
+        }),
+        hasAccountKey: () => state.hasKey,
+        getAccountPublicKey: () => null,
+      };
+    }
+
+    function initWithKeyMock(keyMock: any) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [LoginComponent],
+        providers: [
+          { provide: ServerCryptoService, useValue: keyMock },
+          { provide: ApiService, useValue: mockApi },
+          { provide: NotificationService, useValue: { requestPermission: jasmine.createSpy() } },
+          { provide: ActivatedRoute, useValue: { snapshot: { queryParams: {} }, paramMap: of(convertToParamMap({})), url: of([]) } },
+          { provide: Router, useValue: mockRouter },
+        ],
+      });
+      const f = TestBed.createComponent(LoginComponent);
+      return f.componentInstance;
+    }
+
+    it('opens the password form instead of navigating when the device has no key', async () => {
+      const keyMock = makeKeyMock('secret');
+      const component = initWithKeyMock(keyMock);
+
+      // No password was supplied, so nothing can be created - the form must open.
+      const ok = await (component as any).ensureKey('');
+
+      expect(ok).toBeFalse();
+      expect(keyMock.ensureAccountKey).toHaveBeenCalledWith('');
+    });
+
+    it('closes the form and navigates once the password produces a key', async () => {
+      const keyMock = makeKeyMock('secret');
+      const component = initWithKeyMock(keyMock);
+      mockRouter.navigateByUrl.calls.reset();
+
+      component.keyPromptOpen = true;
+      component.keyPassword = 'secret';
+      await component.submitKeyPassword();
+
+      expect(keyMock.ensureAccountKey).toHaveBeenCalledWith('secret');
+      expect(component.keyPromptOpen).withContext('the form must disappear').toBeFalse();
+      expect(mockRouter.navigateByUrl).toHaveBeenCalled();
+    });
+
+    it('keeps the form open and explains why when the password does not help', async () => {
+      const keyMock = makeKeyMock('secret');
+      const component = initWithKeyMock(keyMock);
+      mockRouter.navigateByUrl.calls.reset();
+
+      component.keyPromptOpen = true;
+      component.keyPassword = 'не тот';
+      await component.submitKeyPassword();
+
+      expect(component.keyPromptOpen).toBeTrue();
+      expect(component.keyPromptError).withContext('silence would look like a broken button').toContain('Не удалось');
+      expect(mockRouter.navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    it('lets the user in anyway: signing in does not depend on the key', async () => {
+      const keyMock = makeKeyMock('secret');
+      const component = initWithKeyMock(keyMock);
+      mockRouter.navigateByUrl.calls.reset();
+
+      component.keyPromptOpen = true;
+      component.skipKeySetup();
+
+      expect(component.keyPromptOpen).toBeFalse();
+      expect(mockRouter.navigateByUrl).withContext('old messages must stay reachable').toHaveBeenCalled();
+    });
+  });
 });
