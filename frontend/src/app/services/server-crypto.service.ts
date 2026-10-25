@@ -4,14 +4,17 @@ import { HttpClient } from '@angular/common/http';
 /**
  * Pinned fingerprint of the server's X25519 key: base64(SHA-256(raw 32 bytes)).
  *
- * Filled from `GET /api/crypto/server-key` on the deployment that owns the key -
- * the server generates its pair on first start, so this value cannot be known
- * before that. Empty means "not configured", and the service refuses to seal or
- * open rather than trusting whatever arrived on the channel. An empty pin that
- * silently behaved like a match would be worse than no pin at all: it would look
- * like protection.
+ * Taken from `GET /api/crypto/server-key` on the deployment that owns the key -
+ * the server generates its pair on first start, so this value cannot exist
+ * before that. Filled 2026-10-25 for the home server.
+ *
+ * Empty means "not configured": the service then refuses to seal or open rather
+ * than trusting whatever arrived on the channel. An empty pin that silently
+ * behaved like a match would be worse than no pin at all - it would look like
+ * protection. Changing this value requires rebuilding the client, which is the
+ * trade-off the root/leaf scheme in v1.11.0 exists to remove.
  */
-export const PINNED_SERVER_KEY_FINGERPRINT = '';
+export const PINNED_SERVER_KEY_FINGERPRINT = 'Q5hTjJTYTZLiiyleuHyXxL72J4U5nBdMtqzma1uNUsg=';
 
 /** Wire format shared with `backend/messagecrypto`. Field names are load-bearing. */
 export interface ServerEnvelope {
