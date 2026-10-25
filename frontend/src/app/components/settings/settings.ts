@@ -362,6 +362,10 @@ import * as QRCode from 'qrcode';
             class="btn-secondary" style="width:100%;padding:12px 20px;">
             Создать фразу восстановления
           </button>
+          <a href="/device-auth?recover=1" class="btn-secondary"
+            style="display:block;width:100%;padding:12px 20px;margin-top:8px;text-align:center;text-decoration:none;">
+            Восстановить ключ на этом устройстве
+          </a>
           @if (recoveryPhrase) {
             <div style="margin-top:8px;padding:10px;border-radius:8px;border:1px solid var(--accent);background:var(--bg-surface);font-family:monospace;font-size:13px;color:var(--text-primary);word-break:break-all;">
               {{ recoveryPhrase }}

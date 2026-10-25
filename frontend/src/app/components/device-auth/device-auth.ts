@@ -106,7 +106,10 @@ export class DeviceAuthComponent {
   deviceName: string = '';
   private authRequestId: number = 0;
   private pollSub?: Subscription;
-  showRecovery = false;
+  // Open by default: this page is now reachable from the profile for key
+  // recovery, and with no pending device request the form was the only thing it
+  // could show - rendering nothing looked like a broken page.
+  showRecovery = true;
   recoveryMethod: 'password' | 'phrase' = 'password';
   recoveryInput = '';
   recoveryError = '';
