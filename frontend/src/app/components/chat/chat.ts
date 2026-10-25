@@ -1069,7 +1069,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       pollMultiple: this.pollMultiple,
     };
 
-    const prep = await this.sends.prepare(req);
+    // try/catch, not a bare await: `sending` was set above, so one thrown error
+    // left it true for good and every later press returned on the first line -
+    // no request, no message, no clue. Silence on "отправить" is the worst
+    // outcome there is, and a reload was the only way out.
+    let prep: Awaited<ReturnType<ChatSendService['prepare']>>;
+    try {
+      prep = await this.sends.prepare(req);
+    } catch (err) {
+      this.sending = false;
+      console.error('prepare failed', err);
+      this.sendError.set(
+        'Не удалось подготовить сообщение: ' + (err instanceof Error ? err.message : String(err)),
+      );
+      return;
+    }
     if (!prep.ok) {
       this.sending = false;
       if (prep.reason === 'no-group-key') {
