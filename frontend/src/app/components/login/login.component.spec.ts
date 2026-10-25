@@ -225,6 +225,9 @@ describe('LoginComponent', () => {
         }),
         hasAccountKey: () => state.hasKey,
         getAccountPublicKey: () => null,
+        // These specs exist because the layer is ON: that is the only case where
+        // the password form has a purpose.
+        isEnabled: () => true,
       };
     }
 
@@ -243,6 +246,18 @@ describe('LoginComponent', () => {
       const f = TestBed.createComponent(LoginComponent);
       return f.componentInstance;
     }
+
+    it('does not ask for a password when the layer is switched off', async () => {
+      // Prod state on 2026-10-25: no pinned server key, so nothing needs an
+      // account key. Face ID has to go straight in.
+      const keyMock = { ...makeKeyMock('secret'), isEnabled: () => false };
+      const component = initWithKeyMock(keyMock);
+
+      const ok = await (component as any).ensureKey('');
+
+      expect(ok).toBeTrue();
+      expect(keyMock.ensureAccountKey).withContext('nothing to set up').not.toHaveBeenCalled();
+    });
 
     it('opens the password form instead of navigating when the device has no key', async () => {
       const keyMock = makeKeyMock('secret');

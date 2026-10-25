@@ -3,6 +3,7 @@ import { RouterOutlet, Router } from '@angular/router';
 import { SwUpdate, SwPush } from '@angular/service-worker';
 import { interval, fromEvent, merge, filter, tap, map, switchMap, exhaustMap, timeout, catchError, of, Subscription, firstValueFrom } from 'rxjs';
 import { ApiService } from './services/api.service';
+import { shouldRedirectToLogin } from './auth-redirect';
 import { PwaInstallService } from './services/pwa-install.service';
 import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
@@ -330,6 +331,17 @@ export class App implements OnInit, OnDestroy {
   @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
+    // A session can be lost while the app is open - an expired token whose
+    // refresh is refused, or a logout from another tab. Nothing sent the user
+    // anywhere, so the app stayed on the current page with no user: the profile
+    // showed nobody signed in and the mobile bottom bar was gone. Reads as a
+    // broken app, not as being signed out.
+    effect(() => {
+      if (shouldRedirectToLogin(!!this.#api.currentUser(), this.#router.url)) {
+        this.#router.navigateByUrl('/login');
+      }
+    });
+
     // On a reload there is no password in memory, so this can only pick up a key
     // this device already stored. Creating one happens at sign-in, where the
     // password is at hand; doing it here would need a prompt out of nowhere.

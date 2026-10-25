@@ -186,6 +186,11 @@ export class LoginComponent implements OnInit {
    * send" much later.
    */
   private async ensureKey(password: string): Promise<boolean> {
+    // The client-to-server layer is off in this build (no pinned server key), so
+    // there is no account key to create or unlock. Asking for the account
+    // password to set up a layer that nothing uses is a question with no
+    // consequence - and it stood between Face ID and the app.
+    if (!this.serverCrypto.isEnabled()) return true;
     try {
       await this.serverCrypto.ensureAccountKey(password);
     } catch (err) {

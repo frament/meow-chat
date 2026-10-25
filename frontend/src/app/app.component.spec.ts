@@ -111,9 +111,22 @@ describe('App', () => {
         { provide: SwUpdate, useValue: mockSwUpdate },
         { provide: SwPush, useValue: mockSwPush },
         { provide: PwaInstallService },
-        { provide: Router, useValue: { events: routerEvents, url: '/feed', navigate: jasmine.createSpy() } },
+        { provide: Router, useValue: { events: routerEvents, url: '/feed', navigate: jasmine.createSpy(), navigateByUrl: jasmine.createSpy() } },
       ],
     }).compileComponents();
+  });
+
+  it('sends a session-less app to the login page', () => {
+    // The prod report: the app opened with no bottom bar and nobody signed in on
+    // the profile page, and stayed there. currentUser is null in this spec, so
+    // the redirect is exactly what should happen on creation.
+    const router = TestBed.inject(Router);
+    (router.navigateByUrl as jasmine.Spy).calls.reset();
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
   });
 
   it('creates the component', () => {
