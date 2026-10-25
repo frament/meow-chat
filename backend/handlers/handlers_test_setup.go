@@ -247,6 +247,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Delete("/friend-requests/:id", AuthRequired, h.RejectFriendRequest)
 
 	app.Post("/polls/:id/vote", AuthRequired, h.CastVote)
+	app.Post("/crypto/receive-key", AuthRequired, h.RegisterReceiveKey)
 	app.Get("/polls/:id/votes", AuthRequired, h.GetPollVotes)
 
 	// Push routes
@@ -263,6 +264,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Post("/logout", AuthRequired, h.Logout)
 	app.Post("/offline", AuthRequired, h.GoOffline)
 	app.Get("/version", h.GetVersion)
+	app.Get("/crypto/server-key", h.GetServerKey)
 	app.Put("/keys", AuthRequired, h.PutKey)
 	app.Get("/keys/:userId", AuthRequired, h.GetKey)
 

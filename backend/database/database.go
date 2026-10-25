@@ -114,6 +114,13 @@ func InitDB() {
 
 	loadOrGenerateServerKey()
 
+	// Generated on first start and kept next to the database: losing it costs
+	// reissuing a key, not history, so it does not carry the at-rest key's
+	// requirements.
+	if err := LoadOrGenerateServerKeyPair(); err != nil {
+		log.Fatal("Server X25519 key pair:", err)
+	}
+
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
 	if err != nil {
@@ -438,6 +445,20 @@ func ApplySchema(db *sql.DB) error {
 			device_id         TEXT NOT NULL UNIQUE,
 			last_seen         DATETIME,
 			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		// Receive keys are separate from user_devices on purpose. The column above
+		// holds an ECDH P-256 key that the old E2EE messages still need until 2.0.0,
+		// and reusing it would mean one column whose meaning depends on a date.
+		// A device gets its own X25519 pair here, which is also the only shape that
+		// works with `extractable: false`: such a key cannot be exported, so it
+		// cannot be shared with the user's other devices.
+		`CREATE TABLE IF NOT EXISTS device_receive_keys (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_device_id INTEGER NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+			kid            TEXT NOT NULL,
+			public_key     TEXT NOT NULL,
+			created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+			retired_at     DATETIME
 		)`,
 		`CREATE TABLE IF NOT EXISTS device_auth_requests (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,

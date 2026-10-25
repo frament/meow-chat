@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-		"path/filepath"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -188,9 +188,15 @@ func main() {
 
 	api.Get("/ws-health", h.WSHealth)
 
+	// Public on purpose: a public key, needed before anything else can be trusted.
+	// The pin, not the token, is what catches a substituted key.
+	api.Get("/crypto/server-key", h.GetServerKey)
+
 	api.Use(handlers.AuthRequired)
 
 	api.Post("/offline", h.GoOffline)
+
+	api.Post("/crypto/receive-key", h.RegisterReceiveKey)
 
 	dev := api.Group("/devices")
 	dev.Post("/register", h.RegisterDevice)
