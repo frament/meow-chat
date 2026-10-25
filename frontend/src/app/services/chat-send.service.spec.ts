@@ -182,6 +182,18 @@ describe('ChatSendService', () => {
       expect(crypto['encrypt']).not.toHaveBeenCalled();
     });
 
+    it('does not seal a group text: group delivery has no envelope field', async () => {
+      // Sealing here would send an empty body - the message looks sent and
+      // carries nothing, which is worse than staying on the old scheme.
+      const seal = jasmine.createSpy('sealForServer').and.resolveTo({ kid: 'srv-1', envelope: { v: 1 } });
+      const service = withLayer(seal);
+
+      const result = await service.prepare(req({ target: { groupId: 5 } }));
+
+      expect(seal).not.toHaveBeenCalled();
+      expect(result.ok).toBeTrue();
+    });
+
     it('does not seal a captioned image: the server only accepts envelopes for text', async () => {
       // Sealing here would make the request fail outright - the shape is not
       // supported, and pretending otherwise loses the whole message.

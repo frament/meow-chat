@@ -86,7 +86,10 @@ export class ChatSendService {
     // image would otherwise be sealed while the file itself travels as before,
     // and the request is rejected - a whole message lost for a half-encrypted
     // shape nobody designed.
-    if (this.serverCrypto.isEnabled() && req.msgType === 'text') {
+    // Direct messages only, for now. Group delivery has no envelope field, so
+    // sealing a group text would send an empty body - the worst possible
+    // outcome: the message looks sent and carries nothing.
+    if (this.serverCrypto.isEnabled() && req.msgType === 'text' && !!req.target.userId) {
       const sealed = await this.serverCrypto.sealForServer(req.content);
       if (!sealed) {
         return { ok: false, reason: 'no-server-key' };
