@@ -154,11 +154,16 @@ describe('ChatSendService', () => {
   });
 
   describe('when the server scheme is enabled', () => {
-    function withLayer(sealForServer: () => Promise<any>): ChatSendService {
+    function withLayer(sealForServer: () => Promise<any>, hasKey = true): ChatSendService {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
-          { provide: ServerCryptoService, useValue: { isEnabled: () => true, sealForServer } },
+          { provide: ServerCryptoService, useValue: {
+              isEnabled: () => true,
+              sealForServer,
+              ensureAccountKey: async () => undefined,
+              hasAccountKey: () => hasKey,
+            } },
           { provide: ApiService, useValue: api },
           { provide: CryptoService, useValue: crypto },
         ],
@@ -180,6 +185,21 @@ describe('ChatSendService', () => {
       expect(result.prepared.encryptedContent).withContext('the old scheme must not run as well').toBeUndefined();
       expect(JSON.parse(result.prepared.serverEnvelope!)).toEqual({ v: 1, kid: 'srv-1' } as any);
       expect(crypto['encrypt']).not.toHaveBeenCalled();
+    });
+
+    it('refuses to send when this device has no account key', async () => {
+      // Sealing only needs the server's public key, so without this guard a
+      // session that never went through sign-in produces a message nobody can
+      // read - not the sender, not the recipient.
+      const seal = jasmine.createSpy('sealForServer').and.resolveTo({ kid: 'srv-1', envelope: { v: 1 } });
+      const service = withLayer(seal, false);
+
+      const result = await service.prepare(req());
+
+      expect(result.ok).toBeFalse();
+      if (result.ok) return;
+      expect(result.reason).toBe('no-account-key');
+      expect(seal).withContext('nothing may be sealed without a key to read it back').not.toHaveBeenCalled();
     });
 
     it('does not seal a group text: group delivery has no envelope field', async () => {

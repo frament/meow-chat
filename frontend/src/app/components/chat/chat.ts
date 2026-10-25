@@ -1078,6 +1078,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.pendingGroupSend = { content: rawContent, type };
         this.api.requestGroupKey(req.target.groupId!).subscribe({ error: () => {} });
         this.sendError.set('Нет ключа чата. Запросили у участников — отправим автоматически…');
+      } else if (prep.reason === 'no-account-key') {
+        // The password is only in hand at sign-in, so there is no way to create
+        // the key from here. Saying what to do beats "encryption failed".
+        this.sendError.set('Шифрование включилось недавно. Выйдите и войдите снова — после входа ключ создастся, и сообщение отправится.');
       } else {
         this.sendError.set('Не удалось зашифровать: у собеседника нет ключа шифрования');
       }

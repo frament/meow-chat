@@ -40,7 +40,7 @@ export interface PreparedSend {
 
 export type PrepareResult =
   | { ok: true; prepared: PreparedSend }
-  | { ok: false; reason: 'no-peer-key' | 'no-group-key' | 'no-server-key' };
+  | { ok: false; reason: 'no-peer-key' | 'no-group-key' | 'no-server-key' | 'no-account-key' };
 
 export type DeliveryEvent =
   | { type: 'progress'; percent: number }
@@ -90,6 +90,16 @@ export class ChatSendService {
     // sealing a group text would send an empty body - the worst possible
     // outcome: the message looks sent and carries nothing.
     if (this.serverCrypto.isEnabled() && req.msgType === 'text' && !!req.target.userId) {
+      // Sealing needs only the server's public key, so without this check a
+      // session that never went through sign-in would happily produce a message
+      // it cannot read back - and neither could the recipient. The account key
+      // is created at sign-in, where the password is at hand; the only honest
+      // answer here is to send nothing.
+      await this.serverCrypto.ensureAccountKey();
+      if (!this.serverCrypto.hasAccountKey()) {
+        return { ok: false, reason: 'no-account-key' };
+      }
+
       const sealed = await this.serverCrypto.sealForServer(req.content);
       if (!sealed) {
         return { ok: false, reason: 'no-server-key' };
