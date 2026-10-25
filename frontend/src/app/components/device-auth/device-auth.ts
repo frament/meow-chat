@@ -13,6 +13,27 @@ interface IncomingRequest {
   device_id?: string;
 }
 
+/**
+ * Where to land after a successful key recovery. reload() re-opens the current
+ * address, and ?recover=1 is exactly what opens the form, so it has to go or the
+ * panel returns over the freshly decrypted thread. /device-auth without the
+ * param is an empty route - a form with nothing behind it - so that one goes to
+ * the chat.
+ *
+ * Pure and exported: the URL is the whole problem here, and a branch that
+ * returns early before this becomes untestable.
+ *
+ * Returns null when there is nothing to change.
+ */
+export function recoveryLandingUrl(href: string): string | null {
+  const url = new URL(href);
+  if (url.searchParams.get('recover') !== '1') return null;
+  url.searchParams.delete('recover');
+  if (url.pathname.startsWith('/device-auth')) url.pathname = '/chat';
+  const query = url.searchParams.toString();
+  return url.pathname + (query ? `?${query}` : '');
+}
+
 @Component({
   selector: 'app-device-auth',
   standalone: true,
@@ -132,6 +153,22 @@ export class DeviceAuthComponent implements OnInit {
     // stays closed.
     if (this.#route?.snapshot?.queryParamMap?.get('recover') === '1') {
       this.showRecovery = true;
+    }
+  }
+
+  /**
+   * Drop ?recover=1 before the reload that follows a successful recovery.
+   * reload() re-opens the current address, and that query param is exactly what
+   * opens the form - so without this the panel came back right after success,
+   * the same way the old "open by default" bug did. On /device-auth the page
+   * would then be a form over an empty route, so it lands on the chat instead.
+   */
+  #stripRecoveryParam() {
+    try {
+      const next = recoveryLandingUrl(window.location.href);
+      if (next) history.replaceState(null, '', next);
+    } catch {
+      // Never fail a successful recovery over URL cleanup.
     }
   }
 
@@ -280,6 +317,7 @@ export class DeviceAuthComponent implements OnInit {
           this.showRecovery = false;
           this.recoveryError = '';
           this.status.set('approved');
+          this.#stripRecoveryParam();
           this.#reload.reload();
         } catch (err) {
           console.error('Key recovery failed after the server returned a key', err);

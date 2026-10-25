@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { DeviceAuthComponent } from './device-auth';
+import { DeviceAuthComponent, recoveryLandingUrl } from './device-auth';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { AppReloadService } from '../../services/app-reload.service';
@@ -192,5 +192,28 @@ describe('DeviceAuthComponent recovery entry point', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.showRecovery).toBeTrue();
+  });
+});
+
+describe('recoveryLandingUrl', () => {
+  // The reload after a successful recovery re-opens the current address, so a
+  // surviving ?recover=1 brings the form back over the decrypted thread - the
+  // original complaint, one level down.
+  it('drops the param and leaves the chat where it is', () => {
+    expect(recoveryLandingUrl('https://chat.example/chat/2?recover=1')).toBe('/chat/2');
+  });
+
+  it('moves the bare recovery route to the chat', () => {
+    // /device-auth on its own is an empty route: a form with no page behind it.
+    expect(recoveryLandingUrl('https://chat.example/device-auth?recover=1')).toBe('/chat');
+  });
+
+  it('keeps the other query parameters', () => {
+    expect(recoveryLandingUrl('https://chat.example/chat/2?recover=1&tab=1')).toBe('/chat/2?tab=1');
+  });
+
+  it('does nothing without the param', () => {
+    expect(recoveryLandingUrl('https://chat.example/chat/2')).toBeNull();
+    expect(recoveryLandingUrl('https://chat.example/chat/2?recover=0')).toBeNull();
   });
 });
