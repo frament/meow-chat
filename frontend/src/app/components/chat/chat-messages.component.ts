@@ -47,6 +47,12 @@ export class ChatMessagesComponent {
     this.voteRequested.emit({ pollId, optionId });
   }
 
+  /** True when this bubble belongs to the reader. Used for contrast decisions
+   *  inside the bubble, where the incoming palette does not apply. */
+  isOutgoing(item: unknown): boolean {
+    return (item as { from_user_id?: number })?.from_user_id === this.currentUserId;
+  }
+
   /** Total votes across a poll's options, for the percentage bars. */
   computeTotalVotes(poll: Poll | null | undefined): number {
     return this.polls.computeTotalVotes(poll);

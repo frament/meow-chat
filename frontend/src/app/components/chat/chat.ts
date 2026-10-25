@@ -655,18 +655,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (err) => this.noteLoadFailure(err?.status),
       next: async (msgs: Message[]) => {
         this.noteLoadSuccess();
-        const existingIds = new Set(this.messages.map(m => m.id));
-        let added = 0;
-        for (const msg of msgs) {
-          if (existingIds.has(msg.id)) continue;
-          this.seenMessageIds.add(msg.id);
-          this.messages.push(await this.decryptGroupMsg(msg, group.id));
-          added++;
+        // Decrypt only what we do not already have, then let the shared merge
+        // sort and place it. This used to be a near-copy of the direct-chat
+        // refetch, and the copies could drift.
+        const known = new Set(this.messages.map(m => m.id));
+        const fresh = msgs.filter(m => !known.has(m.id));
+        for (let i = 0; i < fresh.length; i++) {
+          fresh[i] = await this.decryptGroupMsg(fresh[i], group.id);
         }
-        if (added > 0) {
-          this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        }
-        this.messages = [...this.messages];
+        const merged = this.thread.mergeMessages(this.messages, fresh);
+        for (const id of merged.addedIds) this.seenMessageIds.add(id);
+        this.messages = merged.messages;
         if (!document.hidden) {
           this.api.markGroupRead(group.id).subscribe({ error: () => {} });
           this.api.clearGroupUnread(group.id);
@@ -1313,15 +1312,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
       }
       // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
-      const existingIds = new Set(this.messages.map(m => m.id));
-      for (const msg of msgs) {
-        if (!existingIds.has(msg.id)) {
-          this.seenMessageIds.add(msg.id);
-          this.messages.push(msg);
-        }
-      }
-      this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      this.messages = [...this.messages];
+      const merged = this.thread.mergeMessages(this.messages, msgs);
+      for (const id of merged.addedIds) this.seenMessageIds.add(id);
+      this.messages = merged.messages;
       if (boundary) {
         const idx = this.messages.findIndex(m => new Date(m.created_at) >= new Date(boundary));
         this.unreadDividerIdx = idx >= 0 ? idx : -1;

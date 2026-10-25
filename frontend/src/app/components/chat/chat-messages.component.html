@@ -24,7 +24,8 @@
                           <div class="flex flex-col gap-1.5 mt-1">
                             @for (opt of poll.options; track opt.id) {
                             <button (click)="castVote(poll.id, opt.id)"
-                              [style.borderColor]="opt.voted ? 'var(--accent)' : 'var(--divider)'"
+                              [style.borderColor]="opt.voted ? 'var(--accent)' : (isOutgoing(item) ? 'rgba(255,255,255,.45)' : 'var(--border-default)')"
+
                               [style.background]="opt.voted ? 'var(--accent-light)' : 'transparent'"
                               class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs w-full text-left transition-all"
                               style="border:1px solid;cursor:pointer;">

@@ -91,7 +91,7 @@
                   </div>
                 }
               </div>
-              <textarea #composer rows="1" [(ngModel)]="messageContent" (keydown)="onComposerKeydown($event)"
+              <textarea #composer rows="1" class="chat-composer-input" [(ngModel)]="messageContent" (keydown)="onComposerKeydown($event)"
               (input)="autoGrowComposer($event)" (paste)="onPaste($event)"
               style="flex:1;min-height:36px;max-height:140px;box-sizing:border-box;resize:none;overflow-y:auto;field-sizing:content;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'"></textarea>

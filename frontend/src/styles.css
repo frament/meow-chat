@@ -237,6 +237,20 @@ img {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-light);
 }
+
+/* The composer is not a form field: it is a single-line input row between two
+   36px buttons. Inheriting the form padding (12px 16px) left 12px of content in
+   a 36px box, so its text sat off-centre against them, and it picked up the
+   three-pixel focus ring meant for forms. */
+.card textarea.chat-composer-input {
+  padding: 8px 12px;
+  width: auto;
+  line-height: 20px;
+}
+.card textarea.chat-composer-input:focus {
+  border-color: var(--border-default);
+  box-shadow: none;
+}
 .card textarea::placeholder {
   color: var(--text-tertiary);
 }
