@@ -255,6 +255,34 @@ describe('LoginComponent', () => {
       expect(keyMock.ensureAccountKey).toHaveBeenCalledWith('');
     });
 
+    it('opens the password form when Face ID signs in a device with no key', async () => {
+      // The only path that matters: biometry hands over no password, so the key
+      // has to be asked for. Everything below the form is useless if this does
+      // not trigger.
+      const keyMock = makeKeyMock('secret');
+      const component = initWithKeyMock(keyMock);
+
+      (mockApi as any).webauthnBeginLogin = jasmine
+        .createSpy('webauthnBeginLogin')
+        .and.returnValue(of({ session_id: 's1', options: { publicKey: { challenge: 'AAAA' } } }));
+      (mockApi as any).webauthnFinishLogin = jasmine
+        .createSpy('webauthnFinishLogin')
+        .and.returnValue(of({ access_token: 'at', refresh_token: 'rt' }));
+
+      (globalThis as any).PublicKeyCredential = class {};
+      const credential = { toJSON: () => ({ id: 'cred' }) };
+      spyOn(navigator.credentials, 'get').and.resolveTo(credential as any);
+      mockRouter.navigateByUrl.calls.reset();
+
+      await component.biometricLogin();
+      // The finish handler is async inside a subscribe; whenStable does not wait
+      // for a promise the callback never returned.
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(component.keyPromptOpen).withContext('the form must open rather than let them in').toBeTrue();
+      expect(mockRouter.navigateByUrl).withContext('navigating would hide the missing key').not.toHaveBeenCalled();
+    });
+
     it('closes the form and navigates once the password produces a key', async () => {
       const keyMock = makeKeyMock('secret');
       const component = initWithKeyMock(keyMock);
