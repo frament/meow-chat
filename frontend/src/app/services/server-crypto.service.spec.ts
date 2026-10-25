@@ -176,4 +176,5 @@ describe('ServerCryptoService', () => {
 
     expect(opened[2].content).withContext('messages of the old scheme pass through untouched').toBe('старое сообщение');
   });
+
 });

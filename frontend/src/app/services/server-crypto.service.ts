@@ -113,14 +113,10 @@ export class ServerCryptoService {
   async ensureAccountKey(password?: string): Promise<void> {
     if (this.accountPrivate) return;
 
-    const stored = await this.readStored();
-    if (stored) {
-      this.accountPrivate = await this.importPrivate(stored.priv);
-      this.accountPublicB64 = b64(stored.pub);
-      return;
-    }
-
-    // No local key. Another device may already have one for this account.
+    // Ask the server even when a local key exists. "I have a key" and "this is
+    // the account's key" are different statements: after an admin reset the
+    // password, the local copy is the one the server no longer has, and using it
+    // means wrapping to nobody.
     const existing = await this.http
       .get<{ public_key: string; wrapped_private_key: string; kdf_salt: string }>(
         '/api/crypto/receive-key'
@@ -128,27 +124,31 @@ export class ServerCryptoService {
       .toPromise()
       .catch(() => null);
 
-    if (existing?.wrapped_private_key && password) {
-      const raw = await this.unwrapPrivate(existing.wrapped_private_key, existing.kdf_salt, password);
-      if (raw) {
-        const pub = b64d(existing.public_key);
-        await this.writeStored(raw, pub);
-        this.accountPrivate = await this.importPrivate(raw);
+    const stored = await this.readStored();
+
+    if (existing?.public_key) {
+      if (stored && b64(stored.pub) === existing.public_key) {
+        this.accountPrivate = await this.importPrivate(stored.priv);
         this.accountPublicB64 = existing.public_key;
         return;
       }
-      // A wrong password here is not fatal for the session: the user can still
-      // read everything the old scheme covers.
-      return;
-    }
-    if (existing?.public_key) {
-      // The account has a key but this device cannot open it without the
-      // password. Do not create a second one - the server would refuse it, and
-      // trying would look like a bug.
+
+      // The device holds a different key than the account does. Unwrap the
+      // account's own copy with the password and replace what is stored, rather
+      // than keeping a key that cannot receive anything.
+      if (!password) return;
+      const raw = await this.unwrapPrivate(existing.wrapped_private_key, existing.kdf_salt, password);
+      if (!raw) return; // wrong password: leave the device as it was
+      await this.writeStored(raw, b64d(existing.public_key));
+      this.accountPrivate = await this.importPrivate(raw);
+      this.accountPublicB64 = existing.public_key;
       return;
     }
 
-    if (!password) return; // first setup needs the password to wrap the key
+    // No key on the server at all: first setup, or the previous one retired by an
+    // admin password reset. Either way a key has to be created, and the local
+    // copy - if any - is exactly what the reset invalidated.
+    if (!password) return;
 
     const keyPair = (await crypto.subtle.generateKey({ name: 'X25519' } as any, true, [
       'deriveBits',
@@ -165,8 +165,7 @@ export class ServerCryptoService {
         wrapped_private_key: wrapped.wrapped,
         kdf_salt: wrapped.salt,
       })
-      .toPromise()
-      .catch(() => null);
+      .toPromise();
 
     await this.writeStored(rawPrivate, b64d(publicB64));
     this.accountPrivate = keyPair.privateKey;
