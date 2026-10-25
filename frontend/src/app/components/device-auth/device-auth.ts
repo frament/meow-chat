@@ -1,4 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { interval, Subscription } from 'rxjs';
 import { ApiService } from '../../services/api.service';
@@ -98,18 +99,23 @@ interface IncomingRequest {
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
 })
-export class DeviceAuthComponent {
+export class DeviceAuthComponent implements OnInit {
   readonly #reload = inject(AppReloadService);
+  // Optional: this component is embedded in <app-root> as well as mounted by the
+  // /device-auth route, and the specs create it without a Router. Reading the
+  // query string must not turn into a NullInjectorError in either case.
+  readonly #route = inject(ActivatedRoute, { optional: true });
 
   readonly status = signal<'idle' | 'waiting' | 'approved' | 'failed'>('idle');
   readonly incomingRequest = signal<IncomingRequest | null>(null);
   deviceName: string = '';
   private authRequestId: number = 0;
   private pollSub?: Subscription;
-  // Open by default: this page is now reachable from the profile for key
-  // recovery, and with no pending device request the form was the only thing it
-  // could show - rendering nothing looked like a broken page.
-  showRecovery = true;
+  // Closed by default. It used to be true so that /device-auth (reachable from
+  // the profile) was not a blank page - but a successful recovery ends with
+  // reload(), so the panel came back every single time and hid whether the key
+  // had actually been applied. The profile link carries ?recover=1 instead.
+  showRecovery = false;
   recoveryMethod: 'password' | 'phrase' = 'password';
   recoveryInput = '';
   recoveryError = '';
@@ -119,6 +125,15 @@ export class DeviceAuthComponent {
     private api: ApiService,
     private crypto: CryptoService,
   ) {}
+
+  ngOnInit() {
+    // Only the explicit entry point opens the form: /device-auth?recover=1, the
+    // link in the profile. Everything else (sign-in, a reload after recovery)
+    // stays closed.
+    if (this.#route?.snapshot?.queryParamMap?.get('recover') === '1') {
+      this.showRecovery = true;
+    }
+  }
 
   async startNewDeviceFlow() {
     const platform = (navigator as any).userAgentData?.platform || navigator.platform || 'Устройство';

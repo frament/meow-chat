@@ -3,6 +3,7 @@ import { DeviceAuthComponent } from './device-auth';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { AppReloadService } from '../../services/app-reload.service';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 describe('DeviceAuthComponent', () => {
@@ -55,6 +56,13 @@ describe('DeviceAuthComponent', () => {
 
   it('creates the component', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('keeps the recovery form closed by default', () => {
+    // It used to be open by default, and because a successful recovery ends with
+    // reload() the panel returned after every attempt - hiding whether the key
+    // had been applied at all. That is the bug this asserts against.
+    expect(component.showRecovery).toBeFalse();
   });
 
   it('renders approval dialog when incomingRequest is set', () => {
@@ -155,4 +163,34 @@ describe('DeviceAuthComponent', () => {
     expect(mockCrypto.importIdentityKey).toHaveBeenCalled();
     expect(mockReload.reload).toHaveBeenCalled();
   }));
+});
+
+describe('DeviceAuthComponent recovery entry point', () => {
+  const mockApi = {
+    recoverKeys: jasmine.createSpy().and.returnValue(of({ identity_key_jwk: '{}' })),
+    getAuthRequests: jasmine.createSpy().and.returnValue(of([])),
+  };
+  const mockCrypto = {
+    deviceId: 'dev-1',
+    hasIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
+    importIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve()),
+    syncPublicKey: jasmine.createSpy().and.returnValue(Promise.resolve()),
+  };
+
+  it('opens the form when the profile link asks for it with ?recover=1', async () => {
+    await TestBed.configureTestingModule({
+      imports: [DeviceAuthComponent],
+      providers: [
+        { provide: ApiService, useValue: mockApi },
+        { provide: CryptoService, useValue: mockCrypto },
+        { provide: AppReloadService, useValue: { reload: jasmine.createSpy('reload') } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ recover: '1' }) } } },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(DeviceAuthComponent);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.showRecovery).toBeTrue();
+  });
 });
