@@ -28,6 +28,35 @@ export interface ServerEnvelope {
   ciphertext: string;
 }
 
+/**
+ * What to do with the account key, given what is on the device and what the
+ * server has.
+ *
+ * Pure and total: three inputs, one answer, no side effects and no early exit
+ * anywhere else. This exists because the previous shape - "load the local key,
+ * return if found" - could silently skip asking the server, and that bug is
+ * impossible to write here: there is nowhere to return from.
+ */
+export type KeyDecision =
+  | { action: 'keep-local' }   // device and account agree
+  | { action: 'adopt-server' } // account has one, device holds a different one
+  | { action: 'create' }       // account has none: first setup, or after a reset
+  | { action: 'none' };        // cannot proceed without the password
+
+export function decideKeyAction(
+  localPublic: string | null,
+  serverPublic: string | null,
+  hasPassword: boolean
+): KeyDecision {
+  if (serverPublic === null) {
+    return hasPassword ? { action: 'create' } : { action: 'none' };
+  }
+  if (localPublic === serverPublic) {
+    return { action: 'keep-local' };
+  }
+  return hasPassword ? { action: 'adopt-server' } : { action: 'none' };
+}
+
 const WRAP_INFO = new TextEncoder().encode('meowchat/wrap/v1');
 const ENVELOPE_VERSION = 1;
 const DB_NAME = 'MeowChatServerCrypto';
@@ -113,30 +142,30 @@ export class ServerCryptoService {
   async ensureAccountKey(password?: string): Promise<void> {
     if (this.accountPrivate) return;
 
-    // Ask the server even when a local key exists. "I have a key" and "this is
-    // the account's key" are different statements: after an admin reset the
-    // password, the local copy is the one the server no longer has, and using it
-    // means wrapping to nobody.
     const existing = await this.http
       .get<{ public_key: string; wrapped_private_key: string; kdf_salt: string }>(
         '/api/crypto/receive-key'
       )
       .toPromise()
       .catch(() => null);
-
     const stored = await this.readStored();
 
-    if (existing?.public_key) {
-      if (stored && b64(stored.pub) === existing.public_key) {
-        this.accountPrivate = await this.importPrivate(stored.priv);
-        this.accountPublicB64 = existing.public_key;
-        return;
-      }
+    // One place decides; the branches below only carry the decision out. Asking
+    // the server happens before the decision, so it cannot be skipped by finding
+    // a local key first.
+    const decision = decideKeyAction(
+      stored ? b64(stored.pub) : null,
+      existing?.public_key ?? null,
+      !!password
+    );
 
-      // The device holds a different key than the account does. Unwrap the
-      // account's own copy with the password and replace what is stored, rather
-      // than keeping a key that cannot receive anything.
-      if (!password) return;
+    if (decision.action === 'keep-local' && stored) {
+      this.accountPrivate = await this.importPrivate(stored.priv);
+      this.accountPublicB64 = b64(stored.pub);
+      return;
+    }
+
+    if (decision.action === 'adopt-server' && existing && password) {
       const raw = await this.unwrapPrivate(existing.wrapped_private_key, existing.kdf_salt, password);
       if (!raw) return; // wrong password: leave the device as it was
       await this.writeStored(raw, b64d(existing.public_key));
@@ -145,31 +174,29 @@ export class ServerCryptoService {
       return;
     }
 
-    // No key on the server at all: first setup, or the previous one retired by an
-    // admin password reset. Either way a key has to be created, and the local
-    // copy - if any - is exactly what the reset invalidated.
-    if (!password) return;
+    if (decision.action === 'create' && password) {
+      const keyPair = (await crypto.subtle.generateKey({ name: 'X25519' } as any, true, [
+        'deriveBits',
+      ])) as CryptoKeyPair;
+      // PKCS#8, not raw: Chrome refuses to export an X25519 private key as 'raw',
+      // and the wrapped blob is exactly what another device imports later.
+      const rawPrivate = new Uint8Array(await crypto.subtle.exportKey('pkcs8', keyPair.privateKey));
+      const publicB64 = b64(new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey)));
+      const wrapped = await this.wrapPrivate(rawPrivate, password);
 
-    const keyPair = (await crypto.subtle.generateKey({ name: 'X25519' } as any, true, [
-      'deriveBits',
-    ])) as CryptoKeyPair;
-    // PKCS#8, not raw: Chrome refuses to export an X25519 private key as 'raw',
-    // and the wrapped blob is exactly what another device has to import later.
-    const rawPrivate = new Uint8Array(await crypto.subtle.exportKey('pkcs8', keyPair.privateKey));
-    const publicB64 = b64(new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey)));
-    const wrapped = await this.wrapPrivate(rawPrivate, password);
+      // Not swallowed: a refused registration used to look like success.
+      await this.http
+        .post('/api/crypto/receive-key', {
+          public_key: publicB64,
+          wrapped_private_key: wrapped.wrapped,
+          kdf_salt: wrapped.salt,
+        })
+        .toPromise();
 
-    await this.http
-      .post('/api/crypto/receive-key', {
-        public_key: publicB64,
-        wrapped_private_key: wrapped.wrapped,
-        kdf_salt: wrapped.salt,
-      })
-      .toPromise();
-
-    await this.writeStored(rawPrivate, b64d(publicB64));
-    this.accountPrivate = keyPair.privateKey;
-    this.accountPublicB64 = publicB64;
+      await this.writeStored(rawPrivate, b64d(publicB64));
+      this.accountPrivate = keyPair.privateKey;
+      this.accountPublicB64 = publicB64;
+    }
   }
 
   hasAccountKey(): boolean {

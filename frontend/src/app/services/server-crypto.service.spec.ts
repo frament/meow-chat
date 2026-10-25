@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
-import { ServerCryptoService, ServerEnvelope } from './server-crypto.service';
+import { ServerCryptoService, ServerEnvelope, decideKeyAction } from './server-crypto.service';
 
 function hexBytes(hex: string): Uint8Array {
   const out = new Uint8Array(hex.length / 2);
@@ -56,6 +56,27 @@ const GO_VECTOR = {
       'i33xe1ima0sJhzUq1aqJCOVVlneC5Hj34p5iCpaLhtTug1vrcMzd8KL1OqfNaE3tdpNulH9dR6GiJLUo3N2JeaQkdND3dolERcB61SbObLmd7FwVMWpookE9xJZhaKs0w+E=',
   } as ServerEnvelope,
 };
+
+describe('decideKeyAction', () => {
+  // The whole point of this function: the choice cannot be skipped. A previous
+  // shape returned as soon as a local key existed, never asking the server, and
+  // these cases are what makes that unreachable.
+  const cases: Array<[string, string | null, string | null, boolean, string]> = [
+    ['first setup', null, null, true, 'create'],
+    ['no key and no password', null, null, false, 'none'],
+    ['device and account agree', 'AA', 'AA', false, 'keep-local'],
+    ['device holds an old key', 'AA', 'BB', true, 'adopt-server'],
+    ['device holds an old key, no password', 'AA', 'BB', false, 'none'],
+    ['no local key, account has one', null, 'BB', true, 'adopt-server'],
+    ['no local key, account has one, no password', null, 'BB', false, 'none'],
+  ];
+
+  for (const [name, local, server, password, expected] of cases) {
+    it(name + ' -> ' + expected, () => {
+      expect(decideKeyAction(local, server, password).action).toBe(expected);
+    });
+  }
+});
 
 describe('ServerCryptoService', () => {
   it('opens an envelope produced by the Go implementation', async () => {
