@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"my-chat-backend/auth"
 	"my-chat-backend/database"
 	"my-chat-backend/federation"
+	"my-chat-backend/messagecrypto"
 	"my-chat-backend/models"
 
 	"github.com/gofiber/contrib/websocket"
@@ -1218,6 +1220,62 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		pushPreview = content
 	}
 
+	// New scheme: the sender wrapped the text to the server's public key, so the
+	// row can hold only what the at-rest key protects. The server opens exactly
+	// one envelope here and nothing else - it does not scan, guess or fall back,
+	// because a fallback to plaintext is the failure mode this whole layer exists
+	// to prevent.
+	cryptoScheme := "plain"
+	if encryptedContent != "" {
+		cryptoScheme = "e2ee"
+	}
+	serverEnvelope := ""
+	if vals, ok := form.Value["server_envelope"]; ok && len(vals) > 0 {
+		serverEnvelope = vals[0]
+	}
+	if serverEnvelope != "" {
+		if msgType != "text" {
+			// Polls, stickers and files have their own storage and their own
+			// questions about encryption. Half-encrypting one of those would be
+			// worse than leaving it for a later step.
+			return c.Status(400).JSON(fiber.Map{"error": "server_envelope is only supported for text messages"})
+		}
+
+		var env messagecrypto.Envelope
+		if err := json.Unmarshal([]byte(serverEnvelope), &env); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid server_envelope"})
+		}
+		if err := env.Validate(); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid server_envelope: " + err.Error()})
+		}
+		if env.Kid != database.KeyID(database.ServerX25519Public) {
+			// The sender used a key this server does not hold, or a stale one.
+			// Trying anyway would fail deeper inside the curve with a message that
+			// says nothing about the real cause.
+			return c.Status(409).JSON(fiber.Map{
+				"error": "Envelope is addressed to a different server key",
+				"kid":   database.KeyID(database.ServerX25519Public),
+			})
+		}
+
+		plaintext, err := messagecrypto.Open(&env, database.ServerX25519Private)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Cannot open server_envelope"})
+		}
+		blob, err := database.EncryptAtRest(plaintext)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to store message"})
+		}
+
+		encryptedContent = base64.StdEncoding.EncodeToString(blob)
+		encryptedIV = ""
+		content = ""
+		cryptoScheme = "server"
+		if pushPreview == "" {
+			pushPreview = string(plaintext)
+		}
+	}
+
 	pollOptions := form.Value["poll_options[]"]
 	pollMultiple := false
 	if vals, ok := form.Value["poll_multiple"]; ok && len(vals) > 0 && vals[0] == "true" {
@@ -1256,8 +1314,8 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url, env_content, env_iv, sender_device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL, envContent, envIV, senderDeviceID,
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type, encrypted_content, encrypted_iv, sticker_url, env_content, env_iv, sender_device_id, crypto_scheme) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		fromUserID, toUserID, content, msgType, encryptedContent, encryptedIV, stickerURL, envContent, envIV, senderDeviceID, cryptoScheme,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to send message"})
