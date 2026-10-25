@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testin
 
 import { signal } from '@angular/core';
 import { convertToParamMap, ActivatedRoute, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
@@ -295,5 +295,28 @@ describe('ChatComponent composer', () => {
     expect((fixture.nativeElement as HTMLElement).textContent)
       .withContext('the reason must be visible while composing a poll')
       .toContain('минимум два варианта');
+  });
+
+  /**
+   * The optimistic bubble must not survive a failed send: the user would see a
+   * message that never reached anyone, with no way to tell.
+   *
+   * A sticker is used on purpose - structural types skip encryption, so this
+   * exercises the send/rollback path without standing up the crypto mock.
+   */
+  it('rolls the optimistic bubble back when the send fails', async () => {
+    sendMessage.and.callThrough();
+    apiSendMessage.and.returnValue(throwError(() => new Error('offline')));
+
+    component.messageType = 'sticker';
+    component.messageContent = '42';
+    const before = component.messages.length;
+
+    await component.sendMessage();
+
+    expect(component.messages.length)
+      .withContext('the failed message must be removed, not left pending')
+      .toBe(before);
+    expect((component as unknown as { sending: boolean }).sending).toBeFalse();
   });
 });

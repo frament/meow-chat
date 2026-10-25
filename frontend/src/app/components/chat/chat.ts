@@ -19,6 +19,7 @@ import { ChatStorageService } from '../../services/chat-storage.service';
 import { ChatPollService } from '../../services/chat-poll.service';
 import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
 import { ChatAttachmentService } from '../../services/chat-attachment.service';
+import { ChatSendService, SendRequest } from '../../services/chat-send.service';
 
 @Component({
   selector: 'app-chat',
@@ -32,6 +33,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly polls = inject(ChatPollService);
   private readonly thread = inject(ChatThreadService);
   private readonly attachments = inject(ChatAttachmentService);
+  private readonly sends = inject(ChatSendService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -1048,155 +1050,82 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const files = [...this.selectedFiles];
     const previewUrls = [...this.previews];
 
-    let encryptedContent: string | undefined;
-    let encryptedIV: string | undefined;
-    let envelope: EnvelopePayload | undefined;
-    let groupEpoch = 0;
-    let pushPreview: string | undefined;
-    const content = rawContent;      // local/optimistic display (never sent when encrypted)
-    let wireContent = rawContent;    // what actually goes to the server
-
     this.sendError.set('');
 
-    // Only user-typed text is encrypted; structural types (sticker id, gif url,
-    // poll question) stay in `content` because the server/rendering needs them.
-    const encryptable = (type === 'text' || type === 'image') && !!rawContent;
-    if (encryptable) {
-      await this.crypto.init();
-      let result: { encrypted: string; iv: string } | null = null;
-      if (this.selectedUser) {
-        result = await this.crypto.encrypt(this.currentUserId, this.selectedUser.id, rawContent);
-      } else if (this.selectedGroup) {
-        groupEpoch = await this.crypto.getCurrentGroupEpoch(this.selectedGroup.id);
-        result = await this.crypto.encryptGroupMessage(this.selectedGroup.id, rawContent, groupEpoch);
+    const req: SendRequest = {
+      target: this.selectedGroup
+        ? { groupId: this.selectedGroup.id }
+        : { userId: this.selectedUser!.id },
+      currentUserId: this.currentUserId,
+      content: rawContent,
+      msgType: type,
+      files,
+      pollOptions: type === 'poll' ? this.pollOptions.filter(o => o.trim()) : undefined,
+      pollMultiple: this.pollMultiple,
+    };
+
+    const prep = await this.sends.prepare(req);
+    if (!prep.ok) {
+      this.sending = false;
+      if (prep.reason === 'no-group-key') {
+        // Ask the members for the key and retry by itself; this is not an error
+        // the user caused, so it must not look like a dead end.
+        this.pendingGroupSend = { content: rawContent, type };
+        this.api.requestGroupKey(req.target.groupId!).subscribe({ error: () => {} });
+        this.sendError.set('Нет ключа чата. Запросили у участников — отправим автоматически…');
+      } else {
+        this.sendError.set('Не удалось зашифровать: у собеседника нет ключа шифрования');
       }
-      if (!result) {
-        // Never fall back to plaintext: block and tell the user why.
-        this.sending = false;
-        if (this.selectedGroup) {
-          // Ask other members to share the group key; retry automatically when it
-          // arrives (see group_key_ready WS event).
-          this.pendingGroupSend = { content: rawContent, type };
-          this.api.requestGroupKey(this.selectedGroup.id).subscribe({ error: () => {} });
-          this.sendError.set('Нет ключа чата. Запросили у участников — отправим автоматически…');
-        } else {
-          this.sendError.set('Не удалось зашифровать: у собеседника нет ключа шифрования');
-        }
-        return;
-      }
-      encryptedContent = result.encrypted;
-      encryptedIV = result.iv;
-      pushPreview = rawContent.length > 120 ? rawContent.slice(0, 120) + '...' : rawContent;
-      wireContent = '';
-      // Per-device envelope (additive). Legacy fields above stay for old clients.
-      if (this.selectedUser) {
-        envelope = (await this.crypto.buildEnvelopes(rawContent, this.selectedUser.id)) ?? undefined;
-      }
+      return;
     }
 
-      if (this.selectedGroup) {
-        // Optimistic: add message immediately
-        const tempId = Date.now();
-        const optimisticMsg: Message = {
-        id: tempId,
-        from_user_id: this.currentUserId,
-        to_user_id: 0,
-        group_chat_id: this.selectedGroup.id,
-        content: content,
-        msg_type: type,
-        created_at: new Date().toISOString(),
-        from_user: this.api.currentUser()?.username ?? '',
-        pending: true,
-        images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
-        sticker_url: type === 'sticker' ? (this.pendingStickerURL ?? undefined) : undefined,
-      };
-      this.messages.push(optimisticMsg);
-      this.messages = [...this.messages];
-      this.messageContent = '';
-      this.pendingStickerURL = null;
-      this.resetComposerHeight();
-      this.clearFiles();
-      this.scrollToBottom();
-
-      const pollOpts = type === 'poll' ? this.pollOptions.filter(o => o.trim()) : undefined;
-      const hasFiles = files.length > 0;
-      if (hasFiles) {
-        this.uploading.set(true);
-        this.uploadProgress.set(0);
-        this.api.sendGroupMessageWithProgress(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, groupEpoch)
-          .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
-          .subscribe({
-            next: (event: any) => {
-              if (event.type === HttpEventType.UploadProgress) {
-                this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
-              } else if (event.type === HttpEventType.Response) {
-                this.uploading.set(false);
-                this.finalizeOptimistic(tempId, event.body);
-              }
-            },
-            error: () => {
-              this.uploading.set(false);
-              this.rollbackOptimistic(tempId);
-            },
-          });
-      } else {
-        this.api.sendGroupMessage(this.selectedGroup.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, groupEpoch).subscribe({
-          next: (res) => this.finalizeOptimistic(tempId, res),
-          error: () => this.rollbackOptimistic(tempId),
-        });
-      }
-    } else if (this.selectedUser) {
-      // Optimistic: add message immediately
-      const tempId = Date.now();
-      const optimisticMsg: Message = {
-        id: tempId,
-        from_user_id: this.currentUserId,
-        to_user_id: this.selectedUser.id,
-        content: content,
-        msg_type: type,
-        created_at: new Date().toISOString(),
-        from_user: this.api.currentUser()?.username ?? '',
-        pending: true,
-        images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
-        sticker_url: type === 'sticker' ? (this.pendingStickerURL ?? undefined) : undefined,
-      };
-      this.messages.push(optimisticMsg);
-      this.messages = [...this.messages];
+    // Optimistic bubble: the user sees the message before the server answers.
+    const tempId = Date.now();
+    const optimisticMsg: Message = {
+      id: tempId,
+      from_user_id: this.currentUserId,
+      to_user_id: this.selectedUser?.id ?? 0,
+      content: rawContent,
+      msg_type: type,
+      created_at: new Date().toISOString(),
+      from_user: this.api.currentUser()?.username ?? '',
+      pending: true,
+      images: type === 'image' ? previewUrls.map(p => ({ id: 0, image_url: p })) : undefined,
+      sticker_url: type === 'sticker' ? (this.pendingStickerURL ?? undefined) : undefined,
+    };
+    if (this.selectedGroup) {
+      optimisticMsg.group_chat_id = this.selectedGroup.id;
+    }
+    this.messages.push(optimisticMsg);
+    this.messages = [...this.messages];
+    if (this.selectedUser) {
       this.persistCache(this.selectedUser.id);
-      this.messageContent = '';
-      this.pendingStickerURL = null;
-      this.resetComposerHeight();
-      this.clearFiles();
-      this.scrollToBottom();
-
-      const pollOpts = type === 'poll' ? this.pollOptions.filter(o => o.trim()) : undefined;
-      const hasFiles = files.length > 0;
-      if (hasFiles) {
-        this.uploading.set(true);
-        this.uploadProgress.set(0);
-        this.api.sendMessageWithProgress(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, envelope)
-          .pipe(filter(e => e.type === HttpEventType.UploadProgress || e.type === HttpEventType.Response))
-          .subscribe({
-            next: (event: any) => {
-              if (event.type === HttpEventType.UploadProgress) {
-                this.uploadProgress.set(Math.round(100 * event.loaded / event.total));
-              } else if (event.type === HttpEventType.Response) {
-                this.uploading.set(false);
-                this.finalizeOptimistic(tempId, event.body);
-              }
-            },
-            error: () => {
-              this.uploading.set(false);
-              this.rollbackOptimistic(tempId);
-            },
-          });
-      } else {
-        this.api.sendMessage(this.selectedUser.id, wireContent, files, type, encryptedContent, encryptedIV, pushPreview, pollOpts, this.pollMultiple, envelope).subscribe({
-          next: (res) => this.finalizeOptimistic(tempId, res),
-          error: () => this.rollbackOptimistic(tempId),
-        });
-      }
     }
+    this.messageContent = '';
+    this.pendingStickerURL = null;
+    this.clearFiles();
+    this.scrollToBottom();
+
+    if (files.length > 0) {
+      this.uploading.set(true);
+      this.uploadProgress.set(0);
+    }
+
+    this.sends.deliver(req, prep.prepared).subscribe({
+      next: (event) => {
+        if (event.type === 'progress') {
+          this.uploadProgress.set(event.percent);
+          return;
+        }
+        this.uploading.set(false);
+        this.finalizeOptimistic(tempId, event.body);
+      },
+      error: () => {
+        this.uploading.set(false);
+        this.rollbackOptimistic(tempId);
+      },
+    });
+
     if (type === 'poll' || type === 'sticker') {
       this.pollOptions = ['', ''];
       this.pollMultiple = false;
