@@ -1066,7 +1066,8 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 				COALESCE(u.username, fu.username) as from_username,
 				COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), m.server_id,
 				COALESCE(m.sticker_url, ''), COALESCE(m.is_read, 0),
-				COALESCE(m.env_content, ''), COALESCE(m.env_iv, ''), COALESCE(m.sender_device_id, '')
+				COALESCE(m.env_content, ''), COALESCE(m.env_iv, ''), COALESCE(m.sender_device_id, ''),
+				COALESCE(m.crypto_scheme, 'plain')
 			FROM messages m
 			LEFT JOIN users u ON m.server_id IS NULL AND m.from_user_id = u.id
 			LEFT JOIN federation_users fu ON m.server_id IS NOT NULL AND m.from_user_id = fu.remote_id AND m.server_id = fu.server_id
@@ -1085,7 +1086,7 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 	for rows.Next() {
 		var m models.Message
 		var serverID *int64
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead, &m.EnvContent, &m.EnvIV, &m.SenderDeviceID); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.ToUserID, &m.Content, &m.Type, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &serverID, &m.StickerURL, &m.IsRead, &m.EnvContent, &m.EnvIV, &m.SenderDeviceID, &m.CryptoScheme); err != nil {
 			continue
 		}
 		messages = append(messages, m)
@@ -1126,6 +1127,10 @@ func (h *Handler) GetMessages(c *fiber.Ctx) error {
 
 		loadPollsForMessages(messages, authUserID, false)
 		loadEnvelopesForMessages(messages)
+	}
+
+	if err := openServerScheme(messages, authUserID); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to open stored messages"})
 	}
 
 	return c.JSON(messages)

@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"my-chat-backend/messagecrypto"
+)
 
 type User struct {
 	ID        int64     `json:"id"`
@@ -44,6 +48,19 @@ type Message struct {
 	Poll             *Poll       `json:"poll,omitempty"`
 	StickerURL       string      `json:"sticker_url,omitempty"`
 	IsRead           bool        `json:"is_read"`
+
+	// CryptoScheme says how the stored text is wrapped: 'e2ee' (old, per-device
+	// keys), 'server' (at-rest, re-wrapped for this reader on the way out) or
+	// 'plain'. Without it a reader has to guess, and guessing wrong shows an
+	// empty bubble instead of an error.
+	CryptoScheme string `json:"crypto_scheme,omitempty"`
+	// ServerEnvelope carries the text wrapped to this user's key. Empty content
+	// plus an envelope is the normal shape for the new scheme.
+	ServerEnvelope *messagecrypto.Envelope `json:"server_envelope,omitempty"`
+	// NeedsKey means the text exists but this account has no receive key yet, so
+	// it could not be wrapped. Saying so is the alternative to returning the
+	// at-rest blob, to plaintext, or to an empty bubble that looks like loss.
+	NeedsKey bool `json:"needs_key,omitempty"`
 }
 
 type GroupChat struct {

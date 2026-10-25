@@ -433,7 +433,7 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 
 	rows, err := database.DB.Query(`
 		SELECT * FROM (
-			SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), COALESCE(m.sticker_url, ''), COALESCE(m.epoch, 0)
+			SELECT m.id, m.from_user_id, COALESCE(m.msg_type, 'text'), m.content, m.created_at, u.username, COALESCE(m.encrypted_content, ''), COALESCE(m.encrypted_iv, ''), COALESCE(m.sticker_url, ''), COALESCE(m.epoch, 0), COALESCE(m.crypto_scheme, 'plain')
 			FROM group_messages m
 			JOIN users u ON m.from_user_id = u.id
 			WHERE m.group_chat_id = ?
@@ -449,7 +449,7 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 	messages := make([]models.Message, 0)
 	for rows.Next() {
 		var m models.Message
-		if err := rows.Scan(&m.ID, &m.FromUserID, &m.Type, &m.Content, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &m.StickerURL, &m.Epoch); err != nil {
+		if err := rows.Scan(&m.ID, &m.FromUserID, &m.Type, &m.Content, &m.CreatedAt, &m.FromUser, &m.EncryptedContent, &m.EncryptedIV, &m.StickerURL, &m.Epoch, &m.CryptoScheme); err != nil {
 			continue
 		}
 		m.GroupChatID = &groupID
@@ -487,6 +487,10 @@ func (h *Handler) GetGroupMessages(c *fiber.Ctx) error {
 		}
 
 		loadPollsForMessages(messages, userID, true)
+	}
+
+	if err := openServerScheme(messages, userID); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to open stored messages"})
 	}
 
 	return c.JSON(messages)
