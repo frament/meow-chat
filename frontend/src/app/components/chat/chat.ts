@@ -18,7 +18,7 @@ import { ChatComposerComponent } from './chat-composer.component';
 import { ChatStorageService } from '../../services/chat-storage.service';
 import { ChatPollService } from '../../services/chat-poll.service';
 import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
-import { toMemoryFile } from '../../services/upload-utils';
+import { ChatAttachmentService } from '../../services/chat-attachment.service';
 
 @Component({
   selector: 'app-chat',
@@ -31,6 +31,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly storage = inject(ChatStorageService);
   private readonly polls = inject(ChatPollService);
   private readonly thread = inject(ChatThreadService);
+  private readonly attachments = inject(ChatAttachmentService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -1263,20 +1264,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   async onPaste(event: ClipboardEvent) {
     const items = event.clipboardData?.items;
     if (!items) return;
-    const remaining = 10 - this.selectedFiles.length;
-    let added = 0;
-    for (let i = 0; i < items.length && added < remaining; i++) {
-      const item = items[i];
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (!file) continue;
-        const mem = await toMemoryFile(file);
-        this.selectedFiles.push(mem);
-        await this.addPreview(mem);
-        added++;
-      }
+    const files = await this.attachments.fromClipboard(
+      items, this.attachments.remainingSlots(this.selectedFiles.length));
+    for (const mem of files) {
+      this.selectedFiles.push(mem);
+      this.previews.push(await this.attachments.readPreview(mem));
     }
-    if (added > 0) {
+    if (files.length > 0) {
       event.preventDefault();
       if (this.messageType !== 'image') {
         this.messageType = 'image';
@@ -1287,12 +1281,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   async onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files) return;
-    const remaining = 10 - this.selectedFiles.length;
-    const chosen = Array.from(input.files).slice(0, remaining);
-    for (const file of chosen) {
-      const mem = await toMemoryFile(file);
+    const files = await this.attachments.fromFileList(
+      input.files, this.attachments.remainingSlots(this.selectedFiles.length));
+    for (const mem of files) {
       this.selectedFiles.push(mem);
-      await this.addPreview(mem);
+      this.previews.push(await this.attachments.readPreview(mem));
     }
     input.value = '';
   }
@@ -1306,19 +1299,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * images and stayed blank until a reload. Awaited by the picker before it
    * returns, which is what puts the images in the bubble.
    */
-  private addPreview(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const url = e.target!.result as string;
-        this.previews.push(url);
-        resolve(url);
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  }
-
   removeFile(index: number) {
     this.selectedFiles.splice(index, 1);
     this.previews.splice(index, 1);
