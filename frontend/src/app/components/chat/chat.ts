@@ -1033,9 +1033,22 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async sendMessage() {
-    if (this.sending) return;
-    if (!this.selectedUser && !this.selectedGroup) return;
-    if (!this.messageContent.trim() && this.selectedFiles.length === 0) return;
+    // Временная диагностика (2026-10-25): отправка не срабатывала без единого
+    // слова, и три выхода ниже были неотличимы друг от друга. Пока причина не
+    // найдена, каждый из них говорит вслух; после починки пустой выход вернётся
+    // к тишине, потому что нажимать «отправить» с пустым полем — не ошибка.
+    if (this.sending) {
+      this.sendError.set('Отправка уже идёт — подождите секунду');
+      return;
+    }
+    if (!this.selectedUser && !this.selectedGroup) {
+      this.sendError.set('Чат не выбран');
+      return;
+    }
+    if (!this.messageContent.trim() && this.selectedFiles.length === 0) {
+      this.sendError.set('Поле пустое: текст не дошёл до обработчика');
+      return;
+    }
     this.sending = true;
     const type = this.messageType;
 
