@@ -409,7 +409,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             await this.cryptoReady();
             const decrypted = await this.crypto.decrypt(this.currentUserId, data.from, data.encrypted_content, data.encrypted_iv);
             if (decrypted !== null) { content = decrypted; decryptedOk = true; }
-            if (!content) content = '[Зашифрованное сообщение]';
+            if (!content) content = ChatThreadService.UNDECRYPTED;
           }
           if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
           // Claimed here, after decryption and immediately before the push. Three
@@ -453,7 +453,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             await this.cryptoReady();
             const decrypted = await this.crypto.decryptGroupMessage(data.group_id, data.encrypted_content, data.encrypted_iv, data.epoch ?? 0);
             if (decrypted !== null) { content = decrypted; decryptedOk = true; }
-            if (!content) content = '[Зашифрованное сообщение]';
+            if (!content) content = ChatThreadService.UNDECRYPTED;
             if (!decryptedOk) this.reportDecryptFailure('group', { group_id: data.group_id, msg_type: data.msg_type });
           }
           // Same reason as in direct messages: claim after the awaits, before the push.
@@ -801,7 +801,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       if (decrypted !== null) {
         msg.content = decrypted;
       } else {
-        if (!msg.content) msg.content = '[Зашифрованное сообщение]';
+        if (!msg.content) msg.content = ChatThreadService.UNDECRYPTED;
         this.reportDecryptFailure('dm', { peer_id: peerId, msg_type: msg.msg_type });
       }
     }
@@ -1443,7 +1443,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     // The key we asked for is here, so a later loss must be able to ask again.
     this.groupKeys.allowRequest(groupId);
     this.retryPendingGroupSend();
-    if (!this.messages.some(m => m.content === '[Зашифрованное сообщение]')) return;
+    if (!this.messages.some(m => m.content === ChatThreadService.UNDECRYPTED)) return;
     // Picks up a possibly newer epoch and reports whether a usable key exists.
     const keyState = await this.groupKeys.syncEpoch(groupId);
     if (!keyState.hadKey) return;
@@ -1480,7 +1480,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       if (decrypted !== null) {
         msg.content = decrypted;
       } else {
-        if (!msg.content) msg.content = '[Зашифрованное сообщение]';
+        if (!msg.content) msg.content = ChatThreadService.UNDECRYPTED;
         this.reportDecryptFailure('group', { group_id: groupId, msg_type: msg.msg_type });
       }
     }

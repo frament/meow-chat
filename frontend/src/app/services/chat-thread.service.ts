@@ -19,6 +19,13 @@ export type DisplayItem =
 @Injectable({ providedIn: 'root' })
 export class ChatThreadService {
   /**
+   * What the thread shows for a message this device cannot decrypt. Named here
+   * because merging has to recognise it: a placeholder must never overwrite real
+   * text, and real text must never be lost to a placeholder.
+   */
+  static readonly UNDECRYPTED = '[Зашифрованное сообщение]';
+
+  /**
    * @param messages in chronological order
    * @param unreadDividerIdx index in `messages` before which the divider goes,
    *   or a negative number for "no divider"
@@ -73,6 +80,19 @@ export class ChatThreadService {
       const current = byId.get(msg.id);
       if (current) {
         current.is_read = msg.is_read;
+        // A placeholder must never win over real text. Without this a message
+        // that was decrypted on another device, or turned back into plaintext on
+        // the server, stayed "[Зашифрованное сообщение]" in this device's cache
+        // for good - the server's text was merged away by id. The reverse is
+        // guarded too: real cached text is not replaced by a placeholder when
+        // this device happens to be unable to decrypt right now.
+        if (
+          current.content === ChatThreadService.UNDECRYPTED &&
+          msg.content &&
+          msg.content !== ChatThreadService.UNDECRYPTED
+        ) {
+          current.content = msg.content;
+        }
         continue;
       }
       byId.set(msg.id, msg);

@@ -96,6 +96,30 @@ describe('ChatThreadService', () => {
       expect(addedIds).toEqual([2]);
     });
 
+    // Recovery on prod made this concrete: 16 messages were turned back into
+    // plaintext on the server, and every device that had them cached kept the
+    // placeholder - mergeMessages only ever copied is_read across. The text
+    // existed and could not be seen.
+    it('replaces a cached placeholder with real text from the server', () => {
+      const cached = { id: 1, created_at: '2026-10-25T10:00:00', is_read: true, content: '[Зашифрованное сообщение]' } as unknown as Message;
+      const fromServer = { id: 1, created_at: '2026-10-25T10:00:00', is_read: true, content: 'Прием прием' } as unknown as Message;
+
+      const { messages } = service.mergeMessages([cached], [fromServer]);
+
+      expect(messages[0].content).toBe('Прием прием');
+    });
+
+    it('keeps real cached text when the server answer is a placeholder', () => {
+      // The device could decrypt once and cannot now: the text it already holds
+      // is strictly better than the placeholder.
+      const cached = { id: 1, created_at: '2026-10-25T10:00:00', content: 'настоящий текст' } as unknown as Message;
+      const fromServer = { id: 1, created_at: '2026-10-25T10:00:00', content: '[Зашифрованное сообщение]' } as unknown as Message;
+
+      const { messages } = service.mergeMessages([cached], [fromServer]);
+
+      expect(messages[0].content).toBe('настоящий текст');
+    });
+
     it('does not duplicate an id that is already in the thread', () => {
       const existing = [m(1, '2026-10-25T10:00:00')];
       const { messages, addedIds } = service.mergeMessages(existing, [m(1, '2026-10-25T10:00:00')]);
