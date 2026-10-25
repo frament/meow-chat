@@ -102,8 +102,16 @@ func (h *Handler) GetKey(c *fiber.Ctx) error {
 // GetAccountKey reports the caller's own account key, if one exists. The client
 // needs this *before* it has a key of its own: a device with no local copy must
 // ask whether the account already has one instead of generating a replacement.
+//
+// Registered behind AuthRequired. The assertion below is checked rather than
+// bare: this handler panicked on prod, restarted the process and dropped every
+// WebSocket, because the route had been registered above the middleware and an
+// unauthenticated request carried no userId.
 func (h *Handler) GetAccountKey(c *fiber.Ctx) error {
-	userID := c.Locals("userId").(int64)
+	userID, ok := c.Locals("userId").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
 
 	var publicKey string
 	err := database.DB.QueryRow(

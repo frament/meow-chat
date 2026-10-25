@@ -165,6 +165,22 @@ func TestGetAccountKey_OwnKey(t *testing.T) {
 	}
 }
 
+// Registered above AuthRequired, this handler panicked on a request with no
+// token - which restarted the process and dropped every WebSocket on prod.
+func TestGetAccountKey_WithoutAuthIs401NotPanic(t *testing.T) {
+	app, h, _ := setupTestApp(t)
+	app.Get("/crypto/account-key", h.GetAccountKey)
+
+	req, _ := http.NewRequest("GET", "/crypto/account-key", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 401 {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
 func TestGetAccountKey_NoKey(t *testing.T) {
 	app, h, userID := setupTestApp(t)
 	app.Get("/crypto/account-key", AuthRequired, h.GetAccountKey)
