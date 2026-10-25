@@ -254,15 +254,26 @@ export class DeviceAuthComponent {
     if (!this.recoveryInput) return;
     this.recoveryError = '';
     this.api.recoverKeys(this.recoveryMethod, this.recoveryInput).subscribe({
-      next: (res) => {
-        this.crypto.importIdentityKey(res.identity_key_jwk).then(() => {
-          this.crypto.syncPublicKey();
+      // async + try/catch, not .then(): a rejected importIdentityKey used to
+      // vanish into an unhandled promise. The server answered 200, the key was
+      // never applied, and the screen said nothing at all - which reads as "the
+      // button does nothing".
+      next: async (res) => {
+        try {
+          await this.crypto.importIdentityKey(res.identity_key_jwk);
+          await this.crypto.syncPublicKey();
           this.showRecovery = false;
+          this.recoveryError = '';
           this.status.set('approved');
           this.#reload.reload();
-        });
+        } catch (err) {
+          console.error('Key recovery failed after the server returned a key', err);
+          this.recoveryError = 'Ключ получен, но не удалось применить его на этом устройстве.';
+        }
       },
       error: () => {
+        // The input is deliberately kept: an empty field disables the button and
+        // leaves no way to retry without retyping the password.
         this.recoveryError = 'Неверный пароль или фраза восстановления';
       },
     });
