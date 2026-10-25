@@ -173,6 +173,11 @@ func moduleRoot() (string, error) {
 // directory has to be the module root whatever the caller's was: started from
 // backend/ it used to resolve to backend/backend, which does not exist, and the
 // process died before printing anything.
+// e2eAtRestKey is deliberately not a secret: the server it configures uses a
+// throwaway database in a temporary directory that is deleted when the run ends.
+// It is 32 bytes of hex, which is what LoadAtRestKey accepts.
+const e2eAtRestKey = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+
 func startServer(dir, port string) (*exec.Cmd, error) {
 	root, err := moduleRoot()
 	if err != nil {
@@ -186,6 +191,11 @@ func startServer(dir, port string) (*exec.Cmd, error) {
 		"DB_PATH="+filepath.Join(dir, "chat.db"),
 		"WEBAUTHN_RP_ID=localhost",
 		"WEBAUTHN_RP_ORIGIN=http://localhost:"+port,
+		// This server is disposable and its database is thrown away with the
+		// temporary directory, so a fixed key is right here: requiring the person
+		// running the test to export one would make the check fail for a reason
+		// that has nothing to do with federation.
+		"MEOWCHAT_ATREST_KEY="+e2eAtRestKey,
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

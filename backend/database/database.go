@@ -104,6 +104,14 @@ func InitDB() {
 		log.Fatal("Failed to create data directory:", err)
 	}
 
+	// Before anything touches the database. A server without the at-rest key
+	// would either write content in the clear or fail on the first message, and
+	// the second is much harder to attribute than a refusal to start. `make
+	// update` without the key must therefore stop here, not come up and look fine.
+	if err := LoadAtRestKey(); err != nil {
+		log.Fatal("At-rest key:", err)
+	}
+
 	loadOrGenerateServerKey()
 
 	var err error
@@ -544,6 +552,16 @@ func ApplySchema(db *sql.DB) error {
 	if count == 0 {
 		db.Exec("ALTER TABLE messages ADD COLUMN sender_device_id TEXT DEFAULT ''")
 	}
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name='crypto_scheme'").Scan(&count)
+	if count == 0 {
+		db.Exec("ALTER TABLE messages ADD COLUMN crypto_scheme TEXT DEFAULT 'plain'")
+		// Backfill happens only in this branch, next to the ALTER that created
+		// the column. Running it on every start would relabel 'server' rows as
+		// 'e2ee' the moment v1.8.0 begins writing them - and once relabelled, the
+		// two cannot be told apart, so old messages would be read with the wrong
+		// key forever.
+		db.Exec("UPDATE messages SET crypto_scheme = 'e2ee' WHERE COALESCE(encrypted_content, '') <> ''")
+	}
 	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='epoch'").Scan(&count)
 	if count == 0 {
 		db.Exec("ALTER TABLE group_messages ADD COLUMN epoch INTEGER DEFAULT 0")
@@ -555,6 +573,12 @@ func ApplySchema(db *sql.DB) error {
 	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='encrypted_iv'").Scan(&count)
 	if count == 0 {
 		db.Exec("ALTER TABLE group_messages ADD COLUMN encrypted_iv TEXT DEFAULT ''")
+	}
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('group_messages') WHERE name='crypto_scheme'").Scan(&count)
+	if count == 0 {
+		db.Exec("ALTER TABLE group_messages ADD COLUMN crypto_scheme TEXT DEFAULT 'plain'")
+		// Same reasoning as for `messages`: backfill once, here, never on every start.
+		db.Exec("UPDATE group_messages SET crypto_scheme = 'e2ee' WHERE COALESCE(encrypted_content, '') <> ''")
 	}
 
 	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('friends') WHERE name='server_id'").Scan(&count)

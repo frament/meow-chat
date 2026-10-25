@@ -22,6 +22,12 @@ services:
       # tokens anyone can forge - and this repo is public. main.go refuses to boot
       # without one, which turns a silent downgrade into a loud failure.
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET_is_not_set}
+      # Key for message content at rest. Required with no default for the same
+      # reason as JWT_SECRET: a server that starts without it would either write
+      # content in the clear or fail on the first message. Losing it is loss of
+      # history, and it must not live next to the database or inside a backup of
+      # it - the point is that a stolen disk does not decrypt the content.
+      - MEOWCHAT_ATREST_KEY=${MEOWCHAT_ATREST_KEY:?MEOWCHAT_ATREST_KEY_is_not_set}
     dns:
       - 192.168.1.1
     volumes:
