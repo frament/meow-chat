@@ -177,4 +177,44 @@ describe('ServerCryptoService', () => {
     expect(opened[2].content).withContext('messages of the old scheme pass through untouched').toBe('старое сообщение');
   });
 
+
+  it('does not keep a local key the account no longer has', async () => {
+    // The device holds an old key while the server has a different one - what an
+    // admin password reset leaves behind. Keeping the local copy means wrapping
+    // to a key the server no longer has.
+    //
+    // The storage lives in IndexedDB, which made the first version of this test
+    // worthless: the write did not survive into the read, the code took the same
+    // path with and without the fix, and the mutation went unnoticed. Spying on
+    // the two storage methods tests the decision instead of the browser.
+    const stale = await newKeyPair();
+    const stalePriv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', stale.privateKey));
+    const stalePub = new Uint8Array(await crypto.subtle.exportKey('raw', stale.publicKey));
+
+    const serverKey = await newKeyPair();
+    const serverPub = new Uint8Array(await crypto.subtle.exportKey('raw', serverKey.publicKey));
+
+    const service = makeService({
+      get: () => of({
+        public_key: bytesB64(serverPub),
+        // Wrapped with a password this test does not know: unopenable, exactly
+        // what a reset looks like to a device that still holds the old key.
+        wrapped_private_key: btoa('not-a-real-blob'),
+        kdf_salt: bytesB64(new Uint8Array(16).fill(1)),
+      }),
+      post: () => of({}),
+    });
+
+    (service as any).readStored = async () => ({ priv: stalePriv, pub: stalePub });
+    (service as any).writeStored = jasmine.createSpy('writeStored').and.resolveTo();
+
+    await service.ensureAccountKey('пароль');
+
+    expect(service.getAccountPublicKey())
+      .withContext('the stale key must not become the account key')
+      .not.toBe(bytesB64(stalePub));
+    expect(service.hasAccountKey())
+      .withContext('an unopenable account key means no usable key, not the old one')
+      .toBeFalse();
+  });
 });
