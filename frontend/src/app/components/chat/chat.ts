@@ -20,6 +20,7 @@ import { ChatPollService } from '../../services/chat-poll.service';
 import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
 import { ChatAttachmentService } from '../../services/chat-attachment.service';
 import { ChatSendService, SendRequest } from '../../services/chat-send.service';
+import { ChatGroupService } from '../../services/chat-group.service';
 
 @Component({
   selector: 'app-chat',
@@ -34,6 +35,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly thread = inject(ChatThreadService);
   private readonly attachments = inject(ChatAttachmentService);
   private readonly sends = inject(ChatSendService);
+  private readonly groups = inject(ChatGroupService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -1537,7 +1539,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   async createGroup() {
     if (!this.newGroupName.trim()) return;
-    this.api.createGroupChat(this.newGroupName.trim()).subscribe({
+    this.groups.create(this.newGroupName.trim()).subscribe({
       // A creation that failed must say so, otherwise the dialog closes on a
       // success that never happened.
       error: (err) => this.notice.show(err?.error?.error || 'Не удалось создать группу.', 'error'),
@@ -1566,7 +1568,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   loadGroupChats() {
-    this.api.getGroupChats().subscribe({
+    this.groups.list().subscribe({
       // An offline sidebar is not a reason to throw out of the subscription: the
       // cached list stays and the failure is not a blank panel.
       error: () => {},
@@ -1582,7 +1584,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   loadGroupInfo() {
     if (!this.selectedGroup) return;
-    this.api.getGroupChat(this.selectedGroup.id).subscribe({
+    this.groups.get(this.selectedGroup.id).subscribe({
       error: () => { this.showGroupInfo = false; },
       next: (res) => {
       this.groupMembers = res.members;
@@ -1597,18 +1599,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.groupFriendCandidates = [];
       return;
     }
-    const memberIds = new Set(this.groupMembers.map((m) => m.user_id));
-    this.api.getFriends().subscribe({
+    this.groups.friends().subscribe({
       error: () => {},
       next: (friends) => {
-      this.groupFriendCandidates = friends.filter((f) => f.id !== this.currentUserId && !memberIds.has(f.id));
+        this.groupFriendCandidates = this.groups.friendCandidates(friends, this.groupMembers, this.currentUserId);
       },
     });
   }
 
   addFriendToGroup(friend: User) {
     if (!this.selectedGroup) return;
-    this.api.addGroupMember(this.selectedGroup.id, friend.username).subscribe({
+    this.groups.addMember(this.selectedGroup.id, friend.username).subscribe({
       next: () => {
         this.groupMembers = [...this.groupMembers, {
           user_id: friend.id,
@@ -1631,7 +1632,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   createInvite() {
     if (!this.selectedGroup) return;
     this.inviteToken = '';
-    this.api.createGroupInvite(this.selectedGroup.id).subscribe({
+    this.groups.createInvite(this.selectedGroup.id).subscribe({
       error: (err) => this.notice.show(err?.error?.error || 'Не удалось создать приглашение.', 'error'),
       next: (res) => {
         this.inviteToken = res.token;
@@ -1649,7 +1650,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const group = this.selectedGroup;
     if (!group) return;
     if (!confirm(`Удалить чат "${group.name}"? Сообщения будут безвозвратно удалены.`)) return;
-    this.api.deleteGroupChat(group.id).subscribe({
+    this.groups.remove(group.id).subscribe({
       next: () => {
         this.showGroupInfo = false;
         this.selectedGroup = null;
