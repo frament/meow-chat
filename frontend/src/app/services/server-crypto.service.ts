@@ -256,6 +256,43 @@ export class ServerCryptoService {
     };
   }
 
+  /**
+   * Is the layer configured for this build?
+   *
+   * The pin is a build-time constant, so this is a property of the deployment,
+   * not a per-message choice. A build without a pin keeps the old path; a build
+   * with one never falls back to it.
+   */
+  isEnabled(): boolean {
+    return !!this.pinned;
+  }
+
+  /**
+   * Replaces envelopes in a fetched thread with readable text.
+   *
+   * A message that cannot be opened keeps an empty content and is flagged
+   * `needs_key`, the same state the server reports when the account has no key
+   * yet. Both mean "there is text and this device cannot show it", which is the
+   * honest shape - an empty bubble would read as deleted history.
+   */
+  async openMany(messages: any[]): Promise<any[]> {
+    const out: any[] = [];
+    for (const message of messages) {
+      if (!message?.server_envelope) {
+        out.push(message);
+        continue;
+      }
+      const text = await this.openFromServer(message.server_envelope);
+      out.push({
+        ...message,
+        content: text ?? '',
+        server_envelope: undefined,
+        needs_key: text === null ? true : message.needs_key,
+      });
+    }
+    return out;
+  }
+
   /** Opens an envelope addressed to this account. Null means unreadable, not empty. */
   async openFromServer(envelope: ServerEnvelope): Promise<string | null> {
     if (!this.accountPrivate) return null;

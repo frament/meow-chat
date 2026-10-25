@@ -143,6 +143,8 @@ export interface Message {
   images?: AttachedImage[];
   encrypted_content?: string;
   encrypted_iv?: string;
+  server_envelope?: any;
+  needs_key?: boolean;
   env_content?: string;
   env_iv?: string;
   sender_device_id?: string;
@@ -529,7 +531,7 @@ export class ApiService {
     );
   }
 
-  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload) {
+  sendMessage(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload, serverEnvelope?: string) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
@@ -542,6 +544,7 @@ export class ApiService {
       if (envelope.sender_device_id) formData.append('sender_device_id', envelope.sender_device_id);
       formData.append('envelopes', JSON.stringify(envelope.envelopes));
     }
+    if (serverEnvelope) formData.append('server_envelope', serverEnvelope);
     if (pushPreview) formData.append('push_preview', pushPreview);
     if (pollOptions) {
       for (const opt of pollOptions) {
@@ -634,7 +637,7 @@ export class ApiService {
   }
 
   // Upload methods with progress reporting
-  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload) {
+  sendMessageWithProgress(toUserId: number, content: string, files: File[] = [], msgType: MsgType = 'text', encryptedContent?: string, encryptedIV?: string, pushPreview?: string, pollOptions?: string[], pollMultiple?: boolean, envelope?: EnvelopePayload, serverEnvelope?: string) {
     const formData = new FormData();
     formData.append('to_user_id', String(toUserId));
     formData.append('content', content);
@@ -647,6 +650,7 @@ export class ApiService {
       if (envelope.sender_device_id) formData.append('sender_device_id', envelope.sender_device_id);
       formData.append('envelopes', JSON.stringify(envelope.envelopes));
     }
+    if (serverEnvelope) formData.append('server_envelope', serverEnvelope);
     if (pushPreview) formData.append('push_preview', pushPreview);
     if (pollOptions) {
       for (const opt of pollOptions) {
