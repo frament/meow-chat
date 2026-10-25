@@ -22,6 +22,11 @@ FROM nginx:alpine
 
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Runs from the base image's entrypoint before nginx starts: keeps one generation
+# of the two log files that live on a mounted volume.
+COPY nginx-rotate-logs.sh /docker-entrypoint.d/20-rotate-logs.sh
+RUN chmod +x /docker-entrypoint.d/20-rotate-logs.sh
+
 # Allowlist rendered at startup: the address of the TLS-terminating proxy in
 # front is per-install, so it cannot be baked into nginx.conf. `include` in the
 # server block picks the result up.

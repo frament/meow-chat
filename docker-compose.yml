@@ -28,12 +28,17 @@ services:
       # history, and it must not live next to the database or inside a backup of
       # it - the point is that a stolen disk does not decrypt the content.
       - MEOWCHAT_ATREST_KEY=${MEOWCHAT_ATREST_KEY:?MEOWCHAT_ATREST_KEY_is_not_set}
+      # Written next to the database's backups, on a mounted volume, so the log
+      # outlives the container. Empty means stdout only.
+      - LOG_FILE=/app/logs/backend.log
     dns:
       - 192.168.1.1
     volumes:
       - chat-data:/data
       - ./uploads:/app/uploads
       - ./backups:/app/backups
+      # Survives `docker compose up -d`. Docker's own logs do not.
+      - ./logs/backend:/app/logs
     restart: unless-stopped
 
   frontend:
@@ -50,6 +55,9 @@ services:
         BUILD_DIRTY: ${BUILD_DIRTY:-}
     ports:
       - "3000:80"
+    volumes:
+      # Access and error logs on the host, not only on the container's stdout.
+      - ./logs/nginx:/var/log/nginx
     environment:
       # The only address allowed to reach this port directly: the proxy that
       # terminates TLS (here the router). The port cannot simply be bound to

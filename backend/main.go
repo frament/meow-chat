@@ -17,6 +17,7 @@ import (
 	"my-chat-backend/database"
 	"my-chat-backend/federation"
 	"my-chat-backend/handlers"
+	"my-chat-backend/logfile"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -30,6 +31,16 @@ func cleanupOldPushLogs() {
 }
 
 func main() {
+	// Before the first log line, so a startup failure is on disk too. Docker's
+	// logs are deleted when the container is recreated, and this server is
+	// redeployed often: an incident from before the last deploy then has no
+	// evidence. LOG_FILE is empty outside Docker, where stdout is enough.
+	if closer, err := logfile.Setup(os.Getenv("LOG_FILE"), logfile.DefaultMaxBytes); err != nil {
+		log.Printf("Log file disabled, stdout only: %v", err)
+	} else if closer != nil {
+		defer closer.Close()
+	}
+
 	// Before anything opens a database or a socket. Without this the server would
 	// sign tokens with an empty key, which anyone could forge - see auth.RequireSecret.
 	auth.RequireSecret()
