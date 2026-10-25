@@ -14,7 +14,7 @@ import { HttpClient } from '@angular/common/http';
  * protection. Changing this value requires rebuilding the client, which is the
  * trade-off the root/leaf scheme in v1.11.0 exists to remove.
  */
-export const PINNED_SERVER_KEY_FINGERPRINT = 'Q5hTjJTYTZLiiyleuHyXxL72J4U5nBdMtqzma1uNUsg=';
+export const PINNED_SERVER_KEY_FINGERPRINT = '';
 
 /** Wire format shared with `backend/messagecrypto`. Field names are load-bearing. */
 export interface ServerEnvelope {

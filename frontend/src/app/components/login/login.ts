@@ -161,9 +161,12 @@ export class LoginComponent implements OnInit {
         // "no key on this device" for no reason.
         try {
           await this.serverCrypto.ensureAccountKey(this.password);
-        } catch {
+        } catch (err) {
           // Failing to set up the key must not block sign-in: everything written
-          // under the old scheme still reads.
+          // under the old scheme still reads. But it must be visible - an empty
+          // catch hid a device that cannot create keys at all, and the only
+          // symptom was "cannot send" much later.
+          console.error('Account key setup failed', err);
         }
         this.router.navigateByUrl(this.redirectUrl);
       },
