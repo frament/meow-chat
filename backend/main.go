@@ -390,6 +390,20 @@ func runAdminCLI() {
 			fmt.Printf("User '%s' not found\n", username)
 			return
 		}
+
+		// The password change alone leaves the account in a state nobody can use:
+		// the receive key is wrapped with the old password, and every signed-in
+		// device still holds the old key in memory.
+		var userID int64
+		if err := database.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID); err == nil {
+			keyRetired, sessions, err := database.ResetUserKeyAndSessions(userID)
+			if err != nil {
+				fmt.Printf("Warning: password changed, but the receive key and sessions were not reset: %v\n", err)
+				return
+			}
+			fmt.Printf("Receive key retired: %v, sessions dropped: %d\n", keyRetired, sessions)
+			fmt.Println("The user must sign in again; the new key is created at sign-in.")
+		}
 		fmt.Printf("User '%s' is now an admin\n", username)
 
 	case "remove":
