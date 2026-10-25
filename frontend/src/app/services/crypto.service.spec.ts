@@ -116,6 +116,27 @@ describe('CryptoService', () => {
     expect(service.needsRecovery()).withContext('the form must not come back').toBeFalse();
   });
 
+  it('opens recovery when the account key belongs to someone else', async () => {
+    // 409 from PUT /keys means the server holds a different account key. This
+    // device cannot read what peers encrypt to it, and overwriting the server key
+    // to fix that is exactly what orphaned history. Recovery is the way out.
+    await service.init();
+    apiMock.putKey.and.returnValue(throwError(() => ({ status: 409 })));
+
+    await service.syncPublicKey();
+
+    expect(service.needsRecovery()).toBeTrue();
+  });
+
+  it('does not open recovery for an ordinary upload failure', async () => {
+    await service.init();
+    apiMock.putKey.and.returnValue(throwError(() => ({ status: 500 })));
+
+    await service.syncPublicKey();
+
+    expect(service.needsRecovery()).withContext('a 500 is not a key mismatch').toBeFalse();
+  });
+
   it('getPublicKey should return a valid base64 string after init', async () => {
     await service.init();
 

@@ -245,7 +245,14 @@ export class CryptoService {
     if (!pubKey) return;
     try {
       await firstValueFrom(this.api.putKey(pubKey));
-    } catch {
+    } catch (err: any) {
+      // 409 means the account key is a different one: this device cannot read
+      // what peers encrypt to it, and it must not overwrite the account key to
+      // fix that - that is what used to orphan history. Point at recovery: the
+      // account key is the one everyone else already uses.
+      if (err?.status === 409) {
+        this.needsRecovery.set(true);
+      }
       console.warn('Failed to sync public key');
     }
   }
