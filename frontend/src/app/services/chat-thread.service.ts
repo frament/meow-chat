@@ -49,6 +49,43 @@ export class ChatThreadService {
     return items;
   }
 
+  /**
+   * Merges freshly fetched messages into the open thread.
+   *
+   * The thread can already hold messages the fetch does not: an optimistic send
+   * that has not been confirmed yet, and anything that arrived over the socket
+   * while the request was in flight. Replacing the list would drop them, which
+   * is why this merges by id instead of assigning.
+   *
+   * Existing messages keep their object identity so the DOM for an already
+   * rendered bubble is not rebuilt; only `is_read` is refreshed, which is the
+   * field the read receipt shows.
+   *
+   * Returns the sorted list and the ids that were new, so the caller can update
+   * its own "already seen" index without walking the list again.
+   */
+  mergeMessages(existing: Message[], incoming: Message[]): { messages: Message[]; addedIds: number[] } {
+    const byId = new Map<number, Message>();
+    for (const m of existing) byId.set(m.id, m);
+
+    const addedIds: number[] = [];
+    for (const msg of incoming) {
+      const current = byId.get(msg.id);
+      if (current) {
+        current.is_read = msg.is_read;
+        continue;
+      }
+      byId.set(msg.id, msg);
+      addedIds.push(msg.id);
+    }
+
+    const messages = [...byId.values()].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+
+    return { messages, addedIds };
+  }
+
   dayKey(iso: string): string {
     const d = new Date(iso);
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;

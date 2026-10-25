@@ -69,4 +69,56 @@ describe('ChatThreadService', () => {
     expect(older).toContain('30');
     expect(older).not.toContain('2026');
   });
+
+  describe('mergeMessages', () => {
+    const m = (id: number, iso: string, isRead = false) =>
+      ({ id, created_at: iso, is_read: isRead, content: 'm' + id }) as unknown as Message;
+
+    it('adds new messages and keeps the thread sorted', () => {
+      const existing = [m(1, '2026-10-25T10:00:00')];
+      const incoming = [m(3, '2026-10-25T12:00:00'), m(2, '2026-10-25T11:00:00')];
+
+      const { messages, addedIds } = service.mergeMessages(existing, incoming);
+
+      expect(messages.map(x => x.id)).toEqual([1, 2, 3]);
+      expect(addedIds).toEqual([3, 2]);
+    });
+
+    /** An optimistic send is not in the server's answer yet; losing it would
+     *  make the message the user just sent disappear from the screen. */
+    it('keeps messages the fetch does not know about', () => {
+      const optimistic = { id: -1, created_at: '2026-10-25T13:00:00', content: 'unsent' } as unknown as Message;
+      const existing = [m(1, '2026-10-25T10:00:00'), optimistic];
+
+      const { messages, addedIds } = service.mergeMessages(existing, [m(2, '2026-10-25T11:00:00')]);
+
+      expect(messages.map(x => x.id)).toEqual([1, 2, -1]);
+      expect(addedIds).toEqual([2]);
+    });
+
+    it('does not duplicate an id that is already in the thread', () => {
+      const existing = [m(1, '2026-10-25T10:00:00')];
+      const { messages, addedIds } = service.mergeMessages(existing, [m(1, '2026-10-25T10:00:00')]);
+
+      expect(messages.length).toBe(1);
+      expect(addedIds).toEqual([]);
+    });
+
+    it('refreshes the read flag on an existing message', () => {
+      const existing = [m(1, '2026-10-25T10:00:00', false)];
+      const { messages } = service.mergeMessages(existing, [m(1, '2026-10-25T10:00:00', true)]);
+
+      expect(messages[0].is_read).toBeTrue();
+      // Same object, so the rendered bubble is not rebuilt.
+      expect(messages[0]).toBe(existing[0]);
+    });
+
+    it('returns the existing thread unchanged for an empty answer', () => {
+      const existing = [m(1, '2026-10-25T10:00:00')];
+      const { messages, addedIds } = service.mergeMessages(existing, []);
+
+      expect(messages.map(x => x.id)).toEqual([1]);
+      expect(addedIds).toEqual([]);
+    });
+  });
 });

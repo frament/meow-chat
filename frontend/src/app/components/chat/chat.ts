@@ -828,17 +828,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         msgs[i] = await this.decryptMsg(msgs[i], user.id);
       }
       // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
-      const existingIds = new Set(this.messages.map(m => m.id));
-      for (const msg of msgs) {
-        if (!existingIds.has(msg.id)) {
-          this.seenMessageIds.add(msg.id);
-          this.messages.push(msg);
-        } else {
-          const existing = this.messages.find(m => m.id === msg.id);
-          if (existing) existing.is_read = msg.is_read;
-        }
-      }
-      this.messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const merged = this.thread.mergeMessages(this.messages, msgs);
+      for (const id of merged.addedIds) this.seenMessageIds.add(id);
+      this.messages = merged.messages;
       this.persistCache(user.id);
       if (boundary) {
         const idx = this.messages.findIndex(m => new Date(m.created_at) >= new Date(boundary));
