@@ -81,7 +81,16 @@ export class CryptoService {
     // a window of 16 messages. Ask for recovery instead; the form is reachable
     // at /device-auth?recover=1 from the profile, and opens by itself because
     // needsRecovery stays true.
-    if (await this.accountKeyExistsOnServer()) {
+    const status = await this.accountKeyStatus();
+    if (status === 'unknown') {
+      // Not signed in yet, or the check did not get an answer. Decide nothing and
+      // retry on the next call: caching "no key" would refuse to create one
+      // forever, and caching "exists" would show the recovery form to somebody
+      // who merely started the app with an expired token.
+      this.initPromise = null;
+      return;
+    }
+    if (status === 'exists') {
       this.needsRecovery.set(true);
       console.warn('E2EE: the account key exists on another device - recovery required');
       return;
@@ -112,16 +121,18 @@ export class CryptoService {
   /**
    * Whether the account already has a key on the server.
    *
-   * Anything other than a definite "no key yet" answers true: if the check
-   * itself fails (offline, a proxy in the way), generating a replacement is the
-   * damaging choice, so the safe answer is "do not generate".
+   * Three answers, because "I could not ask" is not "there is no key": only a
+   * definite 404 allows creating one, and anything else refuses to guess. The
+   * wording matters - a network failure that read as "no key" would generate a
+   * replacement and orphan history again.
    */
-  private async accountKeyExistsOnServer(): Promise<boolean> {
+  private async accountKeyStatus(): Promise<'exists' | 'missing' | 'unknown'> {
     try {
       await firstValueFrom(this.api.getAccountKey());
-      return true;
+      return 'exists';
     } catch (err: any) {
-      return err?.status !== 404;
+      if (err?.status === 404) return 'missing';
+      return 'unknown';
     }
   }
 

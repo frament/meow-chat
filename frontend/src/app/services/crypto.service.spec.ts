@@ -90,6 +90,25 @@ describe('CryptoService', () => {
 
     expect(await service.hasIdentityKey()).toBeFalse();
     expect(apiMock.putKey).not.toHaveBeenCalled();
+    expect(service.needsRecovery())
+      .withContext('a failed check must not accuse the account of owning a key')
+      .toBeFalse();
+  });
+
+  it('retries after an unanswered check instead of refusing forever', async () => {
+    // A cold start with an expired token answers 401, which is "unknown". Caching
+    // that would leave a brand-new user without a key until they reloaded, and
+    // the form would never appear either.
+    apiMock.getAccountKey.and.returnValue(throwError(() => ({ status: 401 })));
+    await service.init();
+    expect(await service.hasIdentityKey()).toBeFalse();
+
+    // Now authenticated: the account genuinely has no key yet.
+    apiMock.getAccountKey.and.returnValue(throwError(() => ({ status: 404 })));
+    await service.init();
+
+    expect(await service.hasIdentityKey()).withContext('the second attempt must create it').toBeTrue();
+    expect(apiMock.putKey).toHaveBeenCalledTimes(1);
   });
 
   it('creates the first key and uploads it when the account has none', async () => {
