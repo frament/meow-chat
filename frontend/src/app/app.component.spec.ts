@@ -11,6 +11,7 @@ import { SwUpdate, SwPush } from '@angular/service-worker';
 import { signal, computed } from '@angular/core';
 import { Subject, of, throwError } from 'rxjs';
 import { ConnectivityService } from './services/connectivity.service';
+import { SERVER_CRYPTO_STUB_PROVIDER } from './testing/server-crypto.stub';
 
 // Minimal PushSubscriptionJSON-like object for mock
 function makeSubJSON(endpoint = 'https://example.push'): PushSubscriptionJSON {
@@ -102,6 +103,7 @@ describe('App', () => {
     await TestBed.configureTestingModule({
       imports: [App, MockDeviceAuth],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: NotificationService, useValue: mockNotif },
         { provide: ThemeService, useValue: mockTheme },

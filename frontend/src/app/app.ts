@@ -12,6 +12,7 @@ import { DeviceLinkService } from './services/device-link.service';
 import { NoticeComponent } from './components/notice/notice';
 import { ConnectivityService } from './services/connectivity.service';
 import { UpdateAvailableService } from './services/update-available.service';
+import { ServerCryptoService } from './services/server-crypto.service';
 
 @Component({
   selector: 'app-root',
@@ -290,6 +291,7 @@ import { UpdateAvailableService } from './services/update-available.service';
   `],
 })
 export class App implements OnInit, OnDestroy {
+  private readonly serverCrypto = inject(ServerCryptoService);
   /** Set when a request could not reach the server; rendered as a banner. */
   protected readonly conn = inject(ConnectivityService);
   readonly #sw = inject(SwUpdate);
@@ -328,6 +330,11 @@ export class App implements OnInit, OnDestroy {
   @ViewChild('deviceAuth') deviceAuth!: DeviceAuthComponent;
 
   constructor() {
+    // On a reload there is no password in memory, so this can only pick up a key
+    // this device already stored. Creating one happens at sign-in, where the
+    // password is at hand; doing it here would need a prompt out of nowhere.
+    void this.serverCrypto.ensureAccountKey().catch(() => {});
+
     // Push subscription change from service worker
     navigator.serviceWorker?.addEventListener('message', (event) => {
       if (event.data?.type === 'push-subscription-changed') {

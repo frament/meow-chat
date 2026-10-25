@@ -3,6 +3,7 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { NotificationService } from '../../services/notification.service';
+import { ServerCryptoService } from '../../services/server-crypto.service';
 
 @Component({
   selector: 'app-login',
@@ -56,6 +57,7 @@ export class LoginComponent implements OnInit {
     private api: ApiService,
     private router: Router,
     private notif: NotificationService,
+    private serverCrypto: ServerCryptoService,
   ) {}
 
   ngOnInit() {
@@ -149,9 +151,20 @@ export class LoginComponent implements OnInit {
 
     this.notif.requestPermission();
     this.api.login(this.username, this.password).subscribe({
-      next: (res) => {
+      next: async (res) => {
         localStorage.setItem('lastUsername', this.username);
         this.api.storeAuth(res);
+        // The account key is wrapped with this very password, so this is the one
+        // moment it can be created or unwrapped without asking again. Awaited
+        // rather than fired off: the thread loads right after the redirect, and
+        // arriving before the key is ready would show every new message as
+        // "no key on this device" for no reason.
+        try {
+          await this.serverCrypto.ensureAccountKey(this.password);
+        } catch {
+          // Failing to set up the key must not block sign-in: everything written
+          // under the old scheme still reads.
+        }
         this.router.navigateByUrl(this.redirectUrl);
       },
       error: (err) => {

@@ -4,11 +4,14 @@ import { ApiService } from '../../services/api.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { of, throwError, Subject } from 'rxjs';
+import { ServerCryptoService } from '../../services/server-crypto.service';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
   let fixture: ComponentFixture<LoginComponent>;
   const mockRouter = { navigate: jasmine.createSpy(), navigateByUrl: jasmine.createSpy(), createUrlTree: jasmine.createSpy(), serializeUrl: jasmine.createSpy(), events: of(null) };
+
+  const ensureAccountKey = jasmine.createSpy('ensureAccountKey').and.resolveTo();
 
   const mockApi = {
     login: jasmine.createSpy().and.returnValue(of({ access_token: 'at', refresh_token: 'rt' })),
@@ -20,6 +23,7 @@ describe('LoginComponent', () => {
     TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
+        { provide: ServerCryptoService, useValue: { ensureAccountKey } },
         { provide: ApiService, useValue: mockApi },
         { provide: NotificationService, useValue: { requestPermission: jasmine.createSpy() } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParams: routeParams }, paramMap: of(convertToParamMap({})), url: of([]) } },
@@ -71,6 +75,10 @@ describe('LoginComponent', () => {
 
     expect(mockApi.login).toHaveBeenCalledWith('alice', 'secret');
     expect(mockApi.storeAuth).toHaveBeenCalled();
+    // The key is wrapped with this same password, and this is the only moment it
+    // is in hand. Without this call the account has no key and every message of
+    // the new scheme reads as "no key on this device".
+    expect(ensureAccountKey).withContext('sign-in must set up the account key').toHaveBeenCalledWith('secret');
     expect(mockRouter.navigateByUrl).toHaveBeenCalledWith('/feed');
   }));
 
