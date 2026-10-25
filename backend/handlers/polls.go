@@ -11,6 +11,46 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// pollAccess reports whether a poll exists and whether this user may see it.
+// Extracted so voting and reading the voter list cannot disagree about who is
+// allowed: a second copy of this check would drift, and the copy that is wrong
+// is always discovered after the leak.
+func pollAccess(pollID, userID int64) (exists bool, allowed bool) {
+	var messageID, groupMessageID sql.NullInt64
+	err := database.DB.QueryRow(
+		"SELECT message_id, group_message_id FROM polls WHERE id = ?",
+		pollID,
+	).Scan(&messageID, &groupMessageID)
+	if err == sql.ErrNoRows {
+		return false, false
+	}
+	if err != nil {
+		return true, false
+	}
+
+	if messageID.Valid {
+		var fromUserID, toUserID int64
+		if err := database.DB.QueryRow(
+			"SELECT from_user_id, to_user_id FROM messages WHERE id = ?", messageID.Int64,
+		).Scan(&fromUserID, &toUserID); err != nil {
+			return true, false
+		}
+		return true, userID == fromUserID || userID == toUserID
+	}
+
+	if groupMessageID.Valid {
+		var groupChatID int64
+		if err := database.DB.QueryRow(
+			"SELECT group_chat_id FROM group_messages WHERE id = ?", groupMessageID.Int64,
+		).Scan(&groupChatID); err != nil {
+			return true, false
+		}
+		return true, isGroupMember(groupChatID, userID)
+	}
+
+	return true, false
+}
+
 func (h *Handler) CastVote(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 
@@ -24,35 +64,19 @@ func (h *Handler) CastVote(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	var messageID, groupMessageID sql.NullInt64
-	var isMultiple bool
-	err = database.DB.QueryRow(
-		"SELECT message_id, group_message_id, is_multiple_choice FROM polls WHERE id = ?",
-		pollID,
-	).Scan(&messageID, &groupMessageID, &isMultiple)
-	if err == sql.ErrNoRows {
+	exists, allowed := pollAccess(pollID, userID)
+	if !exists {
 		return c.Status(404).JSON(fiber.Map{"error": "Poll not found"})
 	}
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	if !allowed {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
 	}
 
-	if messageID.Valid {
-		var fromUserID, toUserID int64
-		err = database.DB.QueryRow(
-			"SELECT from_user_id, to_user_id FROM messages WHERE id = ?", messageID.Int64,
-		).Scan(&fromUserID, &toUserID)
-		if err != nil || (userID != fromUserID && userID != toUserID) {
-			return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
-		}
-	} else if groupMessageID.Valid {
-		var groupChatID int64
-		err = database.DB.QueryRow(
-			"SELECT group_chat_id FROM group_messages WHERE id = ?", groupMessageID.Int64,
-		).Scan(&groupChatID)
-		if err != nil || !isGroupMember(groupChatID, userID) {
-			return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
-		}
+	var isMultiple bool
+	if err := database.DB.QueryRow(
+		"SELECT is_multiple_choice FROM polls WHERE id = ?", pollID,
+	).Scan(&isMultiple); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
 	}
 
 	var optionPollID int64
@@ -97,6 +121,12 @@ func (h *Handler) CastVote(c *fiber.Ctx) error {
 	}
 
 	options := loadPollOptions(pollID, userID)
+	// The broadcast needs to know which message carries this poll. Fetched here
+	// rather than threaded through pollAccess, which only answers "may I see it".
+	var messageID, groupMessageID sql.NullInt64
+	database.DB.QueryRow(
+		"SELECT message_id, group_message_id FROM polls WHERE id = ?", pollID,
+	).Scan(&messageID, &groupMessageID)
 	h.broadcastPollUpdate(pollID, messageID, groupMessageID, options)
 
 	return c.JSON(fiber.Map{"message": "Vote cast", "options": options})
@@ -274,4 +304,69 @@ func loadPollsForMessages(messages []models.Message, userID int64, isGroup bool)
 			}
 		}
 	}
+}
+
+// GetPollVotes lists who voted for each option.
+//
+// The data was always there - poll_votes has user_id - but nothing exposed it,
+// so a family could see "3 votes" and not "who". Access is decided by the same
+// helper as voting, so the two cannot disagree about who may look.
+func (h *Handler) GetPollVotes(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	pollID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid poll ID"})
+	}
+
+	exists, allowed := pollAccess(pollID, userID)
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{"error": "Poll not found"})
+	}
+	if !allowed {
+		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	rows, err := database.DB.Query(`
+		SELECT po.id, u.id, u.username, u.avatar_url
+		FROM poll_options po
+		LEFT JOIN poll_votes pv ON pv.poll_option_id = po.id
+		LEFT JOIN users u ON u.id = pv.user_id
+		WHERE po.poll_id = ?
+		ORDER BY po.id, u.username`, pollID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+	defer rows.Close()
+
+	type voter struct {
+		ID        int64  `json:"id"`
+		Username  string `json:"username"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	type optionVotes struct {
+		OptionID int64   `json:"option_id"`
+		Users    []voter `json:"users"`
+	}
+
+	out := make([]optionVotes, 0)
+	for rows.Next() {
+		var optionID int64
+		var uid sql.NullInt64
+		var username, avatarURL sql.NullString
+		if err := rows.Scan(&optionID, &uid, &username, &avatarURL); err != nil {
+			continue
+		}
+
+		if len(out) == 0 || out[len(out)-1].OptionID != optionID {
+			out = append(out, optionVotes{OptionID: optionID, Users: []voter{}})
+		}
+		// LEFT JOIN: an option nobody voted for has no user row.
+		if uid.Valid {
+			last := &out[len(out)-1]
+			last.Users = append(last.Users, voter{ID: uid.Int64, Username: username.String, AvatarURL: avatarURL.String})
+		}
+	}
+
+	return c.JSON(fiber.Map{"options": out})
 }

@@ -326,6 +326,28 @@ describe('ChatComponent', () => {
 
     expect(mockApi.uploadGroupKeyShare).toHaveBeenCalledWith(5, 7, 'ek', 'iv');
   }));
+
+  it('opens images in a built-in viewer, not a new tab', async () => {
+    const fixture = TestBed.createComponent(ChatComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    const winOpen = spyOn(window, 'open');
+
+    component.openImage('/uploads/posts/a.jpg');
+    fixture.detectChanges();
+
+    expect(component.viewerUrl()).toBe('/uploads/posts/a.jpg');
+    expect(winOpen).not.toHaveBeenCalled();
+
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]');
+    expect(dialog).withContext('the overlay must be in the DOM').toBeTruthy();
+
+    component.closeViewer();
+    fixture.detectChanges();
+    expect(component.viewerUrl()).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]')).toBeNull();
+  });
 });
 
 // ── The report: opening a chat with no network left the thread at the very top

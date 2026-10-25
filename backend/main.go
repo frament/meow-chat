@@ -277,6 +277,7 @@ func main() {
 	api.Post("/group-chats/:groupId/read", h.MarkGroupRead)
 
 	api.Post("/polls/:id/vote", h.CastVote)
+	api.Get("/polls/:id/votes", h.GetPollVotes)
 
 	api.Post("/upload-avatar", h.UploadAvatar)
 	api.Put("/profile", h.UpdateProfile)

@@ -515,3 +515,93 @@ func TestCastVote_GroupPoll(t *testing.T) {
 		t.Errorf("second user vote: expected 200, got %d", resp3.StatusCode)
 	}
 }
+
+// Who voted: the data was always in poll_votes, but nothing exposed it.
+func TestGetPollVotes(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	res, err := database.DB.Exec("INSERT INTO users (username, email, password) VALUES ('voter', 'v@e.ml', 'x')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	voterID, _ := res.LastInsertId()
+
+	// A direct message carrying a poll, so participation is the message pair.
+	res, err = database.DB.Exec(
+		"INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, 'Q', 'poll')",
+		userID, voterID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageID, _ := res.LastInsertId()
+
+	res, err = database.DB.Exec(
+		"INSERT INTO polls (message_id, question, is_multiple_choice) VALUES (?, 'Куда?', 0)", messageID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollID, _ := res.LastInsertId()
+
+	optA, _ := database.DB.Exec("INSERT INTO poll_options (poll_id, text) VALUES (?, 'Парк')", pollID)
+	optB, _ := database.DB.Exec("INSERT INTO poll_options (poll_id, text) VALUES (?, 'Кино')", pollID)
+	aID, _ := optA.LastInsertId()
+	bID, _ := optB.LastInsertId()
+
+	if _, err := database.DB.Exec("INSERT INTO poll_votes (poll_option_id, user_id) VALUES (?, ?)", aID, voterID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := doRequest(t, app, jsonRequest(t, "GET", "/polls/"+itoa(pollID)+"/votes", "", userID, false))
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d (%#v)", resp.StatusCode, body)
+	}
+
+	options, _ := body["options"].([]any)
+	if len(options) != 2 {
+		t.Fatalf("expected both options, got %#v", body["options"])
+	}
+	first, _ := options[0].(map[string]any)
+	users, _ := first["users"].([]any)
+	if len(users) != 1 {
+		t.Fatalf("expected one voter on the first option, got %#v", first["users"])
+	}
+	if u, _ := users[0].(map[string]any); u["username"] != "voter" {
+		t.Errorf("expected the voter's name, got %#v", u)
+	}
+	// An option nobody voted for still appears, with an empty list: the UI shows
+	// "0" next to it and would otherwise render nothing at all.
+	second, _ := options[1].(map[string]any)
+	if second["option_id"] != float64(bID) {
+		t.Errorf("expected the second option %d, got %#v", bID, second["option_id"])
+	}
+	if secondUsers, _ := second["users"].([]any); len(secondUsers) != 0 {
+		t.Errorf("expected no voters on the second option, got %#v", secondUsers)
+	}
+}
+
+// A stranger must not be able to enumerate who voted in someone else's chat.
+func TestGetPollVotes_StrangerForbidden(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+
+	res, _ := database.DB.Exec("INSERT INTO users (username, email, password) VALUES ('other', 'o@e.ml', 'x')")
+	otherID, _ := res.LastInsertId()
+	res, _ = database.DB.Exec("INSERT INTO messages (from_user_id, to_user_id, content, msg_type) VALUES (?, ?, 'Q', 'poll')", userID, otherID)
+	messageID, _ := res.LastInsertId()
+	res, _ = database.DB.Exec("INSERT INTO polls (message_id, question) VALUES (?, 'Q')", messageID)
+	pollID, _ := res.LastInsertId()
+
+	res, _ = database.DB.Exec("INSERT INTO users (username, email, password) VALUES ('stranger', 's@e.ml', 'x')")
+	strangerID, _ := res.LastInsertId()
+
+	resp, _ := doRequest(t, app, jsonRequest(t, "GET", "/polls/"+itoa(pollID)+"/votes", "", strangerID, false))
+	if resp.StatusCode != 403 {
+		t.Errorf("expected 403 for a non-participant, got %d", resp.StatusCode)
+	}
+
+	resp, _ = doRequest(t, app, jsonRequest(t, "GET", "/polls/99999/votes", "", userID, false))
+	if resp.StatusCode != 404 {
+		t.Errorf("expected 404 for an unknown poll, got %d", resp.StatusCode)
+	}
+}

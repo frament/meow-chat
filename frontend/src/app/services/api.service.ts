@@ -1514,6 +1514,13 @@ export class ApiService {
 
   // ── Polls ──
 
+  /** Who voted for each option. Same access rule as voting. */
+  getPollVotes(pollId: number) {
+    return this.http.get<{ options: Array<{ option_id: number; users: Array<{ id: number; username: string; avatar_url: string }> }> }>(
+      `${this.baseUrl}/polls/${pollId}/votes`
+    );
+  }
+
   castVote(pollId: number, optionId: number) {
     return this.http.post<{ message: string; options: PollOption[] }>(
       `${this.baseUrl}/polls/${pollId}/vote`,

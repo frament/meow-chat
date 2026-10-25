@@ -247,6 +247,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *Handler, int64) {
 	app.Delete("/friend-requests/:id", AuthRequired, h.RejectFriendRequest)
 
 	app.Post("/polls/:id/vote", AuthRequired, h.CastVote)
+	app.Get("/polls/:id/votes", AuthRequired, h.GetPollVotes)
 
 	// Push routes
 	h.LoadVAPIDKeys()

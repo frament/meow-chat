@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { GroupChat, Poll } from '../../services/api.service';
+import { ApiService, GroupChat, Poll } from '../../services/api.service';
 import { MdPipe } from '../../pipes/md.pipe';
 import { ChatPollService } from '../../services/chat-poll.service';
 
@@ -28,6 +28,7 @@ import { ChatPollService } from '../../services/chat-poll.service';
 })
 export class ChatMessagesComponent {
   private readonly polls = inject(ChatPollService);
+  private readonly api = inject(ApiService);
 
   @Input() items: unknown[] = [];
   @Input() currentUserId = 0;
@@ -51,6 +52,30 @@ export class ChatMessagesComponent {
    *  inside the bubble, where the incoming palette does not apply. */
   isOutgoing(item: unknown): boolean {
     return (item as { from_user_id?: number })?.from_user_id === this.currentUserId;
+  }
+
+  /** Polls whose voter list is open. */
+  readonly expandedPoll = new Set<number>();
+  /** Fetched voter lists, per poll. Not fetched until the list is opened. */
+  private readonly pollVoters: Record<number, Array<{ option_id: number; users: Array<{ id: number; username: string }> }>> = {};
+
+  toggleVotes(pollId: number): void {
+    if (this.expandedPoll.has(pollId)) {
+      this.expandedPoll.delete(pollId);
+      return;
+    }
+    this.expandedPoll.add(pollId);
+    if (this.pollVoters[pollId]) return;
+    // Fetched on demand: a thread can hold many polls, and most are never opened.
+    this.api.getPollVotes(pollId).subscribe({
+      next: (res) => { this.pollVoters[pollId] = res.options; },
+      error: () => {},
+    });
+  }
+
+  votersFor(pollId: number, optionId: number): string {
+    const users = this.pollVoters[pollId]?.find(o => o.option_id === optionId)?.users ?? [];
+    return users.map(u => u.username).join(', ');
   }
 
   /** Total votes across a poll's options, for the percentage bars. */

@@ -1258,8 +1258,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.fileInputRef?.nativeElement.click();
   }
 
+  /** Full-screen viewer. Opening a new tab loses the conversation and, on a
+   *  phone, drops the user out of the PWA entirely. */
+  readonly viewerUrl = signal<string | null>(null);
+
   openImage(url: string) {
-    window.open(url, '_blank');
+    this.viewerUrl.set(url);
+  }
+
+  closeViewer() {
+    this.viewerUrl.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  onViewerEscape() {
+    if (this.viewerUrl()) this.closeViewer();
   }
 
   encodeURI(url: string): string {
