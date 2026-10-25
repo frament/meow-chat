@@ -22,6 +22,13 @@ FROM nginx:alpine
 
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Allowlist rendered at startup: the address of the TLS-terminating proxy in
+# front is per-install, so it cannot be baked into nginx.conf. `include` in the
+# server block picks the result up.
+COPY nginx-ingress/allow.conf.template /etc/nginx/templates/ingress.conf.template
+RUN mkdir -p /etc/nginx/ingress
+ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/ingress
+
 COPY --from=builder /app/dist/frontend/browser /usr/share/nginx/html
 
 EXPOSE 80

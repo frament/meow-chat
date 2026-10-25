@@ -5,7 +5,12 @@ services:
       args:
         HOME: /tmp
     ports:
-      - "8080:8080"
+      # Loopback only. Nothing outside the host needs the API directly: the
+      # frontend reaches it as `backend:8080` over the compose network, not
+      # through this published port. Publishing it on 0.0.0.0 meant the whole
+      # API was reachable over plain HTTP from the LAN, which is the TLS bypass
+      # this line closes.
+      - "127.0.0.1:8080:8080"
     environment:
       - PORT=8080
       - DB_PATH=/data/chat.db
@@ -39,6 +44,13 @@ services:
         BUILD_DIRTY: ${BUILD_DIRTY:-}
     ports:
       - "3000:80"
+    environment:
+      # The only address allowed to reach this port directly: the proxy that
+      # terminates TLS (here the router). The port cannot simply be bound to
+      # 127.0.0.1 - that proxy is a different machine on the LAN and connects
+      # to this host's address, not to its loopback. The default keeps the
+      # previous behaviour on installs that do not set it.
+      - INGRESS_ALLOW=${INGRESS_ALLOW:-0.0.0.0/0}
     depends_on:
       - backend
     restart: unless-stopped
