@@ -86,6 +86,64 @@ export class ChatThreadService {
     return { messages, addedIds };
   }
 
+  /**
+   * True when this message id has not been seen yet. `undefined` means the frame
+   * carried no id, and such a frame is always accepted: refusing it would drop a
+   * message for the sake of an index that does not exist.
+   */
+  claim(seen: Set<number>, id: number | undefined): boolean {
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }
+
+  /**
+   * Confirms an optimistic message: the server's id replaces the temporary one.
+   *
+   * The id change is the subtle part. Leaving the temporary id in `seen` and the
+   * real one out means the next frame for that message looks unclaimed and
+   * arrives as a duplicate of what is already on screen.
+   *
+   * Returns false when the message is no longer in the thread, so the caller can
+   * skip persisting for nothing.
+   */
+  finalizeOptimistic(
+    messages: Message[],
+    seen: Set<number>,
+    tempId: number,
+    server?: { id?: number; images?: string[]; sticker_url?: string },
+  ): boolean {
+    const msg = messages.find(m => m.id === tempId);
+    if (!msg) return false;
+
+    msg.pending = false;
+
+    if (server?.id) {
+      seen.delete(msg.id);
+      msg.id = server.id;
+      seen.add(server.id);
+    }
+    if (server?.images && server.images.length > 0) {
+      msg.images = server.images.map(url => ({ id: 0, image_url: url }));
+    }
+    // A sticker bubble renders sticker_url, and the optimistic one only held the
+    // sticker id in `content`. Without this the author sees an empty bubble.
+    if (server?.sticker_url) {
+      msg.sticker_url = server.sticker_url;
+    }
+    return true;
+  }
+
+  /** Drops an optimistic message the server rejected. */
+  rollbackOptimistic(messages: Message[], seen: Set<number>, tempId: number): boolean {
+    const idx = messages.findIndex(m => m.id === tempId);
+    if (idx === -1) return false;
+    seen.delete(tempId);
+    messages.splice(idx, 1);
+    return true;
+  }
+
   dayKey(iso: string): string {
     const d = new Date(iso);
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;

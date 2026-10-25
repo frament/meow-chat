@@ -229,10 +229,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * would collide with the next one.
    */
   private claimMessage(id: number | undefined): boolean {
-    if (!id) return true;
-    if (this.seenMessageIds.has(id)) return false;
-    this.seenMessageIds.add(id);
-    return true;
+    return this.thread.claim(this.seenMessageIds, id);
   }
 
   private scrollToBottom(): void {
@@ -1222,42 +1219,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private finalizeOptimistic(tempId: number, server?: any) {
     this.sending = false;
-    const idx = this.messages.findIndex(m => m.id === tempId);
-    if (idx !== -1) {
-      this.messages[idx].pending = false;
-      if (server?.id) {
-        // The id changes under the index's feet here: the temporary one must make
-        // way for the server's, or the next frame for that message would look
-        // unclaimed and arrive as a duplicate of what is already on screen.
-        this.seenMessageIds.delete(this.messages[idx].id);
-        this.messages[idx].id = server.id;
-        this.seenMessageIds.add(server.id);
-      }
-      if (server?.images && server.images.length > 0) {
-        this.messages[idx].images = server.images.map((url: string) => ({ id: 0, image_url: url }));
-      }
-      // A sticker bubble renders sticker_url, and the optimistic one only ever
-      // held the sticker id in `content` - so without this the author sees an
-      // empty bubble. The response carries the resolved URL precisely because
-      // our own WS frame is skipped as an echo.
-      if (server?.sticker_url) {
-        this.messages[idx].sticker_url = server.sticker_url;
-      }
-      if (this.selectedUser) {
-        this.persistCache(this.selectedUser.id);
-      }
+    const found = this.thread.finalizeOptimistic(this.messages, this.seenMessageIds, tempId, server);
+    if (found && this.selectedUser) {
+      this.persistCache(this.selectedUser.id);
     }
   }
 
   private rollbackOptimistic(tempId: number) {
     this.sending = false;
-    const idx = this.messages.findIndex(m => m.id === tempId);
-    if (idx !== -1) {
-      this.seenMessageIds.delete(tempId);
-      this.messages.splice(idx, 1);
-      if (this.selectedUser) {
-        this.persistCache(this.selectedUser.id);
-      }
+    const removed = this.thread.rollbackOptimistic(this.messages, this.seenMessageIds, tempId);
+    if (removed && this.selectedUser) {
+      this.persistCache(this.selectedUser.id);
     }
   }
 

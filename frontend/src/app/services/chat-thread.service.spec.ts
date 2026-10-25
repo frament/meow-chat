@@ -121,4 +121,50 @@ describe('ChatThreadService', () => {
       expect(addedIds).toEqual([]);
     });
   });
+
+  describe('optimistic send bookkeeping', () => {
+    const m = (id: number, extra: Record<string, unknown> = {}) =>
+      ({ id, created_at: '2026-10-25T10:00:00', content: 'x', ...extra }) as unknown as Message;
+
+    it('claim rejects a duplicate id and accepts a missing one', () => {
+      const seen = new Set<number>();
+      expect(service.claim(seen, 1)).toBeTrue();
+      expect(service.claim(seen, 1)).toBeFalse();
+      // A frame with no id is always accepted.
+      expect(service.claim(seen, undefined)).toBeTrue();
+    });
+
+    /** The temporary id must leave `seen` and the real one enter it, or the next
+     *  frame for this message arrives as a duplicate of what is on screen. */
+    it('finalize replaces the temp id in the message and in the seen index', () => {
+      const seen = new Set<number>([-1]);
+      const messages = [m(-1, { pending: true })];
+
+      const found = service.finalizeOptimistic(messages, seen, -1, { id: 42, sticker_url: '/s.png' });
+
+      expect(found).toBeTrue();
+      expect(messages[0].id).toBe(42);
+      expect(messages[0].pending).toBeFalse();
+      expect(messages[0].sticker_url).toBe('/s.png');
+      expect(seen.has(-1)).toBeFalse();
+      expect(seen.has(42)).toBeTrue();
+    });
+
+    it('finalize reports a message that is no longer in the thread', () => {
+      expect(service.finalizeOptimistic([m(1)], new Set(), -1)).toBeFalse();
+    });
+
+    it('rollback removes the message and forgets its temp id', () => {
+      const seen = new Set<number>([-1]);
+      const messages = [m(1), m(-1)];
+
+      expect(service.rollbackOptimistic(messages, seen, -1)).toBeTrue();
+      expect(messages.map(x => x.id)).toEqual([1]);
+      expect(seen.has(-1)).toBeFalse();
+    });
+
+    it('rollback is a no-op for an unknown temp id', () => {
+      expect(service.rollbackOptimistic([m(1)], new Set(), -9)).toBeFalse();
+    });
+  });
 });
