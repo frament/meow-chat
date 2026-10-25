@@ -446,19 +446,28 @@ func ApplySchema(db *sql.DB) error {
 			last_seen         DATETIME,
 			created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		// Receive keys are separate from user_devices on purpose. The column above
-		// holds an ECDH P-256 key that the old E2EE messages still need until 2.0.0,
-		// and reusing it would mean one column whose meaning depends on a date.
-		// A device gets its own X25519 pair here, which is also the only shape that
-		// works with `extractable: false`: such a key cannot be exported, so it
-		// cannot be shared with the user's other devices.
-		`CREATE TABLE IF NOT EXISTS device_receive_keys (
-			id             INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_device_id INTEGER NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
-			kid            TEXT NOT NULL,
-			public_key     TEXT NOT NULL,
-			created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
-			retired_at     DATETIME
+		// Receive keys are one per user, not one per device.
+		//
+		// A per-device key would have to be moved between the phone and the laptop,
+		// and moving it is the whole E2EE problem this release exists to leave
+		// behind: trusted-device lists, shares that did not arrive, one device
+		// reading a group while the other cannot. One key per user makes "which
+		// device" irrelevant - the server wraps every read to the same key.
+		//
+		// The private half is stored wrapped with a key derived from the account
+		// password, because a new device has to obtain the same key and a
+		// non-extractable one could never be exported. The server never replaces
+		// this key on its own: replacement is a rotation confirmed by the password,
+		// otherwise anyone holding a token could point the key at themselves.
+		`CREATE TABLE IF NOT EXISTS user_receive_keys (
+			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			kid                 TEXT NOT NULL,
+			public_key          TEXT NOT NULL,
+			wrapped_private_key TEXT NOT NULL,
+			kdf_salt            TEXT NOT NULL,
+			created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+			retired_at          DATETIME
 		)`,
 		`CREATE TABLE IF NOT EXISTS device_auth_requests (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,

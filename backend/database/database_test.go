@@ -27,7 +27,7 @@ func TestInitDBCreatesTables(t *testing.T) {
 		"pinned_users", "invite_tokens", "user_devices", "device_auth_requests",
 		"user_keys_backup", "federation_servers", "federation_users",
 		"federation_queue", "federation_cache_entries", "federation_network",
-		"federation_invites", "schema_version",
+		"federation_invites", "schema_version", "user_receive_keys",
 	}
 	for _, name := range tables {
 		var exists int

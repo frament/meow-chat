@@ -196,6 +196,7 @@ func main() {
 
 	api.Post("/offline", h.GoOffline)
 
+	api.Get("/crypto/receive-key", h.GetReceiveKey)
 	api.Post("/crypto/receive-key", h.RegisterReceiveKey)
 
 	dev := api.Group("/devices")
