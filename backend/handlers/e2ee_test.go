@@ -51,7 +51,11 @@ func TestPutKey_MissingPublicKey(t *testing.T) {
 	}
 }
 
-func TestPutKey_UpdatesExisting(t *testing.T) {
+// Replacing the account key implicitly is what orphaned the history on prod:
+// a device without a local key generated a pair, uploaded it, and every message
+// encrypted to the previous key became unreadable everywhere. This test used to
+// assert the opposite (200 and the row overwritten) - it was documenting the bug.
+func TestPutKey_RefusesToReplaceExisting(t *testing.T) {
 	app, h, userID := setupTestApp(t)
 	app.Put("/e2ee/key", AuthRequired, h.PutKey)
 
@@ -65,14 +69,114 @@ func TestPutKey_UpdatesExisting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != 200 {
-		t.Errorf("expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != 409 {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
 	}
 
 	var key string
 	database.DB.QueryRow("SELECT public_key FROM user_keys WHERE user_id=?", userID).Scan(&key)
-	if key != "new-key-456" {
-		t.Errorf("expected new-key-456, got %s", key)
+	if key != "old-key" {
+		t.Errorf("the account key must stay untouched, got %s", key)
+	}
+}
+
+// The refusal has to name the key that is in force, otherwise the client cannot
+// tell "someone else owns this account key" from "the upload failed".
+func TestPutKey_ConflictReturnsTheExistingKey(t *testing.T) {
+	app, h, userID := setupTestApp(t)
+	app.Put("/e2ee/key", AuthRequired, h.PutKey)
+
+	database.DB.Exec("INSERT INTO user_keys (user_id, public_key) VALUES (?, ?)", userID, "old-key")
+
+	req, _ := http.NewRequest("PUT", "/e2ee/key", strings.NewReader(`{"public_key":"new-key-456"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 409 {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		PublicKey string `json:"public_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.PublicKey != "old-key" {
+		t.Errorf("expected the existing key in the response, got %q", body.PublicKey)
+	}
+}
+
+// Every login calls syncPublicKey, so the same key arrives again and again. It
+// must be accepted quietly, not treated as a replacement attempt.
+func TestPutKey_SameKeyIsIdempotent(t *testing.T) {
+	app, h, userID := setupTestApp(t)
+	app.Put("/e2ee/key", AuthRequired, h.PutKey)
+
+	database.DB.Exec("INSERT INTO user_keys (user_id, public_key) VALUES (?, ?)", userID, "same-key")
+	var before string
+	database.DB.QueryRow("SELECT created_at FROM user_keys WHERE user_id=?", userID).Scan(&before)
+
+	req, _ := http.NewRequest("PUT", "/e2ee/key", strings.NewReader(`{"public_key":"same-key"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var after string
+	database.DB.QueryRow("SELECT created_at FROM user_keys WHERE user_id=?", userID).Scan(&after)
+	if after != before {
+		t.Errorf("the row must not be rewritten, created_at moved from %q to %q", before, after)
+	}
+}
+
+func TestGetAccountKey_OwnKey(t *testing.T) {
+	app, h, userID := setupTestApp(t)
+	app.Get("/crypto/account-key", AuthRequired, h.GetAccountKey)
+
+	database.DB.Exec("INSERT INTO user_keys (user_id, public_key) VALUES (?, ?)", userID, "my-key")
+
+	req, _ := http.NewRequest("GET", "/crypto/account-key", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		PublicKey string `json:"public_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.PublicKey != "my-key" {
+		t.Errorf("expected my-key, got %q", body.PublicKey)
+	}
+}
+
+func TestGetAccountKey_NoKey(t *testing.T) {
+	app, h, userID := setupTestApp(t)
+	app.Get("/crypto/account-key", AuthRequired, h.GetAccountKey)
+
+	req, _ := http.NewRequest("GET", "/crypto/account-key", nil)
+	req.Header.Set("Authorization", bearerToken(t, userID, false))
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 404 {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
 }
 

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CryptoService } from './crypto.service';
 import { ApiService } from './api.service';
 
@@ -71,8 +71,13 @@ describe('Key recovery on a new device', () => {
       'putKey',
       'getGroupChat',
       'getUserDeviceKeys',
+      'getAccountKey',
     ]);
     api.getKey.and.returnValue(of({ public_key: '' }));
+    // A first-ever device: the account has no key yet, so init() creates one.
+    // Without this the service asks an undeclared spy, and the safe answer to a
+    // failed check - "do not generate" - makes the whole scenario keyless.
+    api.getAccountKey.and.returnValue(throwError(() => ({ status: 404 })));
     api.putKey.and.returnValue(of({ message: 'ok' }));
 
     TestBed.configureTestingModule({ providers: [{ provide: ApiService, useValue: api }] });

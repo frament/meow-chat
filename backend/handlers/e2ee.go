@@ -20,13 +20,39 @@ func (h *Handler) PutKey(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "public_key is required"})
 	}
 
-	_, err := database.DB.Exec(
+	// The account key is created once and never replaced implicitly.
+	//
+	// A device that lost its local copy regenerates a pair (ensureIdentityKey)
+	// and used to land here - silently becoming the owner of the account key.
+	// Every message encrypted to the previous key then became unreadable on
+	// every device, in both directions: on prod that cost a window of 16
+	// messages (28.09-06.10) in one conversation. Replacing the key is key
+	// rotation and has to be an explicit, password-confirmed action.
+	res, err := database.DB.Exec(
 		`INSERT INTO user_keys (user_id, public_key) VALUES (?, ?)
-		 ON CONFLICT(user_id) DO UPDATE SET public_key = excluded.public_key, created_at = CURRENT_TIMESTAMP`,
+		 ON CONFLICT(user_id) DO NOTHING`,
 		userID, body.PublicKey,
 	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save key"})
+	}
+
+	inserted, _ := res.RowsAffected()
+	if inserted == 0 {
+		var existing string
+		if err := database.DB.QueryRow(
+			"SELECT public_key FROM user_keys WHERE user_id = ?", userID,
+		).Scan(&existing); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to read key"})
+		}
+		if existing != body.PublicKey {
+			return c.Status(409).JSON(fiber.Map{
+				"error":      "account key already exists",
+				"public_key": existing,
+			})
+		}
+		// Same key uploaded again: idempotent, and nothing to forward.
+		return c.JSON(fiber.Map{"message": "unchanged"})
 	}
 
 	// Forward key to all federated servers
@@ -62,6 +88,26 @@ func (h *Handler) GetKey(c *fiber.Ctx) error {
 	var publicKey string
 	err = database.DB.QueryRow(
 		"SELECT public_key FROM user_keys WHERE user_id = ?", targetID,
+	).Scan(&publicKey)
+	if err == sql.ErrNoRows {
+		return c.Status(404).JSON(fiber.Map{"error": "No key found"})
+	}
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch key"})
+	}
+
+	return c.JSON(fiber.Map{"public_key": publicKey})
+}
+
+// GetAccountKey reports the caller's own account key, if one exists. The client
+// needs this *before* it has a key of its own: a device with no local copy must
+// ask whether the account already has one instead of generating a replacement.
+func (h *Handler) GetAccountKey(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(int64)
+
+	var publicKey string
+	err := database.DB.QueryRow(
+		"SELECT public_key FROM user_keys WHERE user_id = ?", userID,
 	).Scan(&publicKey)
 	if err == sql.ErrNoRows {
 		return c.Status(404).JSON(fiber.Map{"error": "No key found"})

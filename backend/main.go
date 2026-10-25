@@ -154,6 +154,7 @@ func main() {
 	}))
 
 	api.Get("/keys/:userId", h.GetKey)
+	api.Get("/crypto/account-key", h.GetAccountKey)
 
 	fed := api.Group("/federation/v1")
 	fed.Post("/join", fedHandler.HandleJoinInvite)

@@ -1243,6 +1243,15 @@ export class ApiService {
     return this.http.get<{ public_key: string }>(`${this.baseUrl}/keys/${userId}`);
   }
 
+  /**
+   * The caller's own account key, or 404 when there is none yet. A device with
+   * no local key asks this before generating one: if the account already has a
+   * key, this device is not its owner and must recover it instead.
+   */
+  getAccountKey() {
+    return this.http.get<{ public_key: string }>(`${this.baseUrl}/crypto/account-key`);
+  }
+
   // Group E2EE key shares
   uploadGroupKeyShare(groupId: number, userId: number, encryptedKey: string, iv: string) {
     return this.http.post<{ message: string }>(

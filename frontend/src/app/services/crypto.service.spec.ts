@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CryptoService } from './crypto.service';
 import { ApiService } from './api.service';
 
@@ -18,7 +18,11 @@ describe('CryptoService', () => {
       'getGroupChat',
       'getUserDeviceKeys',
       'getMyGroupDeviceKeyShare',
+      'getAccountKey',
     ]);
+    // Default: the account has no key yet, so init() may create one. Individual
+    // tests override this to describe a device that lost its copy.
+    apiMock.getAccountKey.and.returnValue(throwError(() => ({ status: 404 })));
     apiMock.putKey.and.returnValue(of({ message: 'ok' }));
     apiMock.getKey.and.returnValue(of({ public_key: '' }));
     apiMock.getUserDeviceKeys.and.returnValue(of([]));
@@ -61,6 +65,55 @@ describe('CryptoService', () => {
     expect(await service.hasIdentityKey()).toBeTrue();
     expect(store.has('identityKeyJWK')).toBeTrue();
     expect(store.has('publicKeySPKI')).toBeTrue();
+  });
+
+  it('does not generate a key when the account already has one', async () => {
+    // This is the guarantee: a device that lost its copy must not replace the
+    // account key, because every message encrypted to the previous one becomes
+    // unreadable on every device, in both directions.
+    apiMock.getAccountKey.and.returnValue(of({ public_key: 'someone-elses-key' }));
+
+    await service.init();
+
+    expect(await service.hasIdentityKey()).withContext('must not create a key here').toBeFalse();
+    expect(store.has('identityKeyJWK')).toBeFalse();
+    expect(apiMock.putKey).withContext('must not overwrite the account key').not.toHaveBeenCalled();
+    expect(service.needsRecovery()).withContext('the recovery form opens on this').toBeTrue();
+  });
+
+  it('does not generate a key when the check itself fails', async () => {
+    // Offline or a proxy in the way: "I could not ask" is not "there is no key".
+    // Generating on that answer would be the damaging choice.
+    apiMock.getAccountKey.and.returnValue(throwError(() => new Error('network down')));
+
+    await service.init();
+
+    expect(await service.hasIdentityKey()).toBeFalse();
+    expect(apiMock.putKey).not.toHaveBeenCalled();
+  });
+
+  it('creates the first key and uploads it when the account has none', async () => {
+    await service.init();
+
+    expect(await service.hasIdentityKey()).toBeTrue();
+    expect(apiMock.putKey).toHaveBeenCalledTimes(1);
+    expect(service.needsRecovery()).withContext('nothing to recover').toBeFalse();
+  });
+
+  it('importIdentityKey clears needsRecovery', async () => {
+    apiMock.getAccountKey.and.returnValue(of({ public_key: 'k' }));
+    await service.init();
+    expect(service.needsRecovery()).toBeTrue();
+
+    const keyPair = (await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveKey', 'deriveBits'],
+    )) as CryptoKeyPair;
+    const jwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+    await service.importIdentityKey(JSON.stringify(jwk));
+
+    expect(service.needsRecovery()).withContext('the form must not come back').toBeFalse();
   });
 
   it('getPublicKey should return a valid base64 string after init', async () => {

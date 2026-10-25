@@ -1,4 +1,5 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { DeviceAuthComponent, recoveryLandingUrl } from './device-auth';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
@@ -24,6 +25,8 @@ describe('DeviceAuthComponent', () => {
   const mockReload = { reload: jasmine.createSpy('reload') };
 
   const mockCrypto = {
+    init: jasmine.createSpy('init').and.returnValue(Promise.resolve()),
+    needsRecovery: signal(false),
     ensureDeviceKeyPair: jasmine.createSpy().and.returnValue(Promise.resolve()),
     getDevicePublicKeySPKI: jasmine.createSpy().and.returnValue(Promise.resolve('spki')),
     deviceId: 'dev-1',
@@ -144,10 +147,41 @@ describe('DeviceAuthComponent', () => {
   }));
 
   it('shows recovery error on failed recover', fakeAsync(() => {
-    mockApi.recoverKeys.and.returnValue(throwError(() => ({})));
+    // This used to throw a bare `{}` and expect the password message for it.
+    // Now a status-less failure says the server did not answer, which is what
+    // an empty error actually means; a rejected password comes with 401.
+    mockApi.recoverKeys.and.returnValue(throwError(() => ({ status: 401 })));
     component.recoveryInput = 'wrong';
     component.doRecover();
     tick();
+    expect(component.recoveryError).toBe('Неверный пароль или фраза восстановления');
+  }));
+
+  it('says there is no backup instead of blaming the password', fakeAsync(() => {
+    // With needsRecovery the form opens by itself, so this message is the first
+    // thing a device without a key sees. Telling those people their password is
+    // wrong sends them to retype a correct one forever.
+    mockApi.recoverKeys.and.returnValue(throwError(() => ({
+      status: 404,
+      error: { error: 'No password backup found' },
+    })));
+    component.recoveryInput = 'правильный пароль';
+    component.doRecover();
+    tick();
+
+    expect(component.recoveryError).toContain('Резервной копии ключа нет');
+    expect(component.recoveryError).not.toContain('Неверный пароль');
+  }));
+
+  it('still blames the password when the server rejects it', fakeAsync(() => {
+    mockApi.recoverKeys.and.returnValue(throwError(() => ({
+      status: 401,
+      error: { error: 'Invalid password or phrase' },
+    })));
+    component.recoveryInput = 'неверный';
+    component.doRecover();
+    tick();
+
     expect(component.recoveryError).toBe('Неверный пароль или фраза восстановления');
   }));
 
@@ -171,6 +205,8 @@ describe('DeviceAuthComponent recovery entry point', () => {
     getAuthRequests: jasmine.createSpy().and.returnValue(of([])),
   };
   const mockCrypto = {
+    init: jasmine.createSpy('init').and.returnValue(Promise.resolve()),
+    needsRecovery: signal(false),
     deviceId: 'dev-1',
     hasIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
     importIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve()),
@@ -216,4 +252,42 @@ describe('recoveryLandingUrl', () => {
     expect(recoveryLandingUrl('https://chat.example/chat/2')).toBeNull();
     expect(recoveryLandingUrl('https://chat.example/chat/2?recover=0')).toBeNull();
   });
+});
+
+describe('DeviceAuthComponent opening on need', () => {
+  function configure(needsRecovery: boolean) {
+    const mockCrypto = {
+      init: jasmine.createSpy('init').and.returnValue(Promise.resolve()),
+      needsRecovery: signal(needsRecovery),
+      deviceId: 'dev-1',
+      hasIdentityKey: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
+    };
+    TestBed.configureTestingModule({
+      imports: [DeviceAuthComponent],
+      providers: [
+        { provide: ApiService, useValue: { getAuthRequests: () => of([]), recoverKeys: () => of({}) } },
+        { provide: CryptoService, useValue: mockCrypto },
+        { provide: AppReloadService, useValue: { reload: jasmine.createSpy('reload') } },
+      ],
+    });
+    return TestBed.createComponent(DeviceAuthComponent);
+  }
+
+  it('opens the form when the account key lives on another device', fakeAsync(() => {
+    // No key here, key present on the server: the form is the only fix, so it
+    // must appear without anyone knowing the ?recover=1 URL.
+    const fixture = configure(true);
+    fixture.detectChanges();
+    flushMicrotasks();
+
+    expect(fixture.componentInstance.showRecovery).toBeTrue();
+  }));
+
+  it('stays closed when there is nothing to recover', fakeAsync(() => {
+    const fixture = configure(false);
+    fixture.detectChanges();
+    flushMicrotasks();
+
+    expect(fixture.componentInstance.showRecovery).withContext('a healthy device sees no form').toBeFalse();
+  }));
 });

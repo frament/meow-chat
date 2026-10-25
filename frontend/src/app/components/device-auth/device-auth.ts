@@ -153,7 +153,16 @@ export class DeviceAuthComponent implements OnInit {
     // stays closed.
     if (this.#route?.snapshot?.queryParamMap?.get('recover') === '1') {
       this.showRecovery = true;
+      return;
     }
+    // ...unless this device genuinely needs it: no local key while the account
+    // has one. Then the form is the only thing that can fix the device, so it
+    // opens by itself - and stays closed for everybody else.
+    this.crypto.init()
+      .then(() => {
+        if (this.crypto.needsRecovery()) this.showRecovery = true;
+      })
+      .catch(() => {});
   }
 
   /**
@@ -324,10 +333,24 @@ export class DeviceAuthComponent implements OnInit {
           this.recoveryError = 'Ключ получен, но не удалось применить его на этом устройстве.';
         }
       },
-      error: () => {
+      error: (err) => {
         // The input is deliberately kept: an empty field disables the button and
         // leaves no way to retry without retyping the password.
-        this.recoveryError = 'Неверный пароль или фраза восстановления';
+        //
+        // Three different situations used to read as "wrong password", and for a
+        // device without a key and without a backup that was a lie with no way
+        // forward - it sent people to retype a password that was correct.
+        const status = err?.status;
+        const serverSaid = String(err?.error?.error ?? '');
+        if (status === 404) {
+          this.recoveryError = serverSaid.includes('recovery phrase')
+            ? 'Фраза восстановления не создавалась — восстановить ключ нечем.'
+            : 'Резервной копии ключа нет — восстановить его нельзя. Пароль тут не поможет.';
+        } else if (status === 401) {
+          this.recoveryError = 'Неверный пароль или фраза восстановления';
+        } else {
+          this.recoveryError = 'Не удалось восстановить ключ: сервер не ответил. Попробуйте ещё раз.';
+        }
       },
     });
   }

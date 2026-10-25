@@ -292,14 +292,16 @@ func TestPutAndGetKey(t *testing.T) {
 		t.Errorf("expected pk-1, got %#v", body["public_key"])
 	}
 
-	// A second PUT replaces it rather than adding a row: the key is per user,
-	// and a leftover old key would be served to peers after a rotation.
-	if resp, _ := doRequest(t, app, jsonRequest(t, "PUT", "/keys", `{"public_key":"pk-2"}`, userID, false)); resp.StatusCode != 200 {
-		t.Fatalf("replace key: expected 200")
+	// A second PUT with a different key is refused, not applied: the account key
+	// is created once. Replacing it silently is what orphaned a window of real
+	// messages on prod - every message encrypted to the previous key became
+	// unreadable on both sides. Rotation has to be explicit.
+	if resp, _ := doRequest(t, app, jsonRequest(t, "PUT", "/keys", `{"public_key":"pk-2"}`, userID, false)); resp.StatusCode != 409 {
+		t.Fatalf("replace key: expected 409, got %d", resp.StatusCode)
 	}
 	_, body = doRequest(t, app, jsonRequest(t, "GET", "/keys/"+itoa(userID), "", userID, false))
-	if body["public_key"] != "pk-2" {
-		t.Errorf("expected the key to be replaced, got %#v", body["public_key"])
+	if body["public_key"] != "pk-1" {
+		t.Errorf("the account key must stay untouched, got %#v", body["public_key"])
 	}
 
 	if resp, _ := doRequest(t, app, jsonRequest(t, "GET", "/keys/99999", "", userID, false)); resp.StatusCode != 404 {

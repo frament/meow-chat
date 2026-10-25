@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { ApiService } from './api.service';
 import { firstValueFrom } from 'rxjs';
 
@@ -13,6 +13,15 @@ export class CryptoService {
   private peerKeysCache = new Map<number, CryptoKey>();
   private sharedSecrets = new Map<string, CryptoKey>(); // "ourID:peerID" → AES key
   private initPromise: Promise<void> | null = null;
+
+  /**
+   * True when this device has no identity key but the account has one: the key
+   * lives on another device and has to be recovered with the account password.
+   * The recovery form opens on this signal, so it appears exactly when it is
+   * needed - not after every login, which is what made a successful recovery
+   * invisible.
+   */
+  readonly needsRecovery = signal(false);
 
   constructor(private api: ApiService) {}
 
@@ -65,6 +74,19 @@ export class CryptoService {
     const existing = await this.get<JsonWebKey>('identityKeyJWK');
     if (existing) return;
 
+    // No local key. If the account already has one, this device is not its
+    // owner: generating a pair here and uploading it (PutKey) used to replace
+    // the account key silently, and every message encrypted to the previous key
+    // became unreadable on every device - in both directions. On prod that cost
+    // a window of 16 messages. Ask for recovery instead; the form is reachable
+    // at /device-auth?recover=1 from the profile, and opens by itself because
+    // needsRecovery stays true.
+    if (await this.accountKeyExistsOnServer()) {
+      this.needsRecovery.set(true);
+      console.warn('E2EE: the account key exists on another device - recovery required');
+      return;
+    }
+
     const keyPair = await crypto.subtle.generateKey(
       { name: 'ECDH', namedCurve: 'P-256' },
       true,
@@ -84,6 +106,22 @@ export class CryptoService {
       await firstValueFrom(this.api.putKey(publicKeyBase64));
     } catch {
       console.warn('Failed to upload E2E public key to server');
+    }
+  }
+
+  /**
+   * Whether the account already has a key on the server.
+   *
+   * Anything other than a definite "no key yet" answers true: if the check
+   * itself fails (offline, a proxy in the way), generating a replacement is the
+   * damaging choice, so the safe answer is "do not generate".
+   */
+  private async accountKeyExistsOnServer(): Promise<boolean> {
+    try {
+      await firstValueFrom(this.api.getAccountKey());
+      return true;
+    } catch (err: any) {
+      return err?.status !== 404;
     }
   }
 
@@ -570,6 +608,8 @@ export class CryptoService {
 
     await this.set('identityKeyJWK', jwkJson);
     await this.set('publicKeySPKI', pubB64);
+    // The key is here now: the recovery form must not come back.
+    this.needsRecovery.set(false);
   }
 
   async hasIdentityKey(): Promise<boolean> {
