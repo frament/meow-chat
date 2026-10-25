@@ -7,6 +7,7 @@ import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ClockService } from '../../services/clock.service';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../../testing/server-crypto.stub';
 
 /**
  * One message arriving three times was reported from production.
@@ -99,6 +100,7 @@ describe('ChatComponent duplicate suppression', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: anyApi as unknown as ApiService },
         { provide: CryptoService, useValue: mockCrypto },
         {

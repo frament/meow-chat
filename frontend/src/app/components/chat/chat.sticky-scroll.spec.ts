@@ -8,6 +8,7 @@ import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ClockService } from '../../services/clock.service';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../../testing/server-crypto.stub';
 
 /**
  * Thread pinning: .chat-scroll is a flex column and .thread-inner carries
@@ -109,6 +110,7 @@ describe('ChatComponent thread pinning', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: anyApi as unknown as ApiService },
         { provide: CryptoService, useValue: { init: () => Promise.resolve() } },
         {

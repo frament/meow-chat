@@ -61,6 +61,9 @@
                           }
                         </div>
                       } @else {
+                        @if ($any(item).needs_key && !$any(item).content) {
+                          <p class="md" style="font-style:italic;opacity:.7;">Сообщение зашифровано. Ключ на этом устройстве не настроен.</p>
+                        }
                         @if ($any(item).content) { <p class="md" [innerHTML]="$any(item).content | md"></p> }
                         @if ($any(item).images && $any(item).images.length > 0) {
                         <div class="flex flex-wrap gap-1 mt-1">

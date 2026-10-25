@@ -6,6 +6,7 @@ import { ClockService } from '../../services/clock.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal, computed } from '@angular/core';
 import { of, Subject, throwError } from 'rxjs';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../../testing/server-crypto.stub';
 
 describe('ChatComponent', () => {
   let component: ChatComponent;
@@ -93,6 +94,7 @@ describe('ChatComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },
@@ -435,6 +437,7 @@ describe('ChatComponent: loading a thread over a failing network', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: { init: jasmine.createSpy().and.returnValue(Promise.resolve()) } },
         { provide: ClockService, useValue: { now: signal(Date.now()) } },
@@ -515,6 +518,10 @@ describe('ChatComponent: loading a thread over a failing network', () => {
 
     mockApi.getMessages.and.returnValue(of([message(1, 2, 'наконец-то', 1)]));
     component.retryLoadMessages();
+    // One more turn of the microtask queue: the thread now opens server envelopes
+    // before merging, the subscribe callback is async, and whenStable does not
+    // wait for a promise an observable callback forgot to return.
+    await new Promise(resolve => setTimeout(resolve));
     await fixture.whenStable();
 
     expect(component.messagesLoadFailed()).toBe(false);
@@ -589,6 +596,7 @@ describe('ChatComponent: deep link while offline', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: api },
         { provide: CryptoService, useValue: { init: jasmine.createSpy().and.returnValue(Promise.resolve()) } },
         { provide: ClockService, useValue: { now: signal(Date.now()) } },

@@ -18,6 +18,7 @@ import { ChatComposerComponent } from './chat-composer.component';
 import { ChatStorageService } from '../../services/chat-storage.service';
 import { ChatPollService } from '../../services/chat-poll.service';
 import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
+import { ServerCryptoService } from '../../services/server-crypto.service';
 import { ChatAttachmentService } from '../../services/chat-attachment.service';
 import { ChatSendService, SendRequest } from '../../services/chat-send.service';
 import { ChatGroupService } from '../../services/chat-group.service';
@@ -34,6 +35,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly storage = inject(ChatStorageService);
   private readonly polls = inject(ChatPollService);
   private readonly thread = inject(ChatThreadService);
+  private readonly serverCrypto = inject(ServerCryptoService);
   private readonly attachments = inject(ChatAttachmentService);
   private readonly sends = inject(ChatSendService);
   private readonly groups = inject(ChatGroupService);
@@ -663,7 +665,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         for (let i = 0; i < fresh.length; i++) {
           fresh[i] = await this.decryptGroupMsg(fresh[i], group.id);
         }
-        const merged = this.thread.mergeMessages(this.messages, fresh);
+        const merged = this.thread.mergeMessages(this.messages, await this.serverCrypto.openMany(fresh));
         for (const id of merged.addedIds) this.seenMessageIds.add(id);
         this.messages = merged.messages;
         if (!document.hidden) {
@@ -831,7 +833,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         msgs[i] = await this.decryptMsg(msgs[i], user.id);
       }
       // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
-      const merged = this.thread.mergeMessages(this.messages, msgs);
+      const merged = this.thread.mergeMessages(this.messages, await this.serverCrypto.openMany(msgs));
       for (const id of merged.addedIds) this.seenMessageIds.add(id);
       this.messages = merged.messages;
       this.persistCache(user.id);
@@ -1325,7 +1327,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         msgs[i] = await this.decryptGroupMsg(msgs[i], group.id);
       }
       // Merge with existing messages (e.g. optimistic sends) to avoid race conditions
-      const merged = this.thread.mergeMessages(this.messages, msgs);
+      const merged = this.thread.mergeMessages(this.messages, await this.serverCrypto.openMany(msgs));
       for (const id of merged.addedIds) this.seenMessageIds.add(id);
       this.messages = merged.messages;
       if (boundary) {

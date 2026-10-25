@@ -4,6 +4,8 @@ import { Observable, of, throwError } from 'rxjs';
 import { ChatSendService, SendRequest } from './chat-send.service';
 import { ApiService } from './api.service';
 import { CryptoService } from './crypto.service';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../testing/server-crypto.stub';
+import { ServerCryptoService } from './server-crypto.service';
 
 describe('ChatSendService', () => {
   let service: ChatSendService;
@@ -27,6 +29,7 @@ describe('ChatSendService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: api },
         { provide: CryptoService, useValue: crypto },
       ],
@@ -147,6 +150,47 @@ describe('ChatSendService', () => {
       service.deliver(req(), prepared).subscribe({ error: e => (err = e) });
 
       expect(err).toBeDefined();
+    });
+  });
+
+  describe('when the server scheme is enabled', () => {
+    function withLayer(sealForServer: () => Promise<any>): ChatSendService {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: ServerCryptoService, useValue: { isEnabled: () => true, sealForServer } },
+          { provide: ApiService, useValue: api },
+          { provide: CryptoService, useValue: crypto },
+        ],
+      });
+      return TestBed.inject(ChatSendService);
+    }
+
+    it('seals for the server and leaves no plaintext on the wire', async () => {
+      const seal = jasmine
+        .createSpy('sealForServer')
+        .and.resolveTo({ kid: 'srv-1', envelope: { v: 1, kid: 'srv-1' } });
+      const service = withLayer(seal);
+
+      const result = await service.prepare(req());
+
+      expect(result.ok).toBeTrue();
+      if (!result.ok) return;
+      expect(result.prepared.wireContent).toBe('');
+      expect(result.prepared.encryptedContent).withContext('the old scheme must not run as well').toBeUndefined();
+      expect(JSON.parse(result.prepared.serverEnvelope!)).toEqual({ v: 1, kid: 'srv-1' } as any);
+      expect(crypto['encrypt']).not.toHaveBeenCalled();
+    });
+
+    it('refuses to send when sealing fails instead of falling back', async () => {
+      const service = withLayer(jasmine.createSpy('sealForServer').and.resolveTo(null));
+
+      const result = await service.prepare(req());
+
+      expect(result.ok).toBeFalse();
+      if (result.ok) return;
+      expect(result.reason).withContext('a failed seal is an error, not a quiet downgrade').toBe('no-server-key');
+      expect(crypto['encrypt']).not.toHaveBeenCalled();
     });
   });
 });

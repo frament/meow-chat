@@ -3,6 +3,7 @@ import { HttpEventType } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { ApiService, EnvelopePayload, Message, MsgType } from './api.service';
 import { CryptoService } from './crypto.service';
+import { ServerCryptoService } from './server-crypto.service';
 
 export interface SendTarget {
   userId?: number;
@@ -33,11 +34,13 @@ export interface PreparedSend {
   pushPreview?: string;
   envelope?: EnvelopePayload;
   groupEpoch: number;
+  /** Envelope for the server scheme, produced by `prepare` when the pin is set. */
+  serverEnvelope?: string;
 }
 
 export type PrepareResult =
   | { ok: true; prepared: PreparedSend }
-  | { ok: false; reason: 'no-peer-key' | 'no-group-key' };
+  | { ok: false; reason: 'no-peer-key' | 'no-group-key' | 'no-server-key' };
 
 export type DeliveryEvent =
   | { type: 'progress'; percent: number }
@@ -64,6 +67,7 @@ export type DeliveryEvent =
 export class ChatSendService {
   private readonly api = inject(ApiService);
   private readonly crypto = inject(CryptoService);
+  private readonly serverCrypto = inject(ServerCryptoService);
 
   async prepare(req: SendRequest): Promise<PrepareResult> {
     // Only user-typed text is encrypted. Structural types - a sticker id, a gif
@@ -72,6 +76,26 @@ export class ChatSendService {
     const encryptable = (req.msgType === 'text' || req.msgType === 'image') && !!req.content;
     if (!encryptable) {
       return { ok: true, prepared: { wireContent: req.content, groupEpoch: 0 } };
+    }
+
+    // New scheme first. When this build pinned a server key, text goes out
+    // wrapped to the server and the legacy fields are not used at all. A failure
+    // to seal is an error, never a quiet return to the old path - that fallback
+    // is the failure mode the layer exists to prevent.
+    if (this.serverCrypto.isEnabled()) {
+      const sealed = await this.serverCrypto.sealForServer(req.content);
+      if (!sealed) {
+        return { ok: false, reason: 'no-server-key' };
+      }
+      return {
+        ok: true,
+        prepared: {
+          wireContent: '',
+          serverEnvelope: JSON.stringify(sealed.envelope),
+          pushPreview: req.content.length > 120 ? req.content.slice(0, 120) + '...' : req.content,
+          groupEpoch: 0,
+        },
+      };
     }
 
     await this.crypto.init();
@@ -118,9 +142,9 @@ export class ChatSendService {
             prepared.encryptedContent, prepared.encryptedIV, prepared.pushPreview, req.pollOptions, req.pollMultiple, prepared.groupEpoch)
       : hasFiles
         ? this.api.sendMessageWithProgress(req.target.userId!, prepared.wireContent, req.files, req.msgType,
-            prepared.encryptedContent, prepared.encryptedIV, prepared.pushPreview, req.pollOptions, req.pollMultiple, prepared.envelope)
+            prepared.encryptedContent, prepared.encryptedIV, prepared.pushPreview, req.pollOptions, req.pollMultiple, prepared.envelope, prepared.serverEnvelope)
         : this.api.sendMessage(req.target.userId!, prepared.wireContent, req.files, req.msgType,
-            prepared.encryptedContent, prepared.encryptedIV, prepared.pushPreview, req.pollOptions, req.pollMultiple, prepared.envelope)) as Observable<unknown>;
+            prepared.encryptedContent, prepared.encryptedIV, prepared.pushPreview, req.pollOptions, req.pollMultiple, prepared.envelope, prepared.serverEnvelope)) as Observable<unknown>;
 
     return request$.pipe(
       map((event: unknown): DeliveryEvent => {

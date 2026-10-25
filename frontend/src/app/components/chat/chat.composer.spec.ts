@@ -8,6 +8,7 @@ import { ChatComponent } from './chat';
 import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ClockService } from '../../services/clock.service';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../../testing/server-crypto.stub';
 
 /**
  * The composer was an `<input type="text">`, which has no newline at all, so "new
@@ -64,6 +65,7 @@ describe('ChatComponent composer', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi as unknown as ApiService },
         { provide: CryptoService, useValue: { init: () => Promise.resolve() } },
         {

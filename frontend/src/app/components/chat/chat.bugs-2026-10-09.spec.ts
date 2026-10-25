@@ -7,6 +7,7 @@ import { ApiService } from '../../services/api.service';
 import { CryptoService } from '../../services/crypto.service';
 import { ClockService } from '../../services/clock.service';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { SERVER_CRYPTO_STUB_PROVIDER } from '../../testing/server-crypto.stub';
 
 /**
  * Regression cover for the five bugs reported on 2026-10-09.
@@ -106,6 +107,7 @@ describe('Bug #35: the author does not see their own sticker', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },
@@ -261,6 +263,7 @@ describe('Bug #36: group messages arrive "encrypted" right after login', () => {
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },
@@ -446,6 +449,7 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
     await TestBed.configureTestingModule({
       imports: [ChatComponent],
       providers: [
+        SERVER_CRYPTO_STUB_PROVIDER,
         { provide: ApiService, useValue: mockApi },
         { provide: CryptoService, useValue: mockCrypto },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({})), url: of([]) } },

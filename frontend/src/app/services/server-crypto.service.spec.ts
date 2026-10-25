@@ -149,4 +149,31 @@ describe('ServerCryptoService', () => {
     expect(posted).withContext('a second key must never be registered silently').toBeFalse();
     expect(service.hasAccountKey()).toBeFalse();
   });
+
+  it('opens a thread in place and flags what it cannot open', async () => {
+    const service = makeService({});
+    (service as any).accountPrivate = await crypto.subtle.importKey(
+      'pkcs8',
+      hexBytes(GO_VECTOR.recipient_pkcs8_hex),
+      { name: 'X25519' } as any,
+      true,
+      ['deriveBits']
+    );
+
+    const broken: ServerEnvelope = { ...GO_VECTOR.envelope, ciphertext: btoa('short') };
+    const opened = await service.openMany([
+      { id: 1, server_envelope: GO_VECTOR.envelope },
+      { id: 2, server_envelope: broken },
+      { id: 3, content: 'старое сообщение' },
+    ]);
+
+    expect(opened[0].content).toBe(GO_VECTOR.plaintext);
+    expect(opened[0].needs_key).withContext('an opened message is not keyless').toBeUndefined();
+    expect(opened[0].server_envelope).withContext('the envelope must not survive into the UI').toBeUndefined();
+
+    expect(opened[1].content).toBe('');
+    expect(opened[1].needs_key).withContext('unreadable must be visible, not an empty bubble').toBeTrue();
+
+    expect(opened[2].content).withContext('messages of the old scheme pass through untouched').toBe('старое сообщение');
+  });
 });
