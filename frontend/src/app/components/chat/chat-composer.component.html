@@ -15,7 +15,7 @@
               @if (sendErrorText) {
                 <div style="padding:5px 10px;border-radius:8px;background:#e74c3c;color:#fff;font-size:12px;text-align:center;">{{ sendErrorText }}</div>
               }
-              <input type="text" [(ngModel)]="messageContent" placeholder="Вопрос опроса..."
+              <input type="text" [(ngModel)]="messageContent" (ngModelChange)="messageContentChange.emit($event)" placeholder="Вопрос опроса..."
                 style="height:36px;box-sizing:border-box;">
               @for (opt of pollOptions; track trackPollOption($index, opt); let i = $index) {
               <div class="flex items-center gap-2">
@@ -91,7 +91,7 @@
                   </div>
                 }
               </div>
-              <textarea #composer rows="1" class="chat-composer-input" [(ngModel)]="messageContent" (keydown)="onComposerKeydown($event)"
+              <textarea #composer rows="1" class="chat-composer-input" [(ngModel)]="messageContent" (ngModelChange)="messageContentChange.emit($event)" (keydown)="onComposerKeydown($event)"
               (input)="autoGrowComposer($event)" (paste)="onPaste($event)"
               style="flex:1;min-height:36px;max-height:140px;box-sizing:border-box;resize:none;overflow-y:auto;field-sizing:content;"
               [placeholder]="messageType === 'text' ? 'Напишите сообщение...' : 'Подпись к изображению...'"></textarea>
