@@ -82,7 +82,11 @@ export class ChatSendService {
     // wrapped to the server and the legacy fields are not used at all. A failure
     // to seal is an error, never a quiet return to the old path - that fallback
     // is the failure mode the layer exists to prevent.
-    if (this.serverCrypto.isEnabled()) {
+    // Text only. The server accepts envelopes for text alone: a caption on an
+    // image would otherwise be sealed while the file itself travels as before,
+    // and the request is rejected - a whole message lost for a half-encrypted
+    // shape nobody designed.
+    if (this.serverCrypto.isEnabled() && req.msgType === 'text') {
       const sealed = await this.serverCrypto.sealForServer(req.content);
       if (!sealed) {
         return { ok: false, reason: 'no-server-key' };

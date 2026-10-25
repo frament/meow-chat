@@ -182,6 +182,18 @@ describe('ChatSendService', () => {
       expect(crypto['encrypt']).not.toHaveBeenCalled();
     });
 
+    it('does not seal a captioned image: the server only accepts envelopes for text', async () => {
+      // Sealing here would make the request fail outright - the shape is not
+      // supported, and pretending otherwise loses the whole message.
+      const seal = jasmine.createSpy('sealForServer').and.resolveTo({ kid: 'srv-1', envelope: { v: 1 } });
+      const service = withLayer(seal);
+
+      const result = await service.prepare(req({ msgType: 'image', content: 'подпись' }));
+
+      expect(seal).not.toHaveBeenCalled();
+      expect(result.ok).toBeTrue();
+    });
+
     it('refuses to send when sealing fails instead of falling back', async () => {
       const service = withLayer(jasmine.createSpy('sealForServer').and.resolveTo(null));
 
