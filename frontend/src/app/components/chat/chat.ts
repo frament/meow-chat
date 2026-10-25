@@ -21,6 +21,7 @@ import { ChatThreadService, DisplayItem } from '../../services/chat-thread.servi
 import { ChatAttachmentService } from '../../services/chat-attachment.service';
 import { ChatSendService, SendRequest } from '../../services/chat-send.service';
 import { ChatGroupService } from '../../services/chat-group.service';
+import { ChatGroupKeyService } from '../../services/chat-group-key.service';
 
 @Component({
   selector: 'app-chat',
@@ -36,6 +37,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly attachments = inject(ChatAttachmentService);
   private readonly sends = inject(ChatSendService);
   private readonly groups = inject(ChatGroupService);
+  private readonly groupKeys = inject(ChatGroupKeyService);
 
   users: User[] = [];
   selectedUser: User | null = null;
@@ -1283,26 +1285,16 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     // key available and came back encrypted.
     await this.cryptoReady();
     {
-      try {
-        const { epoch } = await firstValueFrom(this.api.getGroupKeyEpoch(group.id));
-        const localEpoch = await this.crypto.getCurrentGroupEpoch(group.id);
-        if (epoch > localEpoch) {
-          const fetched = await this.crypto.getGroupKey(group.id, epoch);
-          if (fetched) await this.crypto.setCurrentGroupEpoch(group.id, epoch);
-        }
-      } catch {}
-      const epochNow = await this.crypto.getCurrentGroupEpoch(group.id);
-      const groupKey = await this.crypto.getGroupKey(group.id, epochNow);
-      if (groupKey) {
-        this.distributeGroupKeyToMembers(group.id);
+      const keyState = await this.groupKeys.syncEpoch(group.id);
+      if (keyState.hadKey) {
+        this.groupKeys.distributeToMembers(group.id, this.currentUserId);
         this.refreshOwnGroupKeyShare(group.id);
       } else {
         // No key and nobody asked for it. The request used to be sent only when
         // *sending* failed to encrypt - so a member who only ever read the chat
         // never got one, and the thread stayed "[Зашифрованное сообщение]"
-        // forever, across reloads and re-logins. Observed on a fresh browser:
-        // new device, new identity key, and no path to ask for the group's.
-        this.requestGroupKeyForRead(group.id);
+        // forever, across reloads and re-logins.
+        this.groupKeys.requestKeyOnce(group.id);
       }
     }
 
@@ -1355,56 +1347,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    * `group_key_ready` clears the flag when the key actually lands.
    */
   private requestGroupKeyForRead(groupId: number) {
-    if (this.keyRequestedForRead.has(groupId)) return;
-    this.keyRequestedForRead.add(groupId);
-    this.api.requestGroupKey(groupId).subscribe({
-      error: () => {
-        // Allow a retry: a failed request leaves us exactly where we were.
-        this.keyRequestedForRead.delete(groupId);
-      },
-    });
+    this.groupKeys.requestKeyOnce(groupId);
   }
-
-  /** Groups we have already asked for a key on, so reloads do not re-ask. */
-  private keyRequestedForRead = new Set<number>();
 
   private async distributeGroupKeyToMembers(groupId: number) {
-    try {
-      const res = await firstValueFrom(this.api.getGroupChat(groupId));
-      const myId = this.currentUserId;
-      const epoch = await this.crypto.getCurrentGroupEpoch(groupId);
-      const raw = await this.crypto.getRawGroupKey(groupId, epoch);
-      if (!raw) return;
-
-      for (const member of res.members) {
-        if (member.user_id === myId) continue;
-        // Legacy user-level share (reaches all linked devices of the member).
-        const share = await this.crypto.encryptGroupKeyForPeer(raw, member.user_id);
-        if (share) {
-          this.api.uploadGroupKeyShare(groupId, member.user_id, share.encrypted_key, share.iv)
-            .subscribe({ error: () => {} });
-        }
-        // Per-device shares (also reach devices that never linked).
-        await this.distributeGroupKeyToMemberDevices(groupId, member.user_id, raw, epoch);
-      }
-      // Our own other devices.
-      await this.distributeGroupKeyToMemberDevices(groupId, myId, raw, epoch);
-    } catch {}
-  }
-
-  /** Wrap the group key for each device of a user (device-scoped shares). */
-  private async distributeGroupKeyToMemberDevices(groupId: number, userId: number, raw: Uint8Array, epoch: number) {
-    try {
-      const devices = await firstValueFrom(this.api.getUserDeviceKeys(userId));
-      for (const d of devices || []) {
-        if (!d.device_id || !d.device_public_key) continue;
-        const wrapped = await this.crypto.wrapKeyForDeviceFromDevice(raw, d.device_public_key);
-        if (wrapped) {
-          this.api.uploadGroupDeviceKeyShare(groupId, userId, d.device_id, wrapped.wrapped_key, wrapped.iv, epoch)
-            .subscribe({ error: () => {} });
-        }
-      }
-    } catch {}
+    await this.groupKeys.distributeToMembers(groupId, this.currentUserId);
   }
 
   /**
@@ -1471,7 +1418,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.api.uploadGroupKeyShare(groupId, memberId, share.encrypted_key, share.iv)
           .subscribe({ error: () => {} });
       }
-      await this.distributeGroupKeyToMemberDevices(groupId, memberId, raw, epoch);
+      await this.groupKeys.distributeToMemberDevices(groupId, memberId, raw, epoch);
     } catch {}
   }
 
@@ -1482,21 +1429,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private async onGroupKeyReady(groupId: number) {
     // The key we asked for is here, so a later loss must be able to ask again.
-    this.keyRequestedForRead.delete(groupId);
+    this.groupKeys.allowRequest(groupId);
     this.retryPendingGroupSend();
-    // Pick up a possibly newer epoch.
-    try {
-      const { epoch } = await firstValueFrom(this.api.getGroupKeyEpoch(groupId));
-      const local = await this.crypto.getCurrentGroupEpoch(groupId);
-      if (epoch > local) {
-        const fetched = await this.crypto.getGroupKey(groupId, epoch);
-        if (fetched) await this.crypto.setCurrentGroupEpoch(groupId, epoch);
-      }
-    } catch {}
     if (!this.messages.some(m => m.content === '[Зашифрованное сообщение]')) return;
-    const epochNow = await this.crypto.getCurrentGroupEpoch(groupId);
-    const key = await this.crypto.getGroupKey(groupId, epochNow);
-    if (!key) return;
+    // Picks up a possibly newer epoch and reports whether a usable key exists.
+    const keyState = await this.groupKeys.syncEpoch(groupId);
+    if (!keyState.hadKey) return;
     this.api.getGroupMessages(groupId).subscribe({
       error: (err) => this.noteLoadFailure(err?.status),
       next: async (msgs: Message[]) => {

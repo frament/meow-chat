@@ -599,13 +599,18 @@ describe('Bug #38: a group message that only arrived as a push never showed up',
 
     await component.selectGroup({ id: 5, name: 'G' } as any);
     await fixture.whenStable();
-    expect((component as any).keyRequestedForRead.has(5)).toBe(true);
+    expect(mockApi.requestGroupKey).toHaveBeenCalledTimes(1);
 
     wsMessages$.next({ type: 'group_key_ready', group_chat_id: 5 });
     // The subscription does not await the async handler, so give it its own turn.
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    expect((component as any).keyRequestedForRead.has(5)).toBe(false);
+    // The guard moved into ChatGroupKeyService with the request itself, so the
+    // assertion is on the behaviour rather than on a private Set: after the key
+    // arrived, opening the group again must be able to ask once more.
+    await component.selectGroup({ id: 5, name: 'G' } as any);
+    await fixture.whenStable();
+    expect(mockApi.requestGroupKey).toHaveBeenCalledTimes(2);
   });
 
   it('does not ask when the key is already available', async () => {
