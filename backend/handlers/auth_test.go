@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"my-chat-backend/database"
 	"net/http"
 	"strings"
 	"testing"
@@ -165,7 +166,12 @@ func TestRefresh_MissingToken(t *testing.T) {
 	}
 }
 
-func TestRefresh_ReuseRevokedToken(t *testing.T) {
+// A token reused moments after rotation is a race, not an attack. This test used
+// to demand 401 for the second use, and that policy is what signed people out:
+// two contexts share one storage, the first refresh rotates the token, the second
+// gets 401 and the client logs out. Prod evidence: a 401 on /api/refresh at
+// 16:37:38, then a manual login four minutes later.
+func TestRefresh_ReuseWithinGraceIsAccepted(t *testing.T) {
 	app, _, _ := setupTestApp(t)
 
 	loginBody := `{"username":"testuser","password":"password"}`
@@ -188,7 +194,49 @@ func TestRefresh_ReuseRevokedToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if resp3.StatusCode != 200 {
+		t.Errorf("the loser of a refresh race must not be signed out: expected 200, got %d", resp3.StatusCode)
+	}
+
+	// And the pair is usable, not just a 200.
+	var second map[string]interface{}
+	json.NewDecoder(resp3.Body).Decode(&second)
+	if second["access_token"] == nil || second["refresh_token"] == nil {
+		t.Fatal("expected a usable token pair")
+	}
+}
+
+// Outside the window a reused token is still refused: the grace is for races,
+// not for replays.
+func TestRefresh_ReuseAfterGraceIsRefused(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	loginBody := `{"username":"testuser","password":"password"}`
+	req, _ := http.NewRequest("POST", "/login", strings.NewReader(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+
+	var loginResult map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&loginResult)
+	refreshToken := loginResult["refresh_token"].(string)
+
+	refreshBody, _ := json.Marshal(map[string]string{"refresh_token": refreshToken})
+	req2, _ := http.NewRequest("POST", "/refresh", bytes.NewReader(refreshBody))
+	req2.Header.Set("Content-Type", "application/json")
+	app.Test(req2)
+
+	// Age the release beyond the window.
+	database.DB.Exec(
+		"UPDATE refresh_tokens SET used_at = datetime('now', '-10 minutes') WHERE used_at IS NOT NULL",
+	)
+
+	req3, _ := http.NewRequest("POST", "/refresh", bytes.NewReader(refreshBody))
+	req3.Header.Set("Content-Type", "application/json")
+	resp3, err := app.Test(req3)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp3.StatusCode != 401 {
-		t.Errorf("expected 401 for reused token, got %d", resp3.StatusCode)
+		t.Errorf("a replay after the window must be refused: expected 401, got %d", resp3.StatusCode)
 	}
 }

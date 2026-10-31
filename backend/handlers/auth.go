@@ -51,12 +51,14 @@ func (h *Handler) Refresh(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid or expired refresh token"})
 	}
 
-	userID, err := database.GetRefreshToken(claims.ID)
+	// Claim, not consume: a token exchanged moments ago is still honoured, because
+	// two contexts sharing one storage race here and the loser used to be signed
+	// out. See database.RefreshGrace.
+	userID, err := database.ClaimRefreshToken(claims.ID, database.RefreshGrace)
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"error": "Refresh token revoked or expired"})
 	}
-
-	database.DeleteRefreshToken(claims.ID)
+	database.PurgeReleasedRefreshTokens(database.RefreshGrace)
 
 	var isAdmin bool
 	database.DB.QueryRow("SELECT is_admin FROM users WHERE id = ?", userID).Scan(&isAdmin)

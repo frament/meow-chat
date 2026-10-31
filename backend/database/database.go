@@ -198,6 +198,12 @@ func ApplySchema(db *sql.DB) error {
 			user_id INTEGER NOT NULL,
 			token_id TEXT UNIQUE NOT NULL,
 			expires_at DATETIME NOT NULL,
+			-- When this token was exchanged for a new pair. Rotation used to
+			-- delete the row outright, which killed the session whenever two
+			-- contexts refreshed with the same token: the loser got 401 and the
+			-- client signed out. Released tokens stay usable for a short grace
+			-- window (see ClaimRefreshToken).
+			used_at DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
@@ -535,6 +541,12 @@ func ApplySchema(db *sql.DB) error {
 	}
 
 	var count int
+	// Released refresh tokens. Same guarded pattern as the columns below: on an
+	// existing database the table is already there and needs the column added.
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('refresh_tokens') WHERE name='used_at'").Scan(&count)
+	if count == 0 {
+		db.Exec("ALTER TABLE refresh_tokens ADD COLUMN used_at DATETIME")
+	}
 	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='avatar_url'").Scan(&count)
 	if count == 0 {
 		db.Exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
