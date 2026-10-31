@@ -31,7 +31,7 @@
                 <button (click)="addPollOption()" class="text-xs"
                   style="padding:4px 10px;border:1px dashed var(--divider);border-radius:var(--radius-sm);background:transparent;color:var(--text-tertiary);cursor:pointer;">+ Добавить вариант</button>
                 <label class="flex items-center gap-1 text-xs" style="color:var(--text-tertiary);cursor:pointer;">
-                  <input type="checkbox" [(ngModel)]="pollMultiple" style="cursor:pointer;">
+                  <input type="checkbox" [(ngModel)]="pollMultiple" (ngModelChange)="pollMultipleChange.emit($event)" style="cursor:pointer;">
                   Несколько вариантов
                 </label>
                 <button (click)="sendMessage()" title="Отправить"

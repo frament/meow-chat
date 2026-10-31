@@ -605,3 +605,41 @@ func TestGetPollVotes_StrangerForbidden(t *testing.T) {
 		t.Errorf("expected 404 for an unknown poll, got %d", resp.StatusCode)
 	}
 }
+
+// Who voted is the creator's business. The endpoint used to answer anybody who
+// could see the poll, and the client hid nothing either, so in a family chat the
+// result was "3 votes" plus the names of everyone.
+func TestGetPollVotes_OnlyCreatorSees(t *testing.T) {
+	app, _, userID := setupTestApp(t)
+	token := bearerToken(t, userID, false)
+
+	resp := sendPollReq(app, token, 2, "Кто придёт?", []string{"Я", "Не я"}, false)
+	var msgResp struct {
+		Poll *models.Poll `json:"poll"`
+	}
+	json.NewDecoder(resp.Body).Decode(&msgResp)
+	if msgResp.Poll == nil {
+		t.Fatal("no poll created")
+	}
+
+	// The recipient is a participant: they may vote and see the counts, not names.
+	recipientToken := bearerToken(t, 2, false)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/polls/%d/votes", msgResp.Poll.ID), nil)
+	req.Header.Set("Authorization", recipientToken)
+	if got, err := app.Test(req); err != nil {
+		t.Fatal(err)
+	} else if got.StatusCode != 403 {
+		t.Errorf("recipient must not see who voted: expected 403, got %d", got.StatusCode)
+	}
+
+	// The creator may.
+	req, _ = http.NewRequest("GET", fmt.Sprintf("/polls/%d/votes", msgResp.Poll.ID), nil)
+	req.Header.Set("Authorization", token)
+	got, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StatusCode != 200 {
+		t.Errorf("creator must see who voted: expected 200, got %d", got.StatusCode)
+	}
+}

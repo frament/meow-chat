@@ -44,12 +44,14 @@
                           <span class="text-xs opacity-50">
                             @let tv = computeTotalVotes(poll);
                             {{ tv }} голос{{ tv === 1 ? '' : (tv >= 2 && tv <= 4 ? 'а' : 'ов') }}
-                            <button type="button" (click)="toggleVotes(poll.id)"
-                              style="background:transparent;border:none;color:inherit;cursor:pointer;text-decoration:underline;padding:0 0 0 6px;font-size:inherit;">
-                              {{ expandedPoll.has(poll.id) ? 'скрыть' : 'кто голосовал' }}
-                            </button>
+                            @if (isOutgoing(item)) {
+                              <button type="button" (click)="toggleVotes(poll.id)"
+                                style="background:transparent;border:none;color:inherit;cursor:pointer;text-decoration:underline;padding:0 0 0 6px;font-size:inherit;">
+                                {{ expandedPoll.has(poll.id) ? 'скрыть' : 'кто голосовал' }}
+                              </button>
+                            }
                           </span>
-                          @if (expandedPoll.has(poll.id)) {
+                          @if (isOutgoing(item) && expandedPoll.has(poll.id)) {
                             <div class="flex flex-col gap-0.5 text-[11px]" style="color:var(--text-tertiary);">
                               @for (opt of poll.options; track opt.id) {
                                 @if (votersFor(poll.id, opt.id)) {

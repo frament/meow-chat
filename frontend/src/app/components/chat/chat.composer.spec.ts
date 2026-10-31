@@ -256,6 +256,28 @@ describe('ChatComponent composer', () => {
     expect(sendMessage).toHaveBeenCalled();
   });
 
+  it('passes "несколько вариантов" to the chat component', () => {
+    // The checkbox wrote into the composer's own copy and nothing else: the
+    // output was declared but never emitted, so every poll reached the server as
+    // single-choice no matter what was ticked. Prod poll 2 on 2026-10-31 is
+    // exactly that - is_multiple_choice = 0 with the box ticked.
+    component.messageType = 'poll';
+    fixture.detectChanges();
+
+    const box = (fixture.nativeElement as HTMLElement)
+      .querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(box).withContext('the checkbox must be rendered for polls').toBeTruthy();
+
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // The parent's own property is what sendMessage() reads into the request.
+    expect(component.pollMultiple)
+      .withContext('the ticked box has to reach the chat component')
+      .toBeTrue();
+  });
+
   it('renders the poll send button in the phone layout too', () => {
     (component as unknown as { showMobileChat: boolean }).showMobileChat = true;
     component.messageType = 'poll';

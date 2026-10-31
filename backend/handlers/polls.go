@@ -51,6 +51,42 @@ func pollAccess(pollID, userID int64) (exists bool, allowed bool) {
 	return true, false
 }
 
+// pollCreatorID names who created a poll.
+//
+// A poll has no author column of its own: it is a part of the message that
+// carried it, and that message's sender is the creator. Reading it from the
+// message keeps the two in step - a separate column would be a second truth.
+func pollCreatorID(pollID int64) (int64, bool) {
+	var messageID, groupMessageID sql.NullInt64
+	if err := database.DB.QueryRow(
+		"SELECT message_id, group_message_id FROM polls WHERE id = ?", pollID,
+	).Scan(&messageID, &groupMessageID); err != nil {
+		return 0, false
+	}
+
+	if messageID.Valid {
+		var from int64
+		if err := database.DB.QueryRow(
+			"SELECT from_user_id FROM messages WHERE id = ?", messageID.Int64,
+		).Scan(&from); err != nil {
+			return 0, false
+		}
+		return from, true
+	}
+
+	if groupMessageID.Valid {
+		var from int64
+		if err := database.DB.QueryRow(
+			"SELECT from_user_id FROM group_messages WHERE id = ?", groupMessageID.Int64,
+		).Scan(&from); err != nil {
+			return 0, false
+		}
+		return from, true
+	}
+
+	return 0, false
+}
+
 func (h *Handler) CastVote(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(int64)
 
@@ -325,6 +361,17 @@ func (h *Handler) GetPollVotes(c *fiber.Ctx) error {
 	}
 	if !allowed {
 		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
+	}
+
+	// Who voted is the creator's business, not the audience's. Enforced here and
+	// not only in the client: a hidden button still leaves the endpoint open, and
+	// hiding it is exactly the kind of "protection" that looks like one.
+	creatorID, ok := pollCreatorID(pollID)
+	if !ok {
+		return c.Status(500).JSON(fiber.Map{"error": "Server error"})
+	}
+	if creatorID != userID {
+		return c.Status(403).JSON(fiber.Map{"error": "Only the poll author can see who voted"})
 	}
 
 	rows, err := database.DB.Query(`
