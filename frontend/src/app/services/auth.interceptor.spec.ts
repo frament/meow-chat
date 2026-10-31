@@ -102,6 +102,23 @@ describe('authInterceptor', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
+  it('logs out when the refresh is refused for having nothing to refresh with', () => {
+    // Our own Error with status 401, not an HttpErrorResponse. Checking the type
+    // instead of the status let this one through, and the app stayed on a screen
+    // that said "нет соединения" over a session that was simply over.
+    const gone: any = new Error('No refresh token');
+    gone.status = 401;
+    mockApi.refreshAccessToken.and.returnValue(throwError(() => gone));
+
+    http.get('/api/test').subscribe({ error: () => {} });
+
+    const req = httpMock.expectOne('/api/test');
+    req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(mockApi.logout).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+  });
+
   it('skips 401 for /login', () => {
     http.get('/api/login').subscribe({
       error: () => {},

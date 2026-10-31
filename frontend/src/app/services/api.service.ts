@@ -374,7 +374,14 @@ export class ApiService {
       this.wsConnecting = false;
 
       const token = this.accessToken();
-      if (token && this.isJwtExpired(token)) {
+      if (!token) {
+        // Opening a socket without a token guarantees a 401 and paints the app as
+        // offline, which is a lie: the session is gone, not the network. logout()
+        // clears the user and the redirect effect takes it to the login page.
+        this.logout();
+        return;
+      }
+      if (this.isJwtExpired(token)) {
         this.refreshAccessToken().subscribe({
           next: () => this.connectWebSocket(),
           // Not connecting on failure, deliberately. The token is known to be
@@ -420,7 +427,14 @@ export class ApiService {
 
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) {
-      return throwError(() => new Error('No refresh token'));
+      // A session with nothing to refresh with is over, not offline. It used to
+      // return a bare Error with no status, and every caller only logged out on
+      // 401 - so the app sat behind "нет соединения" for ever, retrying a socket
+      // it could never authenticate. Seen on prod: a cold start with no refresh
+      // token, /api/crypto/* answered 401, no /api/refresh was ever sent.
+      const gone: any = new Error('No refresh token');
+      gone.status = 401;
+      return throwError(() => gone);
     }
 
     this.refreshInProgress = true;

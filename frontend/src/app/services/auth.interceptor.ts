@@ -32,7 +32,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             return next(newReq);
           }),
           catchError((refreshError) => {
-            if (refreshError instanceof HttpErrorResponse && refreshError.status === 401) {
+            // By status, not by type: "no refresh token" is our own Error with
+            // status 401, and instanceof would let that one through as a silent
+            // failure - the app then stayed offline instead of asking to sign in.
+            if ((refreshError as HttpErrorResponse)?.status === 401) {
               api.logout();
               router.navigate(['/login']);
             }

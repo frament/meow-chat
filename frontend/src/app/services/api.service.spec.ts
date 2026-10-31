@@ -418,6 +418,49 @@ describe('ApiService', () => {
     expect(service.accessToken()).toBe('new-token');
   }));
 
+  // ── The prod failure of 2026-10-31: a dead session looked like a dead network ──
+  //
+  // A cold start with no refresh token answered 401 on /api/crypto/*, never sent
+  // /api/refresh, and the app sat behind "нет соединения" until the user signed in
+  // again by hand.
+
+  it('T10e: without any access token it ends the session instead of opening a socket', fakeAsync(() => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    service.accessToken.set(null);
+    service.currentUser.set(null);
+    (service as any).ws = null;
+
+    const wsSpy = (globalThis as any).WebSocket as jasmine.Spy;
+    const before = wsSpy.calls.count();
+    spyOn(service, 'logout').and.callThrough();
+
+    service.retryConnection();
+    tick();
+
+    expect(wsSpy.calls.count()).withContext('a socket without a token is a guaranteed 401').toBe(before);
+    expect(service.logout).toHaveBeenCalled();
+  }));
+
+  it('T10f: an expired token with no refresh token ends the session', fakeAsync(() => {
+    const expiredToken =
+      btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' +
+      btoa(JSON.stringify({ exp: 0 })) + '.fakesig';
+    localStorage.setItem('accessToken', expiredToken);
+    localStorage.removeItem('refreshToken');
+    service.accessToken.set(expiredToken);
+    (service as any).ws = null;
+    spyOn(service, 'logout').and.callThrough();
+
+    service.retryConnection();
+    tick();
+
+    httpMock.expectNone('/api/refresh');
+    expect(service.logout).withContext('nothing to refresh with - sign in again').toHaveBeenCalled();
+    // logout() also tells the server; with no refresh token that call is best-effort.
+    httpMock.expectOne('/api/logout').flush({});
+  }));
+
   // ── T10d: retryConnection — skip refresh when token is valid ──
 
   it('T10d: retryConnection skips refresh and connects directly when token is valid', fakeAsync(() => {
