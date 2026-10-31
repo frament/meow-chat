@@ -125,8 +125,29 @@ function acquire(): Slot {
   };
 }
 
+/**
+ * Signing in must never queue behind background work.
+ *
+ * The gate above starts at one slot, and on the login screen the app still fires
+ * its startup calls (account key, push key, update check, biometric probe). The
+ * password/biometric POST then waits for all of them, which on prod looked like
+ * "вход длится долго, а потом срабатывает мгновенно" - the queue draining at
+ * once. These endpoints are small, rare, and the only way back into the app.
+ */
+const AUTH_PATHS = ['/api/login', '/api/register', '/api/refresh', '/api/webauthn/'];
+
+function isAuth(req: { url: string }): boolean {
+  return AUTH_PATHS.some((path) => req.url.includes(path));
+}
+
 export const concurrencyInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.body instanceof FormData) {
+    return next(req);
+  }
+
+  // Not counted either way: a login is not evidence about how many connections
+  // the path can carry, and it must not be held by whoever is.
+  if (isAuth(req)) {
     return next(req);
   }
 

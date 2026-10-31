@@ -62,6 +62,23 @@ describe('concurrencyInterceptor', () => {
     expect(open()).toBe(1);
   }));
 
+  it('never makes a login wait behind the startup calls', fakeAsync(() => {
+    // Prod, 2026-10-31: opening the app on the login screen felt slow, then
+    // completed all at once. The gate holds one slot to begin with, and the
+    // startup calls (account key, push key, update check, biometric probe) had
+    // it. Asserted by the request existing at all: a queued login has not been
+    // issued yet.
+    http.get('/api/crypto/receive-key').subscribe({ error: () => {} });
+    flushMicrotasks();
+
+    http.post('/api/login', {}).subscribe({ error: () => {} });
+    flushMicrotasks();
+
+    // Throws "expected one matching request, found none" if the login was queued.
+    httpMock.expectOne('/api/login').flush({});
+    httpMock.expectOne('/api/crypto/receive-key').flush({});
+  }));
+
   it('opens one more slot after a run of successes', fakeAsync(() => {
     const before = currentLimit();
     get('/a');
