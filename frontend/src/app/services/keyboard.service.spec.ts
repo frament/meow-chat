@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { NavigationEnd, Router } from '@angular/router';
+import { Subject } from 'rxjs';
 
 import { KeyboardService } from './keyboard.service';
 
@@ -97,5 +99,33 @@ describe('KeyboardService', () => {
       other.remove();
       done();
     }, 10);
+  });
+
+  // The prod report of 2026-10-31: sign in, the feed appears, and the bottom
+  // navigation is gone until the app is restarted. The password field is removed
+  // from the DOM rather than blurred, so focusout never fired and the class that
+  // hides the nav stayed on <body>.
+  it('clears the keyboard flag when the screen changes', () => {
+    const events = new Subject<any>();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: Router, useValue: { events } }],
+    });
+    const svc = TestBed.inject(KeyboardService);
+
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    field.focus();
+    expect(document.body.classList.contains('keyboard-open')).toBeTrue();
+    expect(svc.isKeyboardOpen()).toBeTrue();
+
+    // Navigating away: the field is gone, and so must be the flag.
+    field.remove();
+    events.next(new NavigationEnd(2, '/feed', '/feed'));
+
+    expect(document.body.classList.contains('keyboard-open'))
+      .withContext('the bottom nav is hidden by exactly this class')
+      .toBeFalse();
+    expect(svc.isKeyboardOpen()).toBeFalse();
   });
 });

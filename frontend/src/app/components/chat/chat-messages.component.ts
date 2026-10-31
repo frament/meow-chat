@@ -25,6 +25,20 @@ import { ChatPollService } from '../../services/chat-poll.service';
   standalone: true,
   imports: [DatePipe, MdPipe],
   templateUrl: './chat-messages.component.html',
+  styles: [`
+    /*
+     * The 8px between messages used to come from the parent: .thread-inner is a
+     * flex column with gap:8px, and these divs were its own children. After the
+     * list was extracted the children became this host, which is inline by
+     * default - so gap applied between nothing and the messages stacked flush
+     * against each other. Reported 2026-10-31 as "нет вертикального отступа".
+     */
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+  `],
 })
 export class ChatMessagesComponent {
   private readonly polls = inject(ChatPollService);
