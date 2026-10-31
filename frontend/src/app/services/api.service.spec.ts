@@ -424,6 +424,36 @@ describe('ApiService', () => {
   // /api/refresh, and the app sat behind "нет соединения" until the user signed in
   // again by hand.
 
+  it('T10g: cancelling a pending retry must not block every later one', fakeAsync(() => {
+    // A connection open for 16 minutes was cut by a deploy. The client scheduled
+    // a retry, another path opened a socket first, and connectWebSocket()
+    // cancelled the timer without clearing wsReconnecting. scheduleReconnect()
+    // returns on that flag, so nothing ever retried and the banner stayed until
+    // the app was reloaded - the prod report of 2026-10-31.
+    const validToken = 'x.' + btoa(JSON.stringify({ exp: 9999999999 })) + '.y';
+    service.storeAuth({
+      access_token: validToken,
+      refresh_token: 'rt',
+      user: { id: 1, username: 'u', email: 'e@m.c', avatar_url: '', is_admin: false },
+    });
+    tick();
+
+    (service as any).scheduleReconnect();
+    expect((service as any).wsReconnecting).withContext('a retry is pending').toBeTrue();
+
+    // The socket is gone (that is why a retry is pending), so the call proceeds.
+    (service as any).ws = null;
+    (service as any).wsConnecting = false;
+    service.connectWebSocket();
+    expect((service as any).wsRetryTimer).toBeNull();
+    expect((service as any).wsReconnecting)
+      .withContext('the pending attempt is gone, so the flag has to go with it')
+      .toBeFalse();
+
+    (service as any).scheduleReconnect();
+    expect((service as any).wsRetryTimer).withContext('the client must not be stuck').not.toBeNull();
+  }));
+
   it('T10e: without any access token it ends the session instead of opening a socket', fakeAsync(() => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');

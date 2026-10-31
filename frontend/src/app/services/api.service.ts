@@ -1025,7 +1025,16 @@ export class ApiService {
     if (this.wsConnecting) return;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     if (this.ws) this.ws.close();
-    if (this.wsRetryTimer) clearTimeout(this.wsRetryTimer);
+    if (this.wsRetryTimer) {
+      clearTimeout(this.wsRetryTimer);
+      this.wsRetryTimer = null;
+      // The flag belongs to the attempt this timer was going to make. Cancelling
+      // the timer and leaving the flag set makes scheduleReconnect() return on
+      // its first line for ever: the socket drops, nothing ever retries, and the
+      // banner stays until the app is reloaded. Reproduced on prod 2026-10-31 -
+      // a 16-minute connection was cut by a deploy and never came back.
+      this.wsReconnecting = false;
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const token = this.accessToken();
