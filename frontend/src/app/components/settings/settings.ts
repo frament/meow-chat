@@ -10,6 +10,7 @@ import { CryptoService } from '../../services/crypto.service';
 import { toMemoryFile } from '../../services/upload-utils';
 import { PwaInstallService } from '../../services/pwa-install.service';
 import { DeviceLinkService } from '../../services/device-link.service';
+import { DiagnosticsService } from '../../services/diagnostics.service';
 import { NoticeService } from '../../services/notice.service';
 import { UpdateAvailableService } from '../../services/update-available.service';
 import { BuildStampService } from '../../services/build-stamp.service';
@@ -69,6 +70,10 @@ import * as QRCode from 'qrcode';
           <div class="flex gap-3">
             <button type="submit" [disabled]="saving" class="btn-primary" style="flex:1;padding:10px 20px;">
               {{ saving ? 'Сохранение...' : 'Сохранить' }}
+            </button>
+            <button type="button" (click)="openDiagnostics()"
+              style="padding:10px 16px;background:transparent;border:none;color:var(--text-tertiary);font-weight:500;cursor:pointer;font-size:13px;">
+              Диагностика
             </button>
             <button type="button" (click)="logout()"
               class="btn-danger" style="padding:10px 16px;background:transparent;border:none;color:var(--text-tertiary);font-weight:500;cursor:pointer;font-size:13px;">
@@ -579,6 +584,7 @@ export class SettingsComponent implements OnInit {
     private crypto: CryptoService,
     private pwa: PwaInstallService,
     private deviceLink: DeviceLinkService,
+    private diagnostics: DiagnosticsService,
   ) {
     this.selectedTheme = this.theme.currentMode;
   }
@@ -1148,5 +1154,14 @@ export class SettingsComponent implements OnInit {
   logout() {
     this.api.logout();
     this.router.navigate(['/login']);
+  }
+
+  /**
+   * The panel lives in the app shell as a deferred overlay, not at its own route:
+   * it has to be readable while a thread is open, and its scroll section measures
+   * that thread.
+   */
+  openDiagnostics() {
+    this.diagnostics.show();
   }
 }

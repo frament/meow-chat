@@ -317,6 +317,15 @@ export class ApiService {
   private readonly wsMessagesSubject = new Subject<WsServerMessage>();
   readonly wsMessages$ = this.wsMessagesSubject.asObservable();
   readonly wsConnected = signal(false);
+  // What the diagnostics panel needs to answer "why is nothing arriving". All of
+  // it is observed here because this is the only place that owns the socket.
+  readonly wsReadyState = signal<number>(-1);
+  readonly wsFramesReceived = signal(0);
+  /** Frames that repeated a message id we had already logged - the duplicate bug. */
+  readonly wsDuplicateFrames = signal(0);
+  readonly wsLastFrameAt = signal(0);
+  readonly wsReconnectAttempts = signal(0);
+  readonly seenFrameIds = new Set<number>();
   private ws: WebSocket | null = null;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private wsReconnecting = false;
@@ -1058,6 +1067,7 @@ export class ApiService {
 
     try {
       this.ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`);
+      this.wsReadyState.set(WebSocket.CONNECTING);
     } catch {
       this.#clearConnectTimer();
       this.wsConnecting = false;
@@ -1069,6 +1079,7 @@ export class ApiService {
       this.#clearConnectTimer();
       this.wsConnecting = false;
       this.wsConnected.set(true);
+      this.wsReadyState.set(WebSocket.OPEN);
       this.wsRetryCount = 0;
     };
 
@@ -1079,6 +1090,8 @@ export class ApiService {
       } catch {
         return;
       }
+
+      this.noteFrame(data);
 
       // Route ALL message types through wsMessages$ for component consumption
       this.wsMessagesSubject.next(data);
@@ -1094,6 +1107,7 @@ export class ApiService {
       this.ws = null;
       this.wsConnecting = false;
       this.wsConnected.set(false);
+      this.wsReadyState.set(WebSocket.CLOSED);
       this.scheduleReconnect();
     };
 
@@ -1102,6 +1116,31 @@ export class ApiService {
     this.ws.onerror = () => {
       console.warn('WebSocket error', { retry: this.wsRetryCount });
     };
+  }
+
+  /**
+   * Counts a frame and notices a repeated message id.
+   *
+   * The duplicate complaint ("одно сообщение пришло трижды") was diagnosed by
+   * reading the client code, because nothing anywhere counted what arrived. Two
+   * numbers make it visible from the phone: how many frames came in, and how many
+   * of them carried an id that had already been seen.
+   */
+  private noteFrame(data: any): void {
+    this.wsFramesReceived.update((n) => n + 1);
+    this.wsLastFrameAt.set(Date.now());
+
+    if (data?.type !== 'message' && data?.type !== 'group_message') return;
+    const id = Number(data.id);
+    if (!id) return;
+    if (this.seenFrameIds.has(id)) {
+      this.wsDuplicateFrames.update((n) => n + 1);
+      return;
+    }
+    // Bounded on purpose: the set lives for the whole session, and a chat that is
+    // open for a week should not grow one entry per message for ever.
+    if (this.seenFrameIds.size > 1000) this.seenFrameIds.clear();
+    this.seenFrameIds.add(id);
   }
 
   /** Closes and forgets the socket, leaving wsConnecting clear for a retry. */
@@ -1154,6 +1193,7 @@ export class ApiService {
     const jitter = Math.random() * 1000;
 
     this.wsRetryCount++;
+    this.wsReconnectAttempts.update((n) => n + 1);
     this.wsRetryTimer = setTimeout(() => {
       this.wsRetryTimer = null;
       this.wsReconnecting = false;

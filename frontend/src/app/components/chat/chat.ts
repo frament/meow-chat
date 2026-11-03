@@ -16,6 +16,7 @@ import { ChatListComponent } from './chat-list.component';
 import { ChatMessagesComponent } from './chat-messages.component';
 import { ChatComposerComponent } from './chat-composer.component';
 import { ChatStorageService } from '../../services/chat-storage.service';
+import { DiagnosticsService } from '../../services/diagnostics.service';
 import { ChatPollService } from '../../services/chat-poll.service';
 import { ChatThreadService, DisplayItem } from '../../services/chat-thread.service';
 import { ServerCryptoService } from '../../services/server-crypto.service';
@@ -137,6 +138,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   // Kept so ngOnDestroy can release them, like the subscriptions above.
   private effects: EffectRef[] = [];
   private readonly injector = inject(Injector);
+  protected readonly diagnostics = inject(DiagnosticsService);
   private boundaryTimer: ReturnType<typeof setTimeout> | null = null;
   // A group message that failed only because the group key wasn't available yet.
   // Retried automatically once the key arrives (group_key_ready WS event).
@@ -321,6 +323,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     protected clock: ClockService,
   ) {
     this.msgTypes = this.buildMsgTypes();
+    // The diagnostics panel asks for a scroll from outside this component; the
+    // counter makes two requests two events, unlike a boolean flag.
+    effect(
+      () => {
+        if (this.diagnostics.scrollToBottomRequest() > 0) this.scrollToBottom();
+      },
+      { injector: this.injector },
+    );
     this.api.getGiphyStatus().subscribe({
       next: (res) => this.giphyHasKey = res.has_key,
       error: () => { this.giphyHasKey = false; },
@@ -428,6 +438,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             if (!content) content = ChatThreadService.UNDECRYPTED;
           }
           if (!decryptedOk) this.reportDecryptFailure('dm', { peer_id: data.from, msg_type: data.msg_type });
+          else if (data.encrypted_content || data.env_content || data.server_envelope) {
+            this.diagnostics.reportDecrypt(true, 'dm');
+          }
           // Claimed here, after decryption and immediately before the push. Three
           // frames for one message arrive nearly together; each awaits the key
           // first, and they would all have passed a check made before those awaits.
@@ -472,6 +485,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             if (decrypted !== null) { content = decrypted; decryptedOk = true; }
             if (!content) content = ChatThreadService.UNDECRYPTED;
             if (!decryptedOk) this.reportDecryptFailure('group', { group_id: data.group_id, msg_type: data.msg_type });
+            else this.diagnostics.reportDecrypt(true, 'group');
           }
           // Same reason as in direct messages: claim after the awaits, before the push.
           if (!this.claimMessage(data.id)) return;
@@ -791,6 +805,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Best-effort telemetry when a message can't be decrypted (migration safety net). */
   private async reportDecryptFailure(scope: 'dm' | 'group', opts: { peer_id?: number; group_id?: number; msg_type?: string } = {}) {
+    this.diagnostics.reportDecrypt(false, scope);
     const key = `${scope}:${opts.peer_id ?? 0}:${opts.group_id ?? 0}`;
     if (this.reportedDecryptFailures.has(key) || this.reportedDecryptFailures.size >= 30) return;
     this.reportedDecryptFailures.add(key);

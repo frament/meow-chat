@@ -454,6 +454,32 @@ describe('ApiService', () => {
     expect((service as any).wsRetryTimer).withContext('the client must not be stuck').not.toBeNull();
   }));
 
+  it('counts frames and notices a repeated message id', () => {
+    // The duplicate complaint ("одно сообщение трижды") used to be diagnosable only
+    // by reading the client code: nothing anywhere counted what arrived. The panel
+    // shows these two numbers, so they have to be right.
+    const token = 'header.' + btoa(JSON.stringify({ user_id: 1, type: 'access', exp: Math.floor(Date.now() / 1000) + 3600 })) + '.sig';
+    service.accessToken.set(token);
+    (service as any).ws = null;
+    (service as any).wsConnecting = false;
+
+    service.connectWebSocket();
+    const socket = ((globalThis as any).WebSocket as jasmine.Spy).calls.mostRecent().returnValue;
+    expect(service.wsReadyState()).withContext('CONNECTING while the handshake runs').toBe(WebSocket.CONNECTING);
+
+    if (socket.onopen) socket.onopen(new Event('open'));
+    expect(service.wsReadyState()).toBe(WebSocket.OPEN);
+
+    const frame = { type: 'message', id: 42, from: 2, to: 1, content: 'привет' };
+    socket.onmessage({ data: JSON.stringify(frame) });
+    socket.onmessage({ data: JSON.stringify(frame) });
+    socket.onmessage({ data: JSON.stringify({ type: 'message', id: 43, from: 2, to: 1, content: 'ещё' }) });
+
+    expect(service.wsFramesReceived()).withContext('every frame counts, duplicates included').toBe(3);
+    expect(service.wsDuplicateFrames()).withContext('only the second 42 is a duplicate').toBe(1);
+    expect(service.wsLastFrameAt()).withContext('the panel needs a time, not a flag').toBeGreaterThan(0);
+  });
+
   it('T10e: without any access token it ends the session instead of opening a socket', fakeAsync(() => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');

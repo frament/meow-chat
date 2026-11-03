@@ -1,8 +1,9 @@
 import { ApplicationConfig, ErrorHandler, provideBrowserGlobalErrorListeners, provideZoneChangeDetection, isDevMode } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
+import { isChunkLoadError, reloadAfterChunkFailure } from './chunk-reload';
 import { authInterceptor } from './services/auth.interceptor';
 import { timeoutInterceptor } from './services/timeout.interceptor';
 import { concurrencyInterceptor } from './services/concurrency.interceptor';
@@ -29,7 +30,23 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     { provide: ErrorHandler, useClass: LoggingErrorHandler },
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes),
+    provideRouter(
+      routes,
+      // A lazy route that cannot download its chunk used to look like "the page
+      // did not open": nothing to act on, no cause. After a deploy the old chunks
+      // are gone, so the cure is one reload that picks up the new index.html.
+      withNavigationErrorHandler((event) => {
+        if (!isChunkLoadError(event.error)) return;
+        if (reloadAfterChunkFailure(sessionStorage, () => window.location.reload())) return;
+        // A second failure inside the window: reloading again would loop. Say it
+        // out loud instead - the diagnostics panel collects it as well.
+        console.error(
+          'Navigation failed: a lazily loaded part of the app could not be downloaded. ' +
+            'Reload the page; if it repeats, the deployment is incomplete.',
+          event.error,
+        );
+      }),
+    ),
     // Order matters, outermost first:
     //   concurrency - a slot is held for the whole chain, including the retry;
     //   timeout     - a stuck request gives its slot back instead of keeping it

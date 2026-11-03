@@ -60,6 +60,26 @@ export class ChatStorageService {
     this.writeJson(ChatStorageService.PINS_KEY, ids);
   }
 
+  /**
+   * Drops every cache this service owns.
+   *
+   * Exists for the diagnostics panel: a message that stayed a placeholder for
+   * ever was a cache problem, and "выйдите и войдите" is a poor first answer when
+   * the cache is the suspect. Only our own keys are touched - the tokens and the
+   * signed-in user are the session, not a cache.
+   */
+  clearCaches(): number {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('cached_messages_') || key === ChatStorageService.USERS_KEY || key === ChatStorageService.PINS_KEY)) {
+        keys.push(key);
+      }
+    }
+    for (const key of keys) localStorage.removeItem(key);
+    return keys.length;
+  }
+
   private readJson<T>(key: string): T | null {
     const raw = localStorage.getItem(key);
     if (!raw) return null;

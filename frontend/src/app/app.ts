@@ -9,6 +9,8 @@ import { NotificationService } from './services/notification.service';
 import { ThemeService } from './services/theme.service';
 import { CryptoService } from './services/crypto.service';
 import { DeviceAuthComponent } from './components/device-auth/device-auth';
+import { DiagnosticsComponent } from './components/diagnostics/diagnostics';
+import { DiagnosticsService } from './services/diagnostics.service';
 import { DeviceLinkService } from './services/device-link.service';
 import { NoticeComponent } from './components/notice/notice';
 import { ConnectivityService } from './services/connectivity.service';
@@ -18,7 +20,7 @@ import { ServerCryptoService } from './services/server-crypto.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, DeviceAuthComponent, NoticeComponent],
+  imports: [RouterOutlet, DeviceAuthComponent, DiagnosticsComponent, NoticeComponent],
   template: `
     @if (gitHubUpdateAvailable()) {
       <div class="update-banner" style="background:var(--accent-gradient);">
@@ -60,6 +62,7 @@ import { ServerCryptoService } from './services/server-crypto.service';
       <div class="offline-banner">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
         <span>Нет соединения</span>
+        <button class="reconnect-btn" (click)="diagnostics.show()">Диагностика</button>
         <button class="reconnect-btn" (click)="api.retryConnection()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           Подключиться
@@ -82,6 +85,11 @@ import { ServerCryptoService } from './services/server-crypto.service';
       </div>
     }
     <app-device-auth #deviceAuth />
+    <!-- Loaded on demand: the panel is small but it is not part of opening the
+         app, and it must not cost the first download anything. -->
+    @defer (when diagnostics.open()) {
+      <app-diagnostics />
+    }
     <app-notice />
     <router-outlet />
   `,
@@ -309,6 +317,8 @@ export class App implements OnInit, OnDestroy {
   readonly #router = inject(Router);
   readonly #theme = inject(ThemeService);
   readonly #crypto = inject(CryptoService);
+  /** Opened from here, from settings and from the "нет соединения" banner. */
+  protected readonly diagnostics = inject(DiagnosticsService);
   readonly #pwa = inject(PwaInstallService);
   readonly #deviceLink = inject(DeviceLinkService);
   readonly toast = signal<{ from: number; from_name: string; body: string } | null>(null);
