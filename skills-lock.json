@@ -48,6 +48,12 @@
       "sourceType": "github",
       "skillPath": ".agent/skills/reference-signal-forms/SKILL.md",
       "computedHash": "ceb0ae2c1830bd04b4d6ef5a1fa3ee708ad3bf1052e93a9a3e69c36245a4e9b5"
+    },
+    "stageshow": {
+      "source": "benjitaylor/skills",
+      "sourceType": "github",
+      "skillPath": "stageshow/SKILL.md",
+      "computedHash": "bf9f07985a62882deae7935b5b1162fb5bf66b248930bb14a75dcaf9d67291b7"
     }
   }
 }
