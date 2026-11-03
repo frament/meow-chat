@@ -1,0 +1,9 @@
+{
+  "name": "meowchat-livecheck",
+  "private": true,
+  "description": "Browser check for the client -> server encryption layer: see livecheck.js",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}
