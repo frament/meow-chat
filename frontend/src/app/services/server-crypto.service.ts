@@ -76,6 +76,8 @@ const PRIVATE_KEY_ENTRY = 'receive-private';
 export class ServerCryptoService {
   private accountPrivate: CryptoKey | null = null;
   private accountPublicB64: string | null = null;
+  /** In-flight load, so two callers cannot create two keys. See ensureAccountKey. */
+  private loading: Promise<void> | null = null;
   private db: IDBDatabase | null = null;
   /**
    * Copy of the build-time constant. A field rather than a direct read so a
@@ -142,6 +144,26 @@ export class ServerCryptoService {
   async ensureAccountKey(password?: string): Promise<void> {
     if (this.accountPrivate) return;
 
+    // One load at a time. Two concurrent callers - the app's startup and the
+    // first incoming message, both without a password - used to run the whole
+    // create path twice: two key pairs generated, the first registered, the
+    // second refused with 409 and then written to this device anyway. The
+    // account would keep a key whose private half sits on no device at all.
+    if (this.loading) {
+      await this.loading;
+      if (this.accountPrivate) return;
+      if (!password) return;
+    }
+
+    this.loading = this.loadAccountKey(password);
+    try {
+      await this.loading;
+    } finally {
+      this.loading = null;
+    }
+  }
+
+  private async loadAccountKey(password?: string): Promise<void> {
     const existing = await this.http
       .get<{ public_key: string; wrapped_private_key: string; kdf_salt: string }>(
         '/api/crypto/receive-key'

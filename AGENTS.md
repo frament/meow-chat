@@ -90,6 +90,17 @@ cd frontend && npm run build   # production build with service-worker
 - **Pinned users**: `pinned_users` DB table (`user_id`, `pinned_user_id`). API: `GET /api/pinned`, `POST /api/pin/:id`, `DELETE /api/pin/:id`. Frontend stores pins in `cachedPins` localStorage, sorted into separate "Закреплённые" section above "Все пользователи". Each item has pin toggle button.
 - **Mobile user list items**: Each user in mobile chat list is a standalone `.card` with `space-y-2` gap — no container background, individual cards per user.
 - **Message images**: `message_images` DB table (`id`, `message_id`, `image_url`). `POST /api/messages` accepts `multipart/form-data` with `content` + `images` (max 10, jpg/png/gif/webp, 10MB each). Images saved to `./uploads/messages/`. `GET /api/messages` returns `images[]` per message. WS broadcasts `images: string[]`. Frontend has image picker button, preview strip, renders images inside bubbles (clickable to open in new tab).
+- **A message has two read paths, and both must know every scheme.** `GET /api/messages` runs
+  `openServerScheme` (server wraps the text for the reader) and the client runs `openMany`; the
+  WebSocket frame is built separately in `runHub` and the client's socket handler in `chat.ts`
+  copies fields by hand. Twice now only one path learned a new field: `sticker_url` (bubble
+  with an `<img>` and no `src`) and `server_envelope` (a sealed message live as an **empty**
+  bubble, text only after reload). The rule: a new per-message field or scheme is not done
+  until the frame, the socket handler and the fetch path all carry it — and the test drives the
+  real POST → hub → socket route, not `h.broadcast` directly.
+  The frame never carries the at-rest blob: it is the server's ciphertext and cannot be opened
+  by a client. For the same reason `needs_key` exists — an account without a key is told so
+  rather than shown blank space, which reads as deleted history.
 - **Monochrome icons**: All UI icons (buttons, indicators, labels) must use monochrome SVGs with `currentColor`, never colorful emoji. The only exception is reaction emojis on posts. Settings theme selector uses inline SVGs, not ☀️🌙💻 emoji.
 - **Image compression**: `backend/imageproc` (pure Go: `golang.org/x/image/draw` + stdlib `image/jpeg`, no CGO so it survives v2.0.0). Policy decided 2026-10-02: **JPEG only**, quality 82, long side ≤ 1920px, the smaller of the two files wins (5% threshold), original discarded. PNG/GIF/WebP pass through byte for byte. Measured on a real prod photo: 2 932 308 → 408 953 bytes (−86%).
   - All four upload paths (`CreatePost`, `SendMessage`, `UploadAvatar`, group `SendMessage`) go through `handlers.saveImage` → `imageproc.Store`, and so does `federation.cacheRemoteImage` — do not reintroduce `c.SaveFile` or a direct `os.WriteFile` for images. Stickers are deliberately left alone.

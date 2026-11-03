@@ -114,6 +114,12 @@ type wsMessage struct {
 	pushPreview      string
 	pollData         fiber.Map
 	stickerURL       string
+	// serverPlaintext is the text of a message sent under the server scheme.
+	// Its row holds only the at-rest ciphertext and an empty `content`, so the
+	// hub has nothing readable to forward unless the sender's plaintext travels
+	// with the frame. It never leaves the process: each connection receives an
+	// envelope wrapped to its own key instead (see runHub).
+	serverPlaintext string
 }
 
 func NewHandler() *Handler {
@@ -420,6 +426,28 @@ func (h *Handler) runHub() {
 					}
 					if msg.stickerURL != "" {
 						payload["sticker_url"] = msg.stickerURL
+					}
+					if msg.serverPlaintext != "" {
+						// Wrapped here, per connection, because the reader is
+						// whoever this socket belongs to: the recipient gets an
+						// envelope for their key, the sender's other devices one
+						// for theirs. Without this the frame carries `content: ""`
+						// and the bubble stays empty until a reload - what prod
+						// showed on 2026-10-25.
+						envelope, err := sealForReader(uid, []byte(msg.serverPlaintext))
+						switch {
+						case err != nil:
+							// A broken key row must not turn into a silent empty
+							// bubble. Log it, and let the client say what it can.
+							log.Printf("Hub: cannot wrap message %d for user %d: %v", msg.messageID, uid, err)
+							payload["needs_key"] = true
+						case envelope == nil:
+							// No key on this account: say so, the way the read
+							// path does. An empty bubble reads as deleted history.
+							payload["needs_key"] = true
+						default:
+							payload["server_envelope"] = envelope
+						}
 					}
 					if msg.pushPreview != "" {
 						payload["preview"] = msg.pushPreview
@@ -1234,6 +1262,10 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 	if encryptedContent != "" {
 		cryptoScheme = "e2ee"
 	}
+	// Opened envelope, kept for the socket only. The row stores the at-rest
+	// ciphertext; a live reader needs an envelope for its own key, and the only
+	// moment the text is in hand is here.
+	var serverPlaintext string
 	serverEnvelope := ""
 	if vals, ok := form.Value["server_envelope"]; ok && len(vals) > 0 {
 		serverEnvelope = vals[0]
@@ -1276,6 +1308,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		encryptedIV = ""
 		content = ""
 		cryptoScheme = "server"
+		serverPlaintext = string(plaintext)
 		if pushPreview == "" {
 			pushPreview = string(plaintext)
 		}
@@ -1393,7 +1426,7 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		}
 	}
 
-	h.broadcast <- wsMessage{
+	frame := wsMessage{
 		messageID:        messageID,
 		from:             fromUserID,
 		to:               toUserID,
@@ -1411,7 +1444,17 @@ func (h *Handler) SendMessage(c *fiber.Ctx) error {
 		pushPreview:      pushPreview,
 		pollData:         pollData,
 		stickerURL:       stickerURL,
+		serverPlaintext:  serverPlaintext,
 	}
+	if cryptoScheme == "server" {
+		// The at-rest blob is not the client's business - it cannot be opened
+		// there - and forwarding it made the frame look like an ordinary E2EE
+		// message whose iv happened to be empty. The readable copy travels as
+		// an envelope instead.
+		frame.encryptedContent = ""
+		frame.encryptedIV = ""
+	}
+	h.broadcast <- frame
 
 	// Forward to federated server if recipient is a remote user
 	if fedTransport != nil {

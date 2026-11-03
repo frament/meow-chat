@@ -400,6 +400,22 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           if (data.from === this.currentUserId) return;
           let content = data.content;
           let decryptedOk = true;
+          let needsKey = data.needs_key === true;
+          // Server scheme: the text is not in `content` at all - the frame
+          // carries it wrapped to this account's key. Without this branch the
+          // bubble stays empty until the thread is reloaded from
+          // GET /api/messages, which is where the unwrapping used to live only.
+          if (!content && data.server_envelope) {
+            try {
+              await this.serverCrypto.ensureAccountKey();
+              const text = await this.serverCrypto.openFromServer(data.server_envelope);
+              if (text !== null) content = text;
+              else needsKey = true;
+            } catch {
+              // No key, or the load failed: say so instead of showing nothing.
+              needsKey = true;
+            }
+          }
           if (data.env_content && data.envelopes?.length) {
             const viaEnv = await this.crypto.decryptViaEnvelope(data.envelopes, data.env_content, data.env_iv, data.from, data.sender_device_id);
             if (viaEnv !== null) content = viaEnv;
@@ -432,6 +448,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             // <img> pointing at undefined - invisible until the thread was
             // reloaded from GET /api/messages, which does return it.
             sticker_url: data.sticker_url,
+            needs_key: needsKey,
           };
           this.messages.push(msg);
           this.messages = [...this.messages];
